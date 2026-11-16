@@ -15,3 +15,33 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## ArenaPass local foundation
+
+Android flavors have separate install IDs, app names and launcher icons:
+
+- Customer: `com.arenapass.customer`, `lib/main_customer.dart`.
+- Vendor: `com.arenapass.vendor`, `lib/main_vendor.dart`.
+
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --debug --flavor customer -t lib/main_customer.dart
+flutter build apk --debug --flavor vendor -t lib/main_vendor.dart
+```
+
+Supply the installed Android SDK through `ANDROID_HOME` if needed. The default
+`main.dart` selects the native flavor; production entry points above are explicit.
+The two isolated GetIt graphs register provider-owned StartupCubit factories and
+use go_router. App teardown owns router/container disposal; Cubits ignore late
+async completion after close.
+
+This foundation intentionally displays **Setup pending**. Cloud configuration,
+Firebase initialization, Customer authentication, Vendor enrollment and feature
+routes are not implemented. Retry rechecks startup availability; it never grants
+access or silently substitutes fake data. Tests inject startup checks directly.
+No Firebase project, credentials, Google Services plugin or cloud resource is
+created. Future auth/access route redirects depend on reviewed repositories and
+must remain closed until configured. A build is not proof of side-by-side install
+or device acceptance.
