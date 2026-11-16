@@ -1,0 +1,3 @@
+rules_test/node_modules/
+*-debug.log*
+.firebase/
