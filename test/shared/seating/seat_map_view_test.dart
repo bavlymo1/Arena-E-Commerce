@@ -409,87 +409,91 @@ void main() {
       showId: 'show-1',
       sessionId: '1900',
     );
-    addTearDown(cubit.close);
+    try {
+      final buildsPerSeat = <int, int>{};
 
-    final buildsPerSeat = <int, int>{};
-
-    await tester.pumpWidget(
-      _wrap(
-        BlocProvider<SeatSelectionCubit>.value(
-          value: cubit,
-          child: BlocBuilder<SeatSelectionCubit, SeatSelectionState>(
-            buildWhen: (prev, curr) =>
-                prev.status != curr.status ||
-                !setEquals(prev.bookedSeats, curr.bookedSeats) ||
-                !setEquals(prev.myConfirmedSeats, curr.myConfirmedSeats) ||
-                prev.conflictMessage != curr.conflictMessage ||
-                prev.submitting != curr.submitting,
-            builder: (context, state) {
-              if (state.status == SeatSelectionStatus.loading) {
-                return const SeatMapView(loadState: SeatMapLoadState.loading);
-              }
-              return SeatMapView(
-                bookedSeats: state.bookedSeats,
-                myConfirmedSeats: state.myConfirmedSeats,
-                busy: state.submitting,
-                onSeatTap: cubit.toggleSeat,
-                seatSelectorBuilder: (context, seatNumber, buildTile) {
-                  return BlocSelector<
-                    SeatSelectionCubit,
-                    SeatSelectionState,
-                    (SeatVisualStatus, bool)
-                  >(
-                    selector: (s) =>
-                        (s.visualStatusFor(seatNumber), s.submitting),
-                    builder: (context, tuple) {
-                      buildsPerSeat[seatNumber] =
-                          (buildsPerSeat[seatNumber] ?? 0) + 1;
-                      return buildTile(context, tuple.$1, tuple.$2);
-                    },
-                  );
-                },
-                selectedSummaryBuilder: (context) {
-                  return BlocSelector<
-                    SeatSelectionCubit,
-                    SeatSelectionState,
-                    Set<int>
-                  >(
-                    selector: (s) => s.selectedSeats,
-                    builder: (context, selected) {
-                      final sorted = selected.toList()..sort();
-                      return Text(
-                        sorted.isEmpty ? 'None' : sorted.join(', '),
-                        key: const ValueKey<String>('seat-selected-summary'),
-                      );
-                    },
-                  );
-                },
-              );
-            },
+      await tester.pumpWidget(
+        _wrap(
+          BlocProvider<SeatSelectionCubit>.value(
+            value: cubit,
+            child: BlocBuilder<SeatSelectionCubit, SeatSelectionState>(
+              buildWhen: (prev, curr) =>
+                  prev.status != curr.status ||
+                  !setEquals(prev.bookedSeats, curr.bookedSeats) ||
+                  !setEquals(prev.myConfirmedSeats, curr.myConfirmedSeats) ||
+                  prev.conflictMessage != curr.conflictMessage ||
+                  prev.submitting != curr.submitting,
+              builder: (context, state) {
+                if (state.status == SeatSelectionStatus.loading) {
+                  return const SeatMapView(loadState: SeatMapLoadState.loading);
+                }
+                return SeatMapView(
+                  bookedSeats: state.bookedSeats,
+                  myConfirmedSeats: state.myConfirmedSeats,
+                  busy: state.submitting,
+                  onSeatTap: cubit.toggleSeat,
+                  seatSelectorBuilder: (context, seatNumber, buildTile) {
+                    return BlocSelector<
+                      SeatSelectionCubit,
+                      SeatSelectionState,
+                      (SeatVisualStatus, bool)
+                    >(
+                      selector: (s) =>
+                          (s.visualStatusFor(seatNumber), s.submitting),
+                      builder: (context, tuple) {
+                        buildsPerSeat[seatNumber] =
+                            (buildsPerSeat[seatNumber] ?? 0) + 1;
+                        return buildTile(context, tuple.$1, tuple.$2);
+                      },
+                    );
+                  },
+                  selectedSummaryBuilder: (context) {
+                    return BlocSelector<
+                      SeatSelectionCubit,
+                      SeatSelectionState,
+                      Set<int>
+                    >(
+                      selector: (s) => s.selectedSeats,
+                      builder: (context, selected) {
+                        final sorted = selected.toList()..sort();
+                        return Text(
+                          sorted.isEmpty ? 'None' : sorted.join(', '),
+                          key: const ValueKey<String>('seat-selected-summary'),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    final seat1BuildsBefore = buildsPerSeat[1] ?? 0;
-    final seat2BuildsBefore = buildsPerSeat[2] ?? 0;
-    expect(seat1BuildsBefore, 1);
-    expect(seat2BuildsBefore, 1);
+      final seat1BuildsBefore = buildsPerSeat[1] ?? 0;
+      final seat2BuildsBefore = buildsPerSeat[2] ?? 0;
+      expect(seat1BuildsBefore, 1);
+      expect(seat2BuildsBefore, 1);
 
-    await tester.tap(find.byKey(const ValueKey<String>('seat-grid-1')));
-    await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('seat-grid-1')));
+      await tester.pump();
 
-    expect(buildsPerSeat[1], seat1BuildsBefore + 1);
-    expect(buildsPerSeat[2], seat2BuildsBefore);
-    expect(cubit.state.selectedSeats, {1});
-    expect(
-      tester
-          .widget<Text>(
-            find.byKey(const ValueKey<String>('seat-selected-summary')),
-          )
-          .data,
-      '1',
-    );
+      expect(buildsPerSeat[1], seat1BuildsBefore + 1);
+      expect(buildsPerSeat[2], seat2BuildsBefore);
+      expect(cubit.state.selectedSeats, {1});
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('seat-selected-summary')),
+            )
+            .data,
+        '1',
+      );
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      // Stream cancellation must finish outside the widget's fake async clock.
+      await tester.runAsync(cubit.close);
+    }
   });
 }
