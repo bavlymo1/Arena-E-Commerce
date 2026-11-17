@@ -14,8 +14,16 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/fake_booking_repository.dart';
 
 final class _StreamingBookingRepository implements BookingRepository {
-  final sessionController = StreamController<Session?>();
-  final mySeatsController = StreamController<Set<int>>();
+  _StreamingBookingRepository({
+    Future<void> Function()? onSessionCancel,
+    this.throwOnOwnWatch = false,
+  }) : sessionController = StreamController<Session?>(
+         onCancel: onSessionCancel,
+       );
+
+  final StreamController<Session?> sessionController;
+  final mySeatsController = StreamController<Set<int>>.broadcast();
+  final bool throwOnOwnWatch;
   (String, String)? watchedSessionArgs;
   (String, String, String)? watchedMySeatsArgs;
   int watchSessionCalls = 0;
@@ -30,6 +38,7 @@ final class _StreamingBookingRepository implements BookingRepository {
 
   @override
   Stream<Set<int>> watchMySeats(String uid, String showId, String sessionId) {
+    if (throwOnOwnWatch) throw StateError('Cannot construct ownership query');
     watchMySeatsCalls++;
     watchedMySeatsArgs = (uid, showId, sessionId);
     return mySeatsController.stream;
@@ -63,6 +72,95 @@ Session _session({Iterable<int> bookedSeats = const []}) => Session(
 );
 
 void main() {
+  for (final failedOwnership in [true, false]) {
+    test(
+      'failed ${failedOwnership ? 'ownership' : 'session'} channel needs fresh data',
+      () async {
+        final repo = _StreamingBookingRepository();
+        addTearDown(repo.dispose);
+        final cubit = SeatSelectionCubit(
+          bookingRepository: repo,
+          customerUid: 'cust-1',
+          showId: 'show-1',
+          sessionId: '1900',
+        );
+        addTearDown(cubit.close);
+        await pumpEventQueue();
+        repo.sessionController.add(_session());
+        repo.mySeatsController.add({});
+        await pumpEventQueue();
+        cubit.toggleSeat(7);
+        if (failedOwnership) {
+          repo.mySeatsController.addError(StateError('Ownership denied'));
+        } else {
+          repo.sessionController.addError(StateError('Session denied'));
+        }
+        await pumpEventQueue();
+        expect(cubit.state.status, SeatSelectionStatus.error);
+        if (failedOwnership) {
+          repo.sessionController.add(_session(bookedSeats: {21}));
+        } else {
+          repo.mySeatsController.add({});
+        }
+        await pumpEventQueue();
+        expect(cubit.state.status, SeatSelectionStatus.error);
+        expect(cubit.state.canSubmit, isFalse);
+        expect(cubit.state.selectedSeats, {7});
+        if (failedOwnership) {
+          repo.mySeatsController.add({});
+        } else {
+          repo.sessionController.add(_session());
+        }
+        await pumpEventQueue();
+        expect(cubit.state.status, SeatSelectionStatus.ready);
+      },
+    );
+  }
+
+  test(
+    'synchronous query failure cancels the already-open sibling stream',
+    () async {
+      final repo = _StreamingBookingRepository(throwOnOwnWatch: true);
+      addTearDown(repo.dispose);
+      final cubit = SeatSelectionCubit(
+        bookingRepository: repo,
+        customerUid: 'cust-1',
+        showId: 'show-1',
+        sessionId: '1900',
+        autoStart: false,
+      );
+      addTearDown(cubit.close);
+      await expectLater(Future<void>.sync(cubit.start), completes);
+      expect(cubit.state.status, SeatSelectionStatus.error);
+      expect(repo.sessionController.hasListener, isFalse);
+    },
+  );
+
+  test('close waits for asynchronous stream resource cleanup', () async {
+    final released = Completer<void>();
+    final repo = _StreamingBookingRepository(
+      onSessionCancel: () => released.future,
+    );
+    addTearDown(repo.dispose);
+    final cubit = SeatSelectionCubit(
+      bookingRepository: repo,
+      customerUid: 'cust-1',
+      showId: 'show-1',
+      sessionId: '1900',
+    );
+    await pumpEventQueue();
+    var closed = false;
+    final closing = cubit.close().then((_) => closed = true);
+    await pumpEventQueue();
+    try {
+      expect(closed, isFalse);
+    } finally {
+      released.complete();
+      await closing;
+    }
+    expect(closed, isTrue);
+  });
+
   test('rejects blank constructor identifiers', () {
     final fake = FakeBookingRepository();
     expect(
@@ -135,6 +233,7 @@ void main() {
       );
       addTearDown(cubit.close);
 
+      await pumpEventQueue();
       expect(repo.watchedSessionArgs, ('show-1', '1900'));
       expect(repo.watchedMySeatsArgs, ('cust-1', 'show-1', '1900'));
       expect(cubit.state.status, SeatSelectionStatus.loading);
@@ -173,6 +272,7 @@ void main() {
     );
     addTearDown(cubit.close);
 
+    await pumpEventQueue();
     repo.sessionController.add(_session(bookedSeats: {14}));
     repo.mySeatsController.add({14});
     await pumpEventQueue();
@@ -212,6 +312,7 @@ void main() {
     );
     addTearDown(cubit.close);
 
+    await pumpEventQueue();
     repo.sessionController.add(_session());
     repo.mySeatsController.add({});
     await pumpEventQueue();
@@ -241,6 +342,7 @@ void main() {
     );
     addTearDown(cubit.close);
 
+    await pumpEventQueue();
     repo.sessionController.add(_session());
     repo.mySeatsController.add({});
     await pumpEventQueue();
@@ -288,6 +390,7 @@ void main() {
         sessionId: '1900',
       );
 
+      await pumpEventQueue();
       expect(repo.sessionController.hasListener, isTrue);
       expect(repo.mySeatsController.hasListener, isTrue);
 

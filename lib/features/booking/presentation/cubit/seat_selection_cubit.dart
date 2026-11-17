@@ -22,13 +22,14 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
          ),
        ) {
     if (autoStart) {
-      start();
+      unawaited(start());
     }
   }
 
   final BookingRepository _bookingRepository;
   StreamSubscription<Session?>? _sessionSubscription;
   StreamSubscription<Set<int>>? _mySeatsSubscription;
+  Future<void> _cancellation = Future<void>.value();
 
   int _listenGeneration = 0;
   bool _hasSessionSnapshot = false;
@@ -43,10 +44,9 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
     return value;
   }
 
-  void start() {
+  Future<void> start() async {
     if (isClosed) return;
     final generation = ++_listenGeneration;
-    _cancelSubscriptions();
     _hasSessionSnapshot = false;
     _hasMySeatsSnapshot = false;
     _latestSession = null;
@@ -60,22 +60,33 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
       ),
     );
 
-    _sessionSubscription = _bookingRepository
-        .watchSession(state.showId, state.sessionId)
-        .listen(
-          (session) => _onSessionSnapshot(generation, session),
-          onError: (Object _) => _onStreamError(generation),
-        );
+    try {
+      await _cancelSubscriptions();
+      if (isClosed || generation != _listenGeneration) return;
+      _sessionSubscription = _bookingRepository
+          .watchSession(state.showId, state.sessionId)
+          .listen(
+            (session) => _onSessionSnapshot(generation, session),
+            onError: (Object _) =>
+                _onStreamError(generation, sessionFailed: true),
+          );
 
-    _mySeatsSubscription = _bookingRepository
-        .watchMySeats(state.customerUid, state.showId, state.sessionId)
-        .listen(
-          (seats) => _onMySeatsSnapshot(generation, seats),
-          onError: (Object _) => _onStreamError(generation),
-        );
+      _mySeatsSubscription = _bookingRepository
+          .watchMySeats(state.customerUid, state.showId, state.sessionId)
+          .listen(
+            (seats) => _onMySeatsSnapshot(generation, seats),
+            onError: (Object _) =>
+                _onStreamError(generation, ownSeatsFailed: true),
+          );
+    } catch (_) {
+      _onStreamError(generation, sessionFailed: true, ownSeatsFailed: true);
+      await _cancelSubscriptions().catchError((Object _) {
+        _onStreamError(generation);
+      });
+    }
   }
 
-  void retry() => start();
+  Future<void> retry() => start();
 
   void _onSessionSnapshot(int generation, Session? session) {
     if (isClosed || generation != _listenGeneration) return;
@@ -103,7 +114,7 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
     try {
       _latestMySeats = checkedSeats(seats);
     } on ArgumentError {
-      _onStreamError(generation);
+      _onStreamError(generation, ownSeatsFailed: true);
       return;
     }
     _hasMySeatsSnapshot = true;
@@ -154,8 +165,14 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
     );
   }
 
-  void _onStreamError(int generation) {
+  void _onStreamError(
+    int generation, {
+    bool sessionFailed = false,
+    bool ownSeatsFailed = false,
+  }) {
     if (isClosed || generation != _listenGeneration) return;
+    if (sessionFailed) _hasSessionSnapshot = false;
+    if (ownSeatsFailed) _hasMySeatsSnapshot = false;
     emit(
       state.copyWith(
         status: SeatSelectionStatus.error,
@@ -231,23 +248,21 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
     return 'Seats ${droppedSeats.join(', ')} were just booked by another customer. Review remaining selection.';
   }
 
-  void _cancelSubscriptions() {
+  Future<void> _cancelSubscriptions() {
     final sessionSub = _sessionSubscription;
     final mySeatsSub = _mySeatsSubscription;
     _sessionSubscription = null;
     _mySeatsSubscription = null;
-    if (sessionSub != null) {
-      unawaited(sessionSub.cancel());
-    }
-    if (mySeatsSub != null) {
-      unawaited(mySeatsSub.cancel());
-    }
+    return _cancellation = Future.wait<void>([
+      _cancellation,
+      if (sessionSub != null) sessionSub.cancel(),
+      if (mySeatsSub != null) mySeatsSub.cancel(),
+    ]).then((_) {});
   }
 
   @override
   Future<void> close() async {
     _listenGeneration++;
-    _cancelSubscriptions();
-    await super.close();
+    await Future.wait<void>([_cancelSubscriptions(), super.close()]);
   }
 }
