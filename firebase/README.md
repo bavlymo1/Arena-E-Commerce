@@ -1,8 +1,8 @@
 # Firebase rules and test harness
 
-**Status: P1-04A emulator harness baseline.** Firestore rules deliberately deny all client reads and writes. No production booking/access rules or application Firebase binding are implemented. Do not deploy this baseline.
+**Status: P1-04B candidate, not deployment ready.** The feature rules and expanded matrix replace the deny-all candidate on this task branch. The latest local run has 68 tests: 67 passed and the simultaneous disjoint-booking test failed with permission-denied. Keep that test failing until its acceptance gap is resolved; do not interpret the passing subset as full transaction verification. No cloud project or application Firebase binding is configured.
 
-`firestore.rules` is the fail-closed baseline; `firestore.indexes.json` is empty until actual queries are implemented. `rules_test/` contains the Node test harness. Its successful tests prove emulator wiring and baseline denial only, not feature acceptance, transaction safety or call budgets.
+The candidate enforces enrolled vendor writes, password-provider customer ownership, atomic show/image/session creation, paired four-document booking, exact seats/counters/events, owner-only reads, server missing-document recovery, deleting-state authorization and reciprocal booking/event deletes. Calendar dates are validated beyond their string format. `firestore.indexes.json` declares the planned active-show and vendor-event ordered feeds; emulator tests do not prove deployed index readiness.
 
 ## Run locally
 
@@ -27,9 +27,28 @@ firebase --config ../../firebase.json --project demo-arenapass emulators:exec --
 
 An explicit non-loopback `FIRESTORE_EMULATOR_HOST` was rejected before emulator access. The initial run exposed an invalid cleanup API; the suite now uses the resolved SDK's `clearFirestore()` and `cleanup()`. Debug logs, emulator downloads and node_modules are local artifacts and must remain untracked.
 
-## Remaining P1-04 work
+## Access-call accounting
 
-Replace the deny-all baseline only alongside reviewed allow/deny tests for vendor enrollment, owner privacy and authoritative missing-document recovery; atomic add-show and four-document booking writes; forged fields/counters/events; concurrency; restart-safe deletion; and measured Rules access-call budgets. Missing booking reads are denied now, so application recovery is not ready. Emulator tests cannot prove deployed configuration or physical-device integration.
+These are static worst-case uncached counts, separate from observed emulator success. Each document operation stays within 10 and each supported atomic request within 20:
+
+| Operation | Per-write calls | Uncached total |
+| --- | --- | --- |
+| Create show + image + five sessions | show2, image3, each session3 | 20 |
+| Four-document booking | show3, session3, booking4, event3 | 13 |
+| Delete three booking/event pairs | each record3 | 18 |
+| Delete five sessions + image | each record2 | 12 |
+| Remove parent after image absent | parent2 | 2 |
+
+Four-pair deletion passed with emulator caching, but its uncached count is24. Application cleanup must use at most three pairs per batch for the guaranteed budget; no cleanup repository is implemented here. The booking show write checks that its booking did not already exist, preventing counter replay.
+
+## Explicit acceptance gaps
+
+- The approved schema contains no session manifest/count. Rules cannot enforce at least one and at most five child sessions at initial creation. A test demonstrates zero and six sessions are accepted; creation of later sessions is denied. Do not claim client validation closes this forged-write gap.
+- Rules cannot enumerate arbitrary children. A test demonstrates that an enrolled vendor can delete a deleting parent after removing its image while sessions/bookings/events remain. The future repository must clean children first; stronger independent parent-last authorization needs an agreed schema/contract change before deployment.
+- Two concurrent disjoint transactions can produce permission-denied before the SDK retries a stale write. The strict both-success test remains failing. This reproduces with Firestore emulator1.22.0 and1.21.0. A temporary permissive in-memory emulator-only diagnostic did retry and pass, isolating the interaction with Rules evaluation; the actual candidate rules were not weakened. Do not blindly retry permission failures or claim production behavior from these experiments.
+- The local harness mocks authentication and does not prove sign-in, deployed Rules/indexes, APK Firebase configuration, live automatic transaction retries, calendar cutoffs, image decodability, or restart-safe deletion. MIME/size validation cannot decode JPEG content.
+
+The task remains in progress. Retain uncertainty mapping and authoritative recovery at the application boundary. A permission-denied response is not evidence that a logical booking reference is absent.
 
 Official API references: [Rules test environment and cleanup](https://firebase.google.com/docs/rules/unit-tests), [Firestore rules emulator testing](https://firebase.google.com/docs/firestore/security/test-rules-emulator), [demo project isolation](https://firebase.google.com/docs/emulator-suite/connect_firestore).
 
