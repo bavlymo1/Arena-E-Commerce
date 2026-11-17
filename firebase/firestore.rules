@@ -1,9 +1,184 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-    // Harness baseline only: replace after reviewed transaction allow/deny tests.
-    match /{document=**} {
-      allow read, write: if false;
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function customer() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'password';
+    }
+    function vendorId() {
+      let v = get(/databases/$(db)/documents/vendorDevices/$(request.auth.uid)).data;
+      return v.enabled == true ? v.vendorId : '';
+    }
+    function vendorOwns(id) { return signedIn() && vendorId() == id && id != ''; }
+    function show(id) { return get(/databases/$(db)/documents/shows/$(id)).data; }
+    function showAfter(id) { return getAfter(/databases/$(db)/documents/shows/$(id)).data; }
+    function deletingOwner(id) {
+      let s = show(id);
+      return vendorOwns(s.vendorId) && s.status == 'deleting';
+    }
+    function validSeats(seats) {
+      return seats is list && seats.size() > 0 && seats.size() <= 47
+        && seats.toSet().size() == seats.size()
+        && seats.hasOnly([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
+                          25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47]);
+    }
+    function calendarDate(value) {
+      let parts = value.split('-');
+      let year = int(parts[0]);
+      let month = int(parts[1]);
+      let day = int(parts[2]);
+      let date = timestamp.date(year, month, day);
+      return year >= 1 && date.year() == year && date.month() == month && date.day() == day;
+    }
+    function validShow(d, id) {
+      return d.keys().hasOnly(['vendorId','title','titleSearch','description','showDate',
+          'createdAt','updatedAt','status','imageId','bookedCount','lastBookingId'])
+        && d.vendorId is string && d.vendorId.size() > 0
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 80
+        && d.titleSearch == d.title.lower()
+        && d.description is string && d.description.size() <= 1000
+        && d.showDate is string && d.showDate.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && calendarDate(d.showDate)
+        && d.createdAt is timestamp && d.updatedAt == request.time
+        && d.status in ['active','deleting'] && d.imageId == id
+        && d.bookedCount is int && d.bookedCount >= 0 && d.bookedCount <= 235
+        && d.lastBookingId is string;
+    }
+    function validImage(d) {
+      return d.keys().hasOnly(['poster','mimeType','width','height','vendorId'])
+        && d.poster is bytes && d.poster.size() > 0 && d.poster.size() <= 204800
+        && d.mimeType == 'image/jpeg'
+        && d.width is int && d.width > 0 && d.height is int && d.height > 0;
+    }
+    function showCounter(id) {
+      let a = request.resource.data;
+      let b = getAfter(/databases/$(db)/documents/bookings/$(a.lastBookingId)).data;
+      let slot = getAfter(/databases/$(db)/documents/shows/$(id)/sessions/$(b.sessionId)).data;
+      return resource.data.status == 'active'
+        && a.diff(resource.data).affectedKeys().hasOnly(['bookedCount','lastBookingId','updatedAt'])
+        && a.updatedAt == request.time
+        && !exists(/databases/$(db)/documents/bookings/$(a.lastBookingId))
+        && b.customerUid == request.auth.uid && b.showId == id && validSeats(b.seats)
+        && a.bookedCount is int
+        && a.bookedCount == resource.data.bookedCount + b.seats.size() && a.bookedCount <= 235
+        && slot.lastBookingId == a.lastBookingId;
+    }
+    function sessionBooking(id, slotId) {
+      let a = request.resource.data;
+      let s = show(id);
+      let sa = showAfter(id);
+      let b = getAfter(/databases/$(db)/documents/bookings/$(a.lastBookingId)).data;
+      return a.diff(resource.data).affectedKeys().hasOnly(['bookedSeats','lastBookingId','updatedAt'])
+        && a.updatedAt == request.time && s.status == 'active' && sa.status == 'active'
+        && sa.lastBookingId == a.lastBookingId
+        && b.customerUid == request.auth.uid && b.showId == id && b.sessionId == slotId
+        && validSeats(b.seats)
+        && sa.bookedCount == s.bookedCount + b.seats.size()
+        && resource.data.bookedSeats.toSet().intersection(b.seats.toSet()).size() == 0
+        && validSeats(a.bookedSeats)
+        && a.bookedSeats.size() == resource.data.bookedSeats.size() + b.seats.size()
+        && a.bookedSeats.toSet() == resource.data.bookedSeats.toSet().union(b.seats.toSet());
+    }
+    match /vendorDevices/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow write, list: if false;
+    }
+    match /users/{uid} {
+      allow get: if customer() && request.auth.uid == uid;
+      allow create, update: if customer() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email','displayName','createdAt'])
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt is timestamp
+        && (!('displayName' in request.resource.data) || request.resource.data.displayName is string)
+        && (resource == null ? request.resource.data.createdAt == request.time
+                            : request.resource.data.createdAt == resource.data.createdAt);
+    }
+    match /shows/{id} {
+      allow get: if signedIn();
+      allow list: if signedIn() && (resource.data.status == 'active' || vendorOwns(resource.data.vendorId));
+      // No session manifest exists: Rules cannot prove a child count of one to five.
+      allow create: if vendorOwns(request.resource.data.vendorId)
+        && validShow(request.resource.data, id) && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.bookedCount == 0 && request.resource.data.lastBookingId == ''
+        && getAfter(/databases/$(db)/documents/showImages/$(id)).data.vendorId == request.resource.data.vendorId;
+      allow update: if (customer() && showCounter(id))
+        || (vendorOwns(resource.data.vendorId) && validShow(request.resource.data, id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'title','titleSearch','description','showDate','status','updatedAt'])
+          && !(resource.data.status == 'deleting' && request.resource.data.status == 'active'));
+      // The repository must prove all children are cleaned; Rules cannot enumerate them.
+      allow delete: if vendorOwns(resource.data.vendorId) && resource.data.status == 'deleting'
+        && !existsAfter(/databases/$(db)/documents/showImages/$(id));
+      match /sessions/{slotId} {
+        function createSession() {
+          let d = request.resource.data;
+          let s = showAfter(id);
+          return vendorOwns(s.vendorId) && s.status == 'active'
+            && !exists(/databases/$(db)/documents/shows/$(id))
+            && d.keys().hasOnly(['time','label','capacity','bookedSeats','lastBookingId','updatedAt'])
+            && d.time is string && d.time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            && slotId == d.time.replace(':', '')
+            && (!('label' in d) || d.label is string)
+            && d.capacity == 47 && d.bookedSeats == [] && d.lastBookingId == '' && d.updatedAt == request.time;
+        }
+        allow read: if signedIn();
+        allow create: if createSession();
+        allow update: if customer() && sessionBooking(id, slotId);
+        allow delete: if deletingOwner(id);
+      }
+    }
+    match /showImages/{id} {
+      allow read: if signedIn();
+      allow create: if vendorOwns(request.resource.data.vendorId) && validImage(request.resource.data)
+        && showAfter(id).vendorId == request.resource.data.vendorId
+        && !exists(/databases/$(db)/documents/shows/$(id));
+      allow update: if vendorOwns(resource.data.vendorId) && validImage(request.resource.data)
+        && request.resource.data.vendorId == resource.data.vendorId
+        && show(id).vendorId == resource.data.vendorId && show(id).status == 'active';
+      allow delete: if deletingOwner(id);
+    }
+    match /bookings/{bookingId} {
+      function createBooking() {
+        let d = request.resource.data;
+        let s = showAfter(d.showId);
+        let slot = getAfter(/databases/$(db)/documents/shows/$(d.showId)/sessions/$(d.sessionId)).data;
+        let before = get(/databases/$(db)/documents/shows/$(d.showId)/sessions/$(d.sessionId)).data;
+        return d.keys().hasOnly(['showId','sessionId','customerUid','seats','showTitle','showDate',
+            'slotTime','vendorId','status','createdAt'])
+          && d.customerUid == request.auth.uid && d.status == 'confirmed' && d.createdAt == request.time
+          && validSeats(d.seats) && s.status == 'active' && s.lastBookingId == bookingId
+          && s.vendorId == d.vendorId && s.title == d.showTitle && s.showDate == d.showDate
+          && slot.lastBookingId == bookingId && slot.time == d.slotTime
+          && before.bookedSeats.toSet().intersection(d.seats.toSet()).size() == 0
+          && existsAfter(/databases/$(db)/documents/bookingEvents/$(bookingId));
+      }
+      allow get: if customer() && (resource == null || resource.data.customerUid == request.auth.uid);
+      allow list: if customer() && resource.data.customerUid == request.auth.uid;
+      allow create: if customer() && createBooking();
+      allow delete: if deletingOwner(resource.data.showId)
+        && !existsAfter(/databases/$(db)/documents/bookingEvents/$(bookingId));
+    }
+    match /bookingEvents/{id} {
+      function createEvent() {
+        let d = request.resource.data;
+        let b = getAfter(/databases/$(db)/documents/bookings/$(id)).data;
+        let s = showAfter(d.showId);
+        let slot = getAfter(/databases/$(db)/documents/shows/$(d.showId)/sessions/$(d.sessionId)).data;
+        return d.keys().hasOnly(['vendorId','showId','sessionId','bookingId','seats','showTitle',
+            'slotTime','slotTotal','showTotal','kind','createdAt'])
+          && d.bookingId == id && d.kind == 'booked' && d.createdAt == request.time
+          && b.customerUid == request.auth.uid && b.createdAt == request.time
+          && d.showId == b.showId && d.sessionId == b.sessionId && d.seats == b.seats
+          && d.vendorId == b.vendorId && d.vendorId == s.vendorId && s.status == 'active'
+          && d.showTitle == b.showTitle && d.slotTime == b.slotTime
+          && d.slotTotal is int && d.showTotal is int
+          && d.slotTotal == slot.bookedSeats.size() && d.showTotal == s.bookedCount;
+      }
+      allow read: if vendorOwns(resource.data.vendorId);
+      allow create: if customer() && createEvent();
+      allow delete: if deletingOwner(resource.data.showId)
+        && !existsAfter(/databases/$(db)/documents/bookings/$(id));
     }
   }
 }
