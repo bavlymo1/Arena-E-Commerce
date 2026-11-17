@@ -17,6 +17,7 @@ Show _show({
   String showDate = '2026-11-18',
   ShowStatus status = ShowStatus.active,
   DateTime? createdAt,
+  DateTime? updatedAt,
 }) {
   return Show(
     id: id,
@@ -29,6 +30,7 @@ Show _show({
     bookedCount: 0,
     lastBookingId: '',
     createdAt: createdAt,
+    updatedAt: updatedAt,
   );
 }
 
@@ -44,6 +46,7 @@ final class _StreamingShowsRepository implements ShowsRepository {
   Future<Uint8List?> Function(String showId)? loadPosterHandler;
   int watchCalls = 0;
   final loadedPosterIds = <String>[];
+  int cacheClears = 0;
 
   @override
   Stream<List<Show>> watchActiveShows({int limit = 100}) {
@@ -84,7 +87,7 @@ final class _StreamingShowsRepository implements ShowsRepository {
   Future<void> resumeDeletes(String vendorId) async {}
 
   @override
-  void clearPosterCache() {}
+  void clearPosterCache() => cacheClears++;
 
   @override
   void dispose() {
@@ -93,6 +96,115 @@ final class _StreamingShowsRepository implements ShowsRepository {
 }
 
 void main() {
+  test('unchanged metadata reuses bytes but explicit retry refreshes cached poster', () async {
+    var loads = 0;
+    final repo = _StreamingShowsRepository(
+      loadPosterHandler: (_) async => Uint8List.fromList([++loads]),
+    );
+    addTearDown(repo.dispose);
+    final cubit = DiscoveryCubit(repo);
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+    final show = _show(id: 's1', title: 'Same');
+    repo.controller.add([show]);
+    await pumpEventQueue();
+    repo.controller.add([_show(id: 's1', title: 'Same')]);
+    await pumpEventQueue();
+    expect(loads, 1);
+    expect(cubit.state.posters['s1'], [1]);
+    final oldController = repo.controller;
+    repo.controller = StreamController<List<Show>>();
+    await cubit.retry();
+    await oldController.close();
+    repo.controller.add([show]);
+    await pumpEventQueue();
+    expect(cubit.state.posters['s1'], [2]);
+    expect(repo.cacheClears, 1);
+  });
+
+  test(
+    'replaces same-ID poster on changed metadata and ignores older completion',
+    () async {
+      final pending = <Completer<Uint8List?>>[];
+      final repo = _StreamingShowsRepository(
+        loadPosterHandler: (_) {
+          final request = Completer<Uint8List?>();
+          pending.add(request);
+          return request.future;
+        },
+      );
+      addTearDown(repo.dispose);
+      final cubit = DiscoveryCubit(repo);
+      addTearDown(cubit.close);
+      await pumpEventQueue();
+      repo.controller.add([_show(id: 's1', title: 'Original')]);
+      await pumpEventQueue();
+      repo.controller.add([_show(id: 's1', title: 'Replacement')]);
+      await pumpEventQueue();
+      expect(pending, hasLength(2));
+      pending[1].complete(Uint8List.fromList([2]));
+      await pumpEventQueue();
+      pending[0].complete(Uint8List.fromList([1]));
+      await pumpEventQueue();
+      expect(cubit.state.posters['s1'], [2]);
+    },
+  );
+
+  test('remove and re-add invalidates same-ID in-flight poster', () async {
+    final pending = <Completer<Uint8List?>>[];
+    final repo = _StreamingShowsRepository(
+      loadPosterHandler: (_) {
+        final request = Completer<Uint8List?>();
+        pending.add(request);
+        return request.future;
+      },
+    );
+    addTearDown(repo.dispose);
+    final cubit = DiscoveryCubit(repo);
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+    final show = _show(id: 's1', title: 'Same metadata');
+    repo.controller.add([show]);
+    await pumpEventQueue();
+    repo.controller.add([]);
+    await pumpEventQueue();
+    repo.controller.add([show]);
+    await pumpEventQueue();
+    expect(pending, hasLength(2));
+    pending[1].complete(Uint8List.fromList([2]));
+    await pumpEventQueue();
+    pending[0].complete(Uint8List.fromList([1]));
+    await pumpEventQueue();
+    expect(cubit.state.posters['s1'], [2]);
+  });
+
+  test('retry waits for cleanup and coalesces pending retry', () async {
+    final released = Completer<void>();
+    final repo = _StreamingShowsRepository(onCancel: () => released.future);
+    addTearDown(repo.dispose);
+    final cubit = DiscoveryCubit(repo);
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+    repo.controller.add([]);
+    await pumpEventQueue();
+    final oldController = repo.controller;
+    repo.controller = StreamController<List<Show>>();
+    final first = cubit.retry();
+    final second = cubit.retry();
+    await pumpEventQueue();
+    try {
+      expect(repo.watchCalls, 1);
+    } finally {
+      released.complete();
+      await Future.wait([first, second]);
+      await oldController.close();
+    }
+    expect(repo.watchCalls, 2);
+    repo.controller.add([]);
+    await pumpEventQueue();
+    expect(cubit.state.status, DiscoveryStatus.ready);
+  });
+
   test(
     'loads FakeShowsRepository active shows newest-first and searches by title',
     () async {

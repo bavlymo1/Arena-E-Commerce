@@ -12,7 +12,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_shows_repository.dart';
 
-Show _show({String id = 'show-1', ShowStatus status = ShowStatus.active}) {
+Show _show({
+  String id = 'show-1',
+  ShowStatus status = ShowStatus.active,
+  DateTime? updatedAt,
+}) {
   return Show(
     id: id,
     vendorId: 'arena',
@@ -24,6 +28,7 @@ Show _show({String id = 'show-1', ShowStatus status = ShowStatus.active}) {
     bookedCount: 2,
     lastBookingId: '',
     createdAt: DateTime.utc(2026, 11, 17),
+    updatedAt: updatedAt,
   );
 }
 
@@ -58,6 +63,7 @@ final class _StreamingShowDetailsRepository implements ShowsRepository {
   Future<Uint8List?> Function(String showId)? loadPosterHandler;
   int watchShowCalls = 0;
   int watchSessionsCalls = 0;
+  int cacheClears = 0;
 
   @override
   Stream<Show?> watchShow(String showId) {
@@ -100,7 +106,7 @@ final class _StreamingShowDetailsRepository implements ShowsRepository {
   Future<void> resumeDeletes(String vendorId) async {}
 
   @override
-  void clearPosterCache() {}
+  void clearPosterCache() => cacheClears++;
 
   @override
   void dispose() {
@@ -110,6 +116,156 @@ final class _StreamingShowDetailsRepository implements ShowsRepository {
 }
 
 void main() {
+  test(
+    're-added show cannot reuse sessions from before it became unavailable',
+    () async {
+      final repo = _StreamingShowDetailsRepository();
+      addTearDown(repo.dispose);
+      final cubit = ShowDetailsCubit(repo, showId: 'show-1');
+      addTearDown(cubit.close);
+      await pumpEventQueue();
+      repo.showController.add(_show());
+      repo.sessionsController.add([_session('19:00')]);
+      await pumpEventQueue();
+      expect(cubit.state.status, ShowDetailsStatus.ready);
+      repo.showController.add(null);
+      await pumpEventQueue();
+      repo.showController.add(_show());
+      await pumpEventQueue();
+      expect(cubit.state.status, ShowDetailsStatus.loading);
+      expect(cubit.state.sessions, isEmpty);
+      repo.sessionsController.add([_session('14:00')]);
+      await pumpEventQueue();
+      expect(cubit.state.status, ShowDetailsStatus.ready);
+      expect(cubit.state.sessions.single.id, '1400');
+    },
+  );
+
+  test('unchanged metadata reuses bytes but explicit retry refreshes cached poster', () async {
+    var loads = 0;
+    final repo = _StreamingShowDetailsRepository(
+      loadPosterHandler: (_) async => Uint8List.fromList([++loads]),
+    );
+    addTearDown(repo.dispose);
+    final cubit = ShowDetailsCubit(repo, showId: 'show-1');
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+    repo.showController.add(_show());
+    repo.sessionsController.add([_session('19:00')]);
+    await pumpEventQueue();
+    repo.showController.add(_show());
+    await pumpEventQueue();
+    expect(loads, 1);
+    final oldShowController = repo.showController;
+    final oldSessionsController = repo.sessionsController;
+    repo.showController = StreamController<Show?>();
+    repo.sessionsController = StreamController<List<Session>>();
+    await cubit.retry();
+    await Future.wait([
+      oldShowController.close(),
+      oldSessionsController.close(),
+    ]);
+    repo.showController.add(_show());
+    repo.sessionsController.add([_session('19:00')]);
+    await pumpEventQueue();
+    expect(cubit.state.posterBytes, [2]);
+    expect(repo.cacheClears, 1);
+  });
+
+  test('removed and re-added show rejects old in-flight poster', () async {
+    final pending = <Completer<Uint8List?>>[];
+    final repo = _StreamingShowDetailsRepository(
+      loadPosterHandler: (_) {
+        final request = Completer<Uint8List?>();
+        pending.add(request);
+        return request.future;
+      },
+    );
+    addTearDown(repo.dispose);
+    final cubit = ShowDetailsCubit(repo, showId: 'show-1');
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+    repo.showController.add(_show());
+    repo.sessionsController.add([_session('19:00')]);
+    await pumpEventQueue();
+    repo.showController.add(null);
+    await pumpEventQueue();
+    repo.showController.add(_show());
+    repo.sessionsController.add([_session('14:00')]);
+    await pumpEventQueue();
+    expect(pending, hasLength(2));
+    pending[1].complete(Uint8List.fromList([2]));
+    await pumpEventQueue();
+    pending[0].complete(Uint8List.fromList([1]));
+    await pumpEventQueue();
+    expect(cubit.state.posterBytes, [2]);
+    expect(cubit.state.sessions.single.id, '1400');
+  });
+
+  test('retry waits for cleanup and coalesces pending retry', () async {
+    final released = Completer<void>();
+    final repo = _StreamingShowDetailsRepository(
+      onShowCancel: () => released.future,
+    );
+    addTearDown(repo.dispose);
+    final cubit = ShowDetailsCubit(repo, showId: 'show-1');
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+    repo.showController.add(_show());
+    repo.sessionsController.add([_session('19:00')]);
+    await pumpEventQueue();
+    final oldShowController = repo.showController;
+    final oldSessionsController = repo.sessionsController;
+    repo.showController = StreamController<Show?>();
+    repo.sessionsController = StreamController<List<Session>>();
+    final first = cubit.retry();
+    final second = cubit.retry();
+    await pumpEventQueue();
+    try {
+      expect(repo.watchShowCalls, 1);
+      expect(repo.watchSessionsCalls, 1);
+    } finally {
+      released.complete();
+      await Future.wait([
+        first,
+        second,
+        oldShowController.close(),
+        oldSessionsController.close(),
+      ]);
+    }
+    expect(repo.watchShowCalls, 2);
+    expect(repo.watchSessionsCalls, 2);
+  });
+
+  test(
+    'updatedAt replacement cannot be overwritten by old poster completion',
+    () async {
+      final pending = <Completer<Uint8List?>>[];
+      final repo = _StreamingShowDetailsRepository(
+        loadPosterHandler: (_) {
+          final request = Completer<Uint8List?>();
+          pending.add(request);
+          return request.future;
+        },
+      );
+      addTearDown(repo.dispose);
+      final cubit = ShowDetailsCubit(repo, showId: 'show-1');
+      addTearDown(cubit.close);
+      await pumpEventQueue();
+      repo.showController.add(_show(updatedAt: DateTime.utc(2026, 11, 17, 1)));
+      repo.sessionsController.add([_session('19:00')]);
+      await pumpEventQueue();
+      repo.showController.add(_show(updatedAt: DateTime.utc(2026, 11, 17, 2)));
+      await pumpEventQueue();
+      expect(pending, hasLength(2));
+      pending[1].complete(Uint8List.fromList([2]));
+      await pumpEventQueue();
+      pending[0].complete(Uint8List.fromList([1]));
+      await pumpEventQueue();
+      expect(cubit.state.posterBytes, [2]);
+    },
+  );
+
   test('rejects blank showId', () {
     final fake = FakeShowsRepository();
     expect(() => ShowDetailsCubit(fake, showId: '   '), throwsArgumentError);

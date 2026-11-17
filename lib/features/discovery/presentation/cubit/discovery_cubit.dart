@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../vendor_shows/domain/models/show.dart';
 import '../../../vendor_shows/domain/repositories/shows_repository.dart';
 import 'discovery_state.dart';
+import 'poster_revision.dart';
 
 final class DiscoveryCubit extends Cubit<DiscoveryState> {
   DiscoveryCubit(this._repository, {bool autoStart = true})
@@ -23,6 +24,8 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
   Future<void>? _activeStartFuture;
   int _listenGeneration = 0;
   bool _awaitingInitialEvent = false;
+  bool _openingSubscription = false;
+  final _posterRequests = <String, Object>{};
 
   Future<void> start() {
     if (isClosed) return Future<void>.value();
@@ -34,18 +37,20 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
 
   Future<void> retry() {
     if (isClosed) return Future<void>.value();
+    if (_openingSubscription && _activeStartFuture != null) {
+      return _activeStartFuture!;
+    }
     return _startListening(retryMissingPosters: true);
   }
 
   Future<void> _startListening({bool retryMissingPosters = false}) {
     final generation = ++_listenGeneration;
     _awaitingInitialEvent = true;
+    _openingSubscription = true;
+    _posterRequests.clear();
 
     final nextPosters = retryMissingPosters
-        ? <String, Uint8List?>{
-            for (final entry in state.posters.entries)
-              if (entry.value != null) entry.key: entry.value,
-          }
+        ? <String, Uint8List?>{}
         : state.posters;
 
     emit(
@@ -57,15 +62,22 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
       ),
     );
 
-    final startFuture = _openSubscription(generation);
+    final startFuture = _openSubscription(
+      generation,
+      refreshPosters: retryMissingPosters,
+    );
     _activeStartFuture = startFuture;
     return startFuture;
   }
 
-  Future<void> _openSubscription(int generation) async {
-    unawaited(_cancelSubscription().catchError((Object _) {}));
-    if (isClosed || generation != _listenGeneration) return;
+  Future<void> _openSubscription(
+    int generation, {
+    required bool refreshPosters,
+  }) async {
     try {
+      await _cancelSubscription();
+      if (isClosed || generation != _listenGeneration) return;
+      if (refreshPosters) _repository.clearPosterCache();
       _showsSubscription = _repository
           .watchActiveShows(limit: feedLimit)
           .listen(
@@ -80,7 +92,9 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
           );
     } catch (_) {
       _onStreamError(generation);
-      unawaited(_cancelSubscription().catchError((Object _) {}));
+      await _cancelSubscription().catchError((Object _) {});
+    } finally {
+      if (generation == _listenGeneration) _openingSubscription = false;
     }
   }
 
@@ -104,13 +118,28 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
         rawShows.where((show) => show.status == ShowStatus.active).toList()
           ..sort(_compareShowsNewestFirst);
     final activeIds = activeShows.map((show) => show.id).toSet();
+    final previous = {for (final show in state.shows) show.id: show};
+    final changedIds = {
+      for (final show in activeShows)
+        if (previous[show.id] case final old?
+            when posterRevision(old) != posterRevision(show))
+          show.id,
+    };
+    final removedIds = previous.keys.toSet().difference(activeIds);
+    for (final id in {...changedIds, ...removedIds}) {
+      _posterRequests.remove(id);
+    }
+    if (changedIds.isNotEmpty || removedIds.isNotEmpty) {
+      _repository.clearPosterCache();
+    }
 
     final retainedPosters = <String, Uint8List?>{
       for (final entry in state.posters.entries)
-        if (activeIds.contains(entry.key)) entry.key: entry.value,
+        if (activeIds.contains(entry.key) && !changedIds.contains(entry.key))
+          entry.key: entry.value,
     };
     final updatedLoading = state.loadingPosterIds
-        .where(activeIds.contains)
+        .where((id) => activeIds.contains(id) && !changedIds.contains(id))
         .toSet();
 
     final idsToLoad = <String>[];
@@ -138,13 +167,19 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
   }
 
   Future<void> _loadPoster(int generation, String showId) async {
+    final request = Object();
+    _posterRequests[showId] = request;
     Uint8List? bytes;
     try {
       bytes = await _repository.loadPoster(showId);
     } catch (_) {
       bytes = null;
     }
-    if (isClosed || generation != _listenGeneration) return;
+    if (isClosed ||
+        generation != _listenGeneration ||
+        !identical(_posterRequests[showId], request)) {
+      return;
+    }
 
     final updatedLoading = state.loadingPosterIds.toSet()..remove(showId);
     final stillPresent = state.shows.any((show) => show.id == showId);

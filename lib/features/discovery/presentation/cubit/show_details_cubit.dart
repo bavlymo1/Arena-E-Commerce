@@ -7,6 +7,7 @@ import '../../../vendor_shows/domain/models/session.dart';
 import '../../../vendor_shows/domain/models/show.dart';
 import '../../../vendor_shows/domain/repositories/shows_repository.dart';
 import 'show_details_state.dart';
+import 'poster_revision.dart';
 
 final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
   ShowDetailsCubit(
@@ -36,6 +37,9 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
   bool _posterRequestStarted = false;
   bool _posterLoading = false;
   Uint8List? _latestPosterBytes;
+  bool _openingSubscriptions = false;
+  Object? _posterRevision;
+  int _posterRequest = 0;
 
   static String _requireNonEmpty(String value) {
     if (value.trim().isEmpty) {
@@ -54,38 +58,51 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
 
   Future<void> retry() {
     if (isClosed) return Future<void>.value();
-    return _startListening();
+    if (_openingSubscriptions && _activeStartFuture != null) {
+      return _activeStartFuture!;
+    }
+    return _startListening(refreshPoster: true);
   }
 
-  Future<void> _startListening() {
+  Future<void> _startListening({bool refreshPoster = false}) {
     final generation = ++_listenGeneration;
     _awaitingInitialEvent = true;
+    _openingSubscriptions = true;
+    _posterRequest++;
     _hasShowSnapshot = false;
     _hasSessionsSnapshot = false;
     _latestShow = null;
     _latestSessions = const <Session>[];
-    if (_latestPosterBytes == null) {
-      _posterRequestStarted = false;
-      _posterLoading = false;
-    }
+    _latestPosterBytes = null;
+    _posterRequestStarted = false;
+    _posterLoading = false;
+    _posterRevision = null;
 
     emit(
       state.copyWith(
         status: ShowDetailsStatus.loading,
         posterLoading: _posterLoading,
+        clearPosterBytes: true,
         clearErrorMessage: true,
       ),
     );
 
-    final startFuture = _openSubscriptions(generation);
+    final startFuture = _openSubscriptions(
+      generation,
+      refreshPoster: refreshPoster,
+    );
     _activeStartFuture = startFuture;
     return startFuture;
   }
 
-  Future<void> _openSubscriptions(int generation) async {
-    unawaited(_cancelSubscriptions().catchError((Object _) {}));
-    if (isClosed || generation != _listenGeneration) return;
+  Future<void> _openSubscriptions(
+    int generation, {
+    required bool refreshPoster,
+  }) async {
     try {
+      await _cancelSubscriptions();
+      if (isClosed || generation != _listenGeneration) return;
+      if (refreshPoster) _repository.clearPosterCache();
       _showSubscription = _repository
           .watchShow(state.showId)
           .listen(
@@ -114,7 +131,9 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
           );
     } catch (_) {
       _onStreamError(generation, showFailed: true, sessionsFailed: true);
-      unawaited(_cancelSubscriptions().catchError((Object _) {}));
+      await _cancelSubscriptions().catchError((Object _) {});
+    } finally {
+      if (generation == _listenGeneration) _openingSubscriptions = false;
     }
   }
 
@@ -125,6 +144,11 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
     _latestShow = show;
 
     if (show == null || show.status != ShowStatus.active) {
+      _hasSessionsSnapshot = false;
+      _latestSessions = const <Session>[];
+      _posterRequest++;
+      _posterRevision = null;
+      _repository.clearPosterCache();
       _posterRequestStarted = false;
       _posterLoading = false;
       _latestPosterBytes = null;
@@ -141,10 +165,29 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
       return;
     }
 
+    final revision = posterRevision(show);
+    if (_posterRevision != null && _posterRevision != revision) {
+      _posterRequest++;
+      _posterRequestStarted = false;
+      _latestPosterBytes = null;
+      _repository.clearPosterCache();
+    }
+    _posterRevision = revision;
+
+    if (state.isUnavailable && !_hasSessionsSnapshot) {
+      emit(
+        state.copyWith(
+          status: ShowDetailsStatus.loading,
+          show: show,
+          clearErrorMessage: true,
+        ),
+      );
+    }
+
     if (!_posterRequestStarted && _latestPosterBytes == null) {
       _posterRequestStarted = true;
       _posterLoading = true;
-      unawaited(_loadPoster(generation));
+      unawaited(_loadPoster(generation, ++_posterRequest));
     }
 
     _reconcileSnapshots();
@@ -181,14 +224,18 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
     );
   }
 
-  Future<void> _loadPoster(int generation) async {
+  Future<void> _loadPoster(int generation, int request) async {
     Uint8List? bytes;
     try {
       bytes = await _repository.loadPoster(state.showId);
     } catch (_) {
       bytes = null;
     }
-    if (isClosed || generation != _listenGeneration) return;
+    if (isClosed ||
+        generation != _listenGeneration ||
+        request != _posterRequest) {
+      return;
+    }
 
     _posterLoading = false;
     final show = _latestShow;
