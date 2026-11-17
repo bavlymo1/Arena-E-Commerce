@@ -29,7 +29,6 @@ class SeatMapView extends StatefulWidget {
     this.seatSelectorBuilder,
     this.selectedSummaryBuilder,
     this.initialListMode = false,
-    this.initialEnlarged = false,
     this.initialRow = 1,
     super.key,
   });
@@ -48,7 +47,6 @@ class SeatMapView extends StatefulWidget {
   final SeatTileSelectorBuilder? seatSelectorBuilder;
   final WidgetBuilder? selectedSummaryBuilder;
   final bool initialListMode;
-  final bool initialEnlarged;
   final int initialRow;
 
   @override
@@ -57,7 +55,6 @@ class SeatMapView extends StatefulWidget {
 
 class _SeatMapViewState extends State<SeatMapView> {
   late bool _listMode = widget.initialListMode;
-  late bool _enlarged = widget.initialEnlarged;
   late int _selectedRow = widget.initialRow.clamp(1, SeatLayout.rowCount);
 
   int get _bookedTotal =>
@@ -78,7 +75,6 @@ class _SeatMapViewState extends State<SeatMapView> {
         readOnly: widget.vendorMode,
         busy: isBusy,
         listMode: _listMode,
-        enlarged: _enlarged,
       );
     }
 
@@ -97,12 +93,12 @@ class _SeatMapViewState extends State<SeatMapView> {
   }
 
   Widget _buildGridRow(BuildContext context, SeatRowSpec row) {
-    final spacing = _enlarged ? 5.0 : 4.0;
-    final aisleWidth = _enlarged ? 18.0 : 12.0;
+    const spacing = 4.0;
+    const aisleWidth = 12.0;
 
     return Padding(
       key: ValueKey<String>('seat-grid-row-${row.rowNumber}'),
-      padding: EdgeInsets.symmetric(vertical: _enlarged ? 4.5 : 3.5),
+      padding: const EdgeInsets.symmetric(vertical: 3.5),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -159,31 +155,21 @@ class _SeatMapViewState extends State<SeatMapView> {
             style: Theme.of(context).textTheme.labelMedium,
           ),
         ),
-        if (_enlarged)
-          SingleChildScrollView(
-            key: const ValueKey<String>('seat-map-enlarged-scroll'),
-            scrollDirection: Axis.horizontal,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              child: gridColumn,
-            ),
-          )
-        else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              return ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-                child: FittedBox(
-                  key: const ValueKey<String>('seat-map-fit-box'),
-                  fit: BoxFit.scaleDown,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: gridColumn,
-                  ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+              child: FittedBox(
+                key: const ValueKey<String>('seat-map-fit-box'),
+                fit: BoxFit.scaleDown,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: gridColumn,
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -363,12 +349,6 @@ class _SeatMapViewState extends State<SeatMapView> {
               onPressed: () => setState(() => _listMode = !_listMode),
               child: Text(_listMode ? 'Show map' : 'Row list'),
             ),
-            if (!_listMode)
-              OutlinedButton(
-                key: const ValueKey<String>('seat-zoom-toggle'),
-                onPressed: () => setState(() => _enlarged = !_enlarged),
-                child: Text(_enlarged ? 'Fit map' : 'Enlarge map'),
-              ),
           ],
         ),
         if (!widget.vendorMode) ...<Widget>[
