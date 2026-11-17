@@ -59,6 +59,7 @@ service cloud.firestore {
         && a.updatedAt == request.time
         && !exists(/databases/$(db)/documents/bookings/$(a.lastBookingId))
         && b.customerUid == request.auth.uid && b.showId == id && validSeats(b.seats)
+        && a.bookedCount is int
         && a.bookedCount == resource.data.bookedCount + b.seats.size() && a.bookedCount <= 235
         && slot.lastBookingId == a.lastBookingId;
     }
@@ -74,7 +75,7 @@ service cloud.firestore {
         && validSeats(b.seats)
         && sa.bookedCount == s.bookedCount + b.seats.size()
         && resource.data.bookedSeats.toSet().intersection(b.seats.toSet()).size() == 0
-        && a.bookedSeats is list && a.bookedSeats.size() <= 47
+        && validSeats(a.bookedSeats)
         && a.bookedSeats.size() == resource.data.bookedSeats.size() + b.seats.size()
         && a.bookedSeats.toSet() == resource.data.bookedSeats.toSet().union(b.seats.toSet());
     }
@@ -171,6 +172,7 @@ service cloud.firestore {
           && d.showId == b.showId && d.sessionId == b.sessionId && d.seats == b.seats
           && d.vendorId == b.vendorId && d.vendorId == s.vendorId && s.status == 'active'
           && d.showTitle == b.showTitle && d.slotTime == b.slotTime
+          && d.slotTotal is int && d.showTotal is int
           && d.slotTotal == slot.bookedSeats.size() && d.showTotal == s.bookedCount;
       }
       allow read: if vendorOwns(resource.data.vendorId);

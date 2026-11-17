@@ -1,6 +1,6 @@
 # Firebase rules and test harness
 
-**Status: P1-04B candidate, not deployment ready.** The feature rules and expanded matrix replace the deny-all candidate on this task branch. The latest local run passed all 74 tests using the explicitly guarded JavaScript transaction writer described below. This does not prove that bare SDK retries or a FlutterFire repository behave the same way. Independent schema gaps below remain open. No cloud project or application Firebase binding is configured.
+**Status: P1-04B candidate, not deployment ready.** The feature rules and expanded matrix replace the deny-all candidate on this task branch. The latest local run passed all 84 tests using the explicitly guarded JavaScript transaction writer and numeric-type hardening described below. This does not prove that bare SDK retries or a FlutterFire repository behave the same way. Independent schema gaps below remain open. No cloud project or application Firebase binding is configured.
 
 The candidate enforces enrolled vendor writes, password-provider customer ownership, atomic show/image/session creation, paired four-document booking, exact seats/counters/events, owner-only reads, server missing-document recovery, deleting-state authorization and reciprocal booking/event deletes. Calendar dates are validated beyond their string format. `firestore.indexes.json` declares the planned active-show and vendor-event ordered feeds; emulator tests do not prove deployed index readiness.
 
@@ -43,7 +43,7 @@ Four-pair deletion passed with emulator caching, but its uncached count is24. Ap
 
 ## Disjoint contention diagnosis and verified writer contract
 
-On 2026-11-18, the original unmodified strict disjoint-booking test reproduced `permission-denied` on Firestore emulator 1.22.0. Earlier candidate evidence also reproduced it on 1.21.0. Coverage showed a stale optimistic write failing the session rule's exact before/after counter and seat-size checks. The JavaScript SDK sends document `updateTime` preconditions, but the emulator evaluates these Rules before returning an optimistic conflict. Its transaction runner does not automatically retry the permanent permission-denied code. A trial removing only a redundant cross-document counter check still failed the necessary seat-delta check; that trial was reverted. The candidate Rules and their permissions remain unchanged.
+On 2026-11-18, the original unmodified strict disjoint-booking test reproduced `permission-denied` on Firestore emulator 1.22.0. Earlier candidate evidence also reproduced it on 1.21.0. Coverage showed a stale optimistic write failing the session rule's exact before/after counter and seat-size checks. The JavaScript SDK sends document `updateTime` preconditions, but the emulator evaluates these Rules before returning an optimistic conflict. Its transaction runner does not automatically retry the permanent permission-denied code. A trial removing only a redundant cross-document counter check still failed the necessary seat-delta check; that trial was reverted. The retry refinement left Rules unchanged; the later numeric hardening below only tightens them.
 
 This is classified as a **transaction-writer retry refinement for the optimistic transaction/Rules evaluation interaction**, not a Rules relaxation or a false success assertion. The Node harness writer now:
 
@@ -60,6 +60,14 @@ The unchanged strict disjoint assertions now force both clients to read before e
 Verification: Node 22.23.4, Java 21.0.12, Firebase CLI 15.35.0, Firestore emulator 1.22.0, demo-arenapass and loopback 8180. Eight targeted concurrency/retry regressions passed, then the full matrix passed **74/74** (15.3s test runtime), exit 0 and clean emulator shutdown. Syntax and whitespace checks passed; no package version, cloud configuration or Rules predicate changed in this retry refinement.
 
 Primary references: [Firestore transaction guarantees](https://firebase.google.com/docs/firestore/manage-data/transactions), [optimistic mobile/web transactions](https://firebase.google.com/docs/firestore/transaction-data-contention), [REST error guidance](https://firebase.google.com/docs/firestore/use-rest-api), [JavaScript transaction runner source](https://github.com/firebase/firebase-js-sdk/blob/main/packages/firestore/src/core/transaction_runner.ts). The installed SDK source was inspected alongside the local reproduction; the bare permission-denied error is not generally classified as retryable.
+
+## REST numeric-type hardening
+
+An independent review identified that JavaScript SDK literals such as `1.0` serialize as Firestore integers, so the ordinary fractional-seat test could not prove rejection of wire-level whole-number doubles. Customer-authenticated emulator REST `documents:commit` probes used explicit `doubleValue` fields and atomic four-document writes. The unsigned fixture JWT contains a password-provider customer UID, not the emulator's admin token; a forged-owner control was denied and an integer control succeeded.
+
+Before the fix, `show.bookedCount`, event `slotTotal` and event `showTotal` each accepted a whole-number double. A session-only double seat also passed the numeric set-union comparison. Booking and event double-seat arrays were independently denied already; their existing constraints were preserved. The fix adds explicit `is int` guards to the three totals and applies the existing fixed 1..47 literal-integer `validSeats` whitelist to the stored session array, replacing its weaker list/size-only check. No new document access or schema field is introduced.
+
+All ten REST tests now pass, including independent paired-field probes, a mixed session array with the last (47th) seat encoded as a double, and a successful commit of all 47 literal integer seats. The final full matrix passed **84/84** (15.3s test runtime), exit 0 and clean Firestore emulator shutdown. Earlier failing probe runs were retained as local ignored logs and are not counted as successful verification. This remains mocked emulator authentication and does not prove live sign-in or Flutter numeric decoding.
 
 ## Explicit acceptance gaps
 

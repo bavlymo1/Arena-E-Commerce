@@ -146,6 +146,57 @@ async function transactionBooking(db, id, seats, uid, { afterRead, mutate } = {}
     }
   }
 }
+function emulatorCustomerToken(uid = 'customer-a') {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode({
+    iss: `https://securetoken.google.com/${projectId}`, aud: projectId,
+    iat: 0, exp: 3600, auth_time: 0, sub: uid, user_id: uid,
+    email: `${uid}@example.test`, firebase: { sign_in_provider: 'password' },
+  })}.`;
+}
+function restValue(value) {
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(restValue) } };
+  if (typeof value === 'number') return { integerValue: String(value) };
+  if (typeof value === 'string') return { stringValue: value };
+  throw new Error('Unsupported REST fixture field');
+}
+async function restBooking({ id = 'rest-booking', doubles = [], uid = 'customer-a', seats = [1], doubleSeatIndex } = {}) {
+  const [show, slot] = await Promise.all([
+    getDocFromServer(doc(customer, 'shows/show-a')), getDocFromServer(doc(customer, sessionPath)),
+  ]);
+  const writes = [];
+  function record(reference, data, update) {
+    const transforms = Object.keys(data).filter((field) => field === 'createdAt' || field === 'updatedAt');
+    const fields = Object.fromEntries(Object.entries(data)
+      .filter(([field]) => !transforms.includes(field)).map(([field, value]) => [field, restValue(value)]));
+    for (const target of doubles) {
+      const [path, field] = target.includes(':') ? target.split(':') : [null, target];
+      if (path !== null && reference.path !== path) continue;
+      if (field in fields) {
+        const value = data[field];
+        fields[field] = Array.isArray(value)
+          ? { arrayValue: { values: value.map((seat, index) =>
+            doubleSeatIndex === undefined || doubleSeatIndex === index
+              ? { doubleValue: seat } : restValue(seat)) } }
+          : { doubleValue: value };
+      }
+    }
+    writes.push({
+      update: { name: `projects/${projectId}/databases/(default)/documents/${reference.path}`, fields },
+      ...(update ? { updateMask: { fieldPaths: Object.keys(fields) } } : {}),
+      updateTransforms: transforms.map((fieldPath) => ({ fieldPath, setToServerValue: 'REQUEST_TIME' })),
+    });
+  }
+  bookingWrites(customer, id, seats, show.data(), slot.data(), { uid })({
+    update: (reference, data) => record(reference, data, true),
+    set: (reference, data) => record(reference, data, false),
+  });
+  return fetch(`http://${host}:${port}/v1/projects/${projectId}/databases/(default)/documents:commit`, {
+    method: 'POST', headers: {
+      'Content-Type': 'application/json', Authorization: `Bearer ${emulatorCustomerToken()}`,
+    }, body: JSON.stringify({ writes }), signal: AbortSignal.timeout(10000),
+  });
+}
 async function markDeleting(db = vendor) {
   return updateDoc(doc(db, 'shows/show-a'), { status: 'deleting', updatedAt: serverTimestamp() });
 }
@@ -313,6 +364,44 @@ test('concurrent disjoint bookings serialize exact event-time totals', async () 
   }
   assert.deepEqual(events.map((event) => event.bookingId).sort(), ['race-a', 'race-b']);
   assert.deepEqual((await getDocFromServer(doc(customer, sessionPath))).data().bookedSeats.sort(), [1,2,3]);
+});
+
+test('REST integer control is authorized as customer, not admin', async () => {
+  await addShow();
+  const forged = await restBooking({ id: 'wrong-owner', uid: 'customer-b' });
+  assert.equal(forged.status, 403, await forged.text());
+  await assertNoBooking('wrong-owner');
+  const response = await restBooking();
+  assert.equal(response.status, 200, await response.text());
+  assert.equal((await getDocFromServer(doc(customer, 'bookings/rest-booking'))).data().customerUid, 'customer-a');
+});
+for (const doubles of [
+  ['bookedCount'], ['slotTotal'], ['showTotal'], ['bookedSeats', 'seats'],
+  ['bookedSeats'], ['bookings/rest-booking:seats'], ['bookingEvents/rest-booking:seats'],
+]) {
+  test(`REST denies whole-number doubles in ${doubles.join('/')}`, async () => {
+    await addShow();
+    const response = await restBooking({ doubles });
+    assert.equal(response.status, 403, await response.text());
+    await assertNoBooking('rest-booking');
+  });
+}
+test('REST denies a mixed integer/double session array at its last seat', async () => {
+  await addShow();
+  const response = await restBooking({
+    seats: Array.from({ length: 47 }, (_, index) => index + 1),
+    doubles: ['bookedSeats'], doubleSeatIndex: 46,
+  });
+  assert.equal(response.status, 403, await response.text());
+  await assertNoBooking('rest-booking');
+});
+test('REST all 47 literal integer seats remain valid under type and call budgets', async () => {
+  await addShow();
+  const response = await restBooking({ seats: Array.from({ length: 47 }, (_, index) => index + 1) });
+  assert.equal(response.status, 200, await response.text());
+  const session = (await getDocFromServer(doc(customer, sessionPath))).data();
+  assert.equal(session.bookedSeats.length, 47);
+  assert.equal((await getDocFromServer(doc(customer, 'shows/show-a'))).data().bookedCount, 47);
 });
 
 test('unchanged permission denial is not retried', async () => {
