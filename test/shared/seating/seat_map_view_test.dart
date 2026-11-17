@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:e_commerce_project/features/booking/presentation/cubit/seat_selection_cubit.dart';
 import 'package:e_commerce_project/features/booking/presentation/cubit/seat_selection_state.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session.dart';
@@ -129,7 +131,7 @@ void main() {
   });
 
   testWidgets(
-    'row list and enlarged mode work cleanly at narrow width and large text',
+    'fitted map and row list stay within narrow width with large text',
     (tester) async {
       tester.view.physicalSize = const Size(280, 640);
       tester.view.devicePixelRatio = 1.0;
@@ -145,14 +147,34 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
-
-      final zoomToggle = find.byKey(const ValueKey<String>('seat-zoom-toggle'));
-      await tester.ensureVisible(zoomToggle);
-      await tester.tap(zoomToggle);
-      await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey<String>('seat-map-enlarged-scroll')),
+        MediaQuery.textScalerOf(tester.element(find.byType(SeatMapView)))
+            .scale(10),
+        18,
+      );
+      for (var seat = 1; seat <= 47; seat++) {
+        final bounds = tester.getRect(
+          find.byKey(ValueKey<String>('seat-grid-$seat')),
+        );
+        expect(bounds.left, greaterThanOrEqualTo(0));
+        expect(bounds.right, lessThanOrEqualTo(280));
+      }
+
+      expect(
+        find.byKey(const ValueKey<String>('seat-map-fit-box')),
         findsOneWidget,
+      );
+      expect(find.text('Enlarge map'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(SeatMapView),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is SingleChildScrollView &&
+                widget.scrollDirection == Axis.horizontal,
+          ),
+        ),
+        findsNothing,
       );
       expect(tester.takeException(), isNull);
 
@@ -189,6 +211,64 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('semantic taps honor the same seat interaction guards', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final tapped = <int>[];
+    await tester.pumpWidget(
+      _wrap(
+        Row(
+          children: [
+            SeatTile(
+              seatNumber: 1,
+              status: SeatVisualStatus.available,
+              onTap: tapped.add,
+            ),
+            SeatTile(
+              seatNumber: 2,
+              status: SeatVisualStatus.selected,
+              onTap: tapped.add,
+            ),
+            SeatTile(
+              seatNumber: 3,
+              status: SeatVisualStatus.bookedByOther,
+              onTap: tapped.add,
+            ),
+            SeatTile(
+              seatNumber: 4,
+              status: SeatVisualStatus.mineConfirmed,
+              onTap: tapped.add,
+            ),
+            SeatTile(
+              seatNumber: 5,
+              status: SeatVisualStatus.available,
+              readOnly: true,
+              onTap: tapped.add,
+            ),
+            SeatTile(
+              seatNumber: 6,
+              status: SeatVisualStatus.available,
+              busy: true,
+              onTap: tapped.add,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    for (var seat = 1; seat <= 6; seat++) {
+      final node = tester.getSemantics(
+        find.bySemanticsLabel(RegExp('^Seat $seat, row 1,')),
+      );
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), seat <= 2);
+      node.owner!.performAction(node.id, SemanticsAction.tap);
+    }
+    await tester.pump();
+    expect(tapped, [1, 2]);
+    handle.dispose();
+  });
 
   testWidgets('exposes semantics labels and state colors', (tester) async {
     final semanticsHandle = tester.ensureSemantics();

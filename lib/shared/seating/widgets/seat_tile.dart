@@ -24,7 +24,6 @@ class SeatTile extends StatelessWidget {
     this.readOnly = false,
     this.busy = false,
     this.listMode = false,
-    this.enlarged = false,
     super.key,
   });
 
@@ -34,7 +33,6 @@ class SeatTile extends StatelessWidget {
   final bool readOnly;
   final bool busy;
   final bool listMode;
-  final bool enlarged;
 
   bool get _canTap =>
       !readOnly && !busy && status.isInteractive && onTap != null;
@@ -95,10 +93,9 @@ class SeatTile extends StatelessWidget {
         ),
       );
     } else {
-      final size = enlarged ? 44.0 : 30.0;
       content = SizedBox(
-        width: size,
-        height: size,
+        width: 30,
+        height: 30,
         child: Center(
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -108,7 +105,7 @@ class SeatTile extends StatelessWidget {
                 tileText,
                 style: TextStyle(
                   color: ink,
-                  fontSize: enlarged ? 12 : 10,
+                  fontSize: 10,
                   fontWeight: isSelected || isMine
                       ? FontWeight.w700
                       : FontWeight.w600,
@@ -126,11 +123,12 @@ class SeatTile extends StatelessWidget {
       enabled: _canTap,
       selected: isSelected,
       label: label,
+      onTap: _canTap ? () => onTap!(seatNumber) : null,
       excludeSemantics: true,
       child: Material(
         color: fill,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(listMode || enlarged ? 10 : 7),
+          borderRadius: BorderRadius.circular(listMode ? 10 : 7),
           side: BorderSide(color: border, width: borderWidth),
         ),
         clipBehavior: Clip.antiAlias,
