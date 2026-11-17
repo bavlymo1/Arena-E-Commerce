@@ -1,6 +1,6 @@
 # Firebase rules and test harness
 
-**Status: P1-04B candidate, not deployment ready.** The feature rules and expanded matrix replace the deny-all candidate on this task branch. The latest local run has 68 tests: 67 passed and the simultaneous disjoint-booking test failed with permission-denied. Keep that test failing until its acceptance gap is resolved; do not interpret the passing subset as full transaction verification. No cloud project or application Firebase binding is configured.
+**Status: P1-04B candidate, not deployment ready.** The feature rules and expanded matrix replace the deny-all candidate on this task branch. The latest local run passed all 74 tests using the explicitly guarded JavaScript transaction writer described below. This does not prove that bare SDK retries or a FlutterFire repository behave the same way. Independent schema gaps below remain open. No cloud project or application Firebase binding is configured.
 
 The candidate enforces enrolled vendor writes, password-provider customer ownership, atomic show/image/session creation, paired four-document booking, exact seats/counters/events, owner-only reads, server missing-document recovery, deleting-state authorization and reciprocal booking/event deletes. Calendar dates are validated beyond their string format. `firestore.indexes.json` declares the planned active-show and vendor-event ordered feeds; emulator tests do not prove deployed index readiness.
 
@@ -41,11 +41,31 @@ These are static worst-case uncached counts, separate from observed emulator suc
 
 Four-pair deletion passed with emulator caching, but its uncached count is24. Application cleanup must use at most three pairs per batch for the guaranteed budget; no cleanup repository is implemented here. The booking show write checks that its booking did not already exist, preventing counter replay.
 
+## Disjoint contention diagnosis and verified writer contract
+
+On 2026-11-18, the original unmodified strict disjoint-booking test reproduced `permission-denied` on Firestore emulator 1.22.0. Earlier candidate evidence also reproduced it on 1.21.0. Coverage showed a stale optimistic write failing the session rule's exact before/after counter and seat-size checks. The JavaScript SDK sends document `updateTime` preconditions, but the emulator evaluates these Rules before returning an optimistic conflict. Its transaction runner does not automatically retry the permanent permission-denied code. A trial removing only a redundant cross-document counter check still failed the necessary seat-delta check; that trial was reverted. The candidate Rules and their permissions remain unchanged.
+
+This is classified as a **transaction-writer retry refinement for the optimistic transaction/Rules evaluation interaction**, not a Rules relaxation or a false success assertion. The Node harness writer now:
+
+1. Snapshots the original booking ID, owner/context and requested seats for the logical request.
+2. Lets `runTransaction` perform its normal bounded retries. After a permission denial, it considers a fresh SDK invocation only when the failed callback recorded its show/session input snapshots.
+3. Uses that same customer's `getDocFromServer` permissions to read the booking, show and session. Every input/evidence snapshot must be server-sourced without pending writes. The booking must be absent, both context documents must still exist, and at least one recorded input must differ from current server data.
+4. Re-enters the whole transaction with the exact same ID and immutable seats, at most three SDK invocations total. The SDK's own finite retry policy still applies inside each invocation. Every new write must pass the unchanged Rules again.
+5. Preserves the failure when evidence is unavailable, cached/pending, unchanged, another owner's booking is forbidden, the booking already exists, or the bound is reached. It does not treat failure as a new logical request, read forbidden events, use admin bypass for retry evidence, or claim confirmation from absence alone.
+
+Only the test writer implements this contract. There is no FlutterFire data repository yet; its uncertainty mapping, account-switch guards, metadata evidence and same-ID retry behavior must be separately implemented and tested before live use. The observer used to schedule deterministic contention and forged payloads is harness-only, not a production callback side effect. Admin access appears only in fixture setup and independent postcondition assertions, never in the writer's retry path.
+
+The unchanged strict disjoint assertions now force both clients to read before either writes, prove a callback was rerun, and require both stable booking/event IDs plus exact final/event-time totals. Six added tests cover unchanged permission denial without retry, forged payload rejection despite changed inputs, the three-invocation bound, immutable original seats, and existing own/other-owner references. The original overlapping-seat/all-or-none and forged-write tests remain intact.
+
+Verification: Node 22.23.4, Java 21.0.12, Firebase CLI 15.35.0, Firestore emulator 1.22.0, demo-arenapass and loopback 8180. Eight targeted concurrency/retry regressions passed, then the full matrix passed **74/74** (15.3s test runtime), exit 0 and clean emulator shutdown. Syntax and whitespace checks passed; no package version, cloud configuration or Rules predicate changed in this retry refinement.
+
+Primary references: [Firestore transaction guarantees](https://firebase.google.com/docs/firestore/manage-data/transactions), [optimistic mobile/web transactions](https://firebase.google.com/docs/firestore/transaction-data-contention), [REST error guidance](https://firebase.google.com/docs/firestore/use-rest-api), [JavaScript transaction runner source](https://github.com/firebase/firebase-js-sdk/blob/main/packages/firestore/src/core/transaction_runner.ts). The installed SDK source was inspected alongside the local reproduction; the bare permission-denied error is not generally classified as retryable.
+
 ## Explicit acceptance gaps
 
 - The approved schema contains no session manifest/count. Rules cannot enforce at least one and at most five child sessions at initial creation. A test demonstrates zero and six sessions are accepted; creation of later sessions is denied. Do not claim client validation closes this forged-write gap.
 - Rules cannot enumerate arbitrary children. A test demonstrates that an enrolled vendor can delete a deleting parent after removing its image while sessions/bookings/events remain. The future repository must clean children first; stronger independent parent-last authorization needs an agreed schema/contract change before deployment.
-- Two concurrent disjoint transactions can produce permission-denied before the SDK retries a stale write. The strict both-success test remains failing. This reproduces with Firestore emulator1.22.0 and1.21.0. A temporary permissive in-memory emulator-only diagnostic did retry and pass, isolating the interaction with Rules evaluation; the actual candidate rules were not weakened. Do not blindly retry permission failures or claim production behavior from these experiments.
+- Bare optimistic SDK transactions can still produce permission-denied before their stale-write precondition is reported as a retryable conflict. The local guarded Node writer passes the strict both-success test without changing Rules. It is not a deployed or FlutterFire implementation; preserve the evidence gates above rather than blindly retrying permission failures.
 - The local harness mocks authentication and does not prove sign-in, deployed Rules/indexes, APK Firebase configuration, live automatic transaction retries, calendar cutoffs, image decodability, or restart-safe deletion. MIME/size validation cannot decode JPEG content.
 
 The task remains in progress. Retain uncertainty mapping and authoritative recovery at the application boundary. A permission-denied response is not evidence that a logical booking reference is absent.

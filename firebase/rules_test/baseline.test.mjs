@@ -4,7 +4,7 @@ import { after, before, beforeEach, test } from 'node:test';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import {
   Bytes, collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs,
-  query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch,
+  query, runTransaction, serverTimestamp, setDoc, snapshotEqual, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 
 const projectId = 'demo-arenapass';
@@ -103,13 +103,48 @@ async function book(db = customer, id = 'booking-a', seats = [1], options = {}) 
   bookingWrites(db, id, seats, s.data(), slot.data(), options)(batch);
   return batch.commit();
 }
-async function transactionBooking(db, id, seats, uid) {
-  return runTransaction(db, async (tx) => {
-    const s = await tx.get(doc(db, 'shows/show-a'));
-    const slot = await tx.get(doc(db, sessionPath));
-    if (seats.some((seat) => slot.data().bookedSeats.includes(seat))) throw new Error('Seat conflict');
-    bookingWrites(db, id, seats, s.data(), slot.data(), { uid })(tx);
-  });
+async function transactionBooking(db, id, seats, uid, { afterRead, mutate } = {}) {
+  const requestedSeats = Object.freeze([...seats]);
+  const showRef = doc(db, 'shows/show-a');
+  const slotRef = doc(db, sessionPath);
+  const bookingRef = doc(db, `bookings/${id}`);
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let inputs;
+    try {
+      await runTransaction(db, async (tx) => {
+        const s = await tx.get(showRef);
+        const slot = await tx.get(slotRef);
+        inputs = [s, slot];
+        // Harness-only observer permits deterministic contention/forgery tests.
+        await afterRead?.({ id, seats: requestedSeats, attempt });
+        if (requestedSeats.some((seat) => slot.data().bookedSeats.includes(seat))) {
+          throw new Error('Seat conflict');
+        }
+        bookingWrites(db, id, requestedSeats, s.data(), slot.data(), { uid, mutate })(tx);
+      });
+      return;
+    } catch (error) {
+      if (error.code !== 'permission-denied' || attempt === maxAttempts || !inputs) throw error;
+      let current;
+      try {
+        // These are the customer's authorized server reads, never admin bypass.
+        current = await Promise.all([
+          getDocFromServer(bookingRef), getDocFromServer(showRef), getDocFromServer(slotRef),
+        ]);
+      } catch {
+        throw error;
+      }
+      const [booking, s, slot] = current;
+      const authoritative = [...inputs, ...current].every((snapshot) =>
+        !snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites);
+      if (!authoritative || booking.exists() || !s.exists() || !slot.exists()
+          || (snapshotEqual(inputs[0], s) && snapshotEqual(inputs[1], slot))) throw error;
+      // Rules can reject stale optimistic writes before updateTime contention is
+      // returned as ABORTED. Re-enter the entire transaction only with proven
+      // changed input and confirmed absence, retaining this exact logical ID.
+    }
+  }
 }
 async function markDeleting(db = vendor) {
   return updateDoc(doc(db, 'shows/show-a'), { status: 'deleting', updatedAt: serverTimestamp() });
@@ -252,16 +287,128 @@ test('two customer transaction race has exactly one winner and no partial losing
 });
 test('concurrent disjoint bookings serialize exact event-time totals', async () => {
   await addShow();
+  const observed = [];
+  const firstReaders = new Set();
+  let release;
+  const bothRead = new Promise((resolve) => { release = resolve; });
+  const afterRead = async (request) => {
+    observed.push(request);
+    if (firstReaders.has(request.id)) return;
+    firstReaders.add(request.id);
+    if (firstReaders.size === 2) release();
+    await bothRead;
+  };
   await Promise.all([
-    transactionBooking(customer, 'race-a', [1,2], 'customer-a'),
-    transactionBooking(databaseFor('customer-b'), 'race-b', [3], 'customer-b'),
+    transactionBooking(customer, 'race-a', [1,2], 'customer-a', { afterRead }),
+    transactionBooking(databaseFor('customer-b'), 'race-b', [3], 'customer-b', { afterRead }),
   ]);
   const events = (await getDocs(query(collection(vendor, 'bookingEvents'), where('vendorId','==','vendor-a')))).docs.map((x) => x.data());
   assert.equal(events.length, 2);
   const totals = events.map((e) => e.showTotal).sort((a,b) => a-b);
   assert.equal(totals[1], 3); assert.ok(totals[0] === 1 || totals[0] === 2);
   assert.ok(events.every((e) => e.showTotal === e.slotTotal));
+  assert.ok(observed.length >= 3, 'forced contention must rerun a transaction callback');
+  for (const request of observed) {
+    assert.deepEqual(request.seats, request.id === 'race-a' ? [1,2] : [3]);
+  }
+  assert.deepEqual(events.map((event) => event.bookingId).sort(), ['race-a', 'race-b']);
+  assert.deepEqual((await getDocFromServer(doc(customer, sessionPath))).data().bookedSeats.sort(), [1,2,3]);
 });
+
+test('unchanged permission denial is not retried', async () => {
+  await addShow();
+  let callbacks = 0;
+  await assertFails(transactionBooking(customer, 'forged', [1], 'customer-a', {
+    afterRead: () => { callbacks++; },
+    mutate: ({show, event}) => { show.bookedCount++; event.showTotal++; },
+  }));
+  assert.equal(callbacks, 1);
+  await assertNoBooking('forged');
+});
+
+test('changed inputs do not authorize forged transaction payloads', async () => {
+  await addShow();
+  let callbacks = 0;
+  await assertFails(transactionBooking(customer, 'forged', [4], 'customer-a', {
+    afterRead: async () => {
+      if (++callbacks === 1) {
+        await book(databaseFor('customer-b'), 'contender', [1,2], { uid: 'customer-b' });
+      }
+    },
+    mutate: ({show, event}) => { show.bookedCount++; event.showTotal++; },
+  }));
+  assert.equal(callbacks, 2, 'changed authoritative inputs permit one fresh attempt, not permission bypass');
+  await admin(async (db) => {
+    assert.equal((await getDoc(doc(db, 'bookings/forged'))).exists(), false);
+    assert.equal((await getDoc(doc(db, 'bookingEvents/forged'))).exists(), false);
+    assert.equal((await getDoc(doc(db, 'shows/show-a'))).data().bookedCount, 2);
+    assert.deepEqual((await getDoc(doc(db, sessionPath))).data().bookedSeats, [1,2]);
+  });
+});
+
+test('continually changed inputs cannot exceed the three-attempt bound', async () => {
+  await addShow();
+  let callbacks = 0;
+  await assertFails(transactionBooking(customer, 'forged', [47], 'customer-a', {
+    afterRead: async ({attempt}) => {
+      callbacks++;
+      await book(databaseFor('customer-b'), `contender-${attempt}`, [10 + attempt], { uid: 'customer-b' });
+    },
+    mutate: ({show, event}) => { show.bookedCount++; event.showTotal++; },
+  }));
+  assert.equal(callbacks, 3);
+  await admin(async (db) => {
+    assert.equal((await getDoc(doc(db, 'bookings/forged'))).exists(), false);
+    assert.equal((await getDoc(doc(db, 'bookingEvents/forged'))).exists(), false);
+    assert.equal((await getDocs(collection(db, 'bookings'))).size, 3);
+    assert.equal((await getDoc(doc(db, 'shows/show-a'))).data().bookedCount, 3);
+  });
+});
+
+test('contention retry snapshots the same logical ID and seats', async () => {
+  await addShow();
+  const requestedSeats = [3];
+  const observed = [];
+  await transactionBooking(customer, 'stable-reference', requestedSeats, 'customer-a', {
+    afterRead: async (request) => {
+      observed.push(request);
+      if (observed.length === 1) {
+        requestedSeats.push(47);
+        await book(databaseFor('customer-b'), 'contender', [1], { uid: 'customer-b' });
+      }
+    },
+  });
+  assert.equal(observed.length, 2);
+  for (const request of observed) {
+    assert.equal(request.id, 'stable-reference');
+    assert.deepEqual(request.seats, [3]);
+  }
+  const booking = (await getDocFromServer(doc(customer, 'bookings/stable-reference'))).data();
+  assert.deepEqual(booking.seats, [3]);
+  assert.equal(booking.customerUid, 'customer-a');
+  assert.deepEqual(requestedSeats, [3,47]);
+});
+
+for (const owner of ['customer-a', 'customer-b']) {
+  test(`existing ${owner} booking is never overwritten or retried after denial`, async () => {
+    await addShow();
+    await book(databaseFor(owner), 'existing', [1], { uid: owner });
+    let callbacks = 0;
+    await assertFails(transactionBooking(customer, 'existing', [3], 'customer-a', {
+      afterRead: async () => {
+        callbacks++;
+        await book(databaseFor('customer-b'), 'contender', [2], { uid: 'customer-b' });
+      },
+    }));
+    assert.equal(callbacks, 1, 'existing or unreadable recovery evidence cannot justify retry');
+    await admin(async (db) => {
+      const booking = (await getDoc(doc(db, 'bookings/existing'))).data();
+      assert.equal(booking.customerUid, owner);
+      assert.deepEqual(booking.seats, [1]);
+      assert.equal((await getDocs(collection(db, 'bookings'))).size, 2);
+    });
+  });
+}
 
 test('server missing recovery allowed; another owner and anonymous existing booking denied', async () => {
   await addShow(); await book();
