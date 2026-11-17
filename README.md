@@ -1,5 +1,23 @@
 # e_commerce_project
 
+## Customer journey demo
+
+```powershell
+flutter run --flavor customer -t lib/main_customer_demo.dart
+```
+
+This explicit entry point uses local sample data and the labelled `demo-customer`
+account. Discover, Details, Seats and Result use the implemented screens and
+repository contracts. Sample bookings reset when the process restarts; they do
+not authenticate, reserve real seats or write to Firebase. The normal Customer
+and Vendor entry points still show setup pending.
+
+The success show has 14:00 and 19:00 sessions. Other sample shows demonstrate
+conflicts, a lost confirmation response with same-reference recovery, sold-out
+seats and an unavailable session. Poster refresh uses existing show metadata or
+explicit retry; an image-only change without a metadata signal is not a live
+image subscription.
+
 A new Flutter project.
 
 ## Getting Started

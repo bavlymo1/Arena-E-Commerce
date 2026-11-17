@@ -5,6 +5,8 @@ import 'package:get_it/get_it.dart';
 import '../../features/booking/domain/repositories/booking_repository.dart';
 import '../../features/booking/presentation/cubit/booking_cubit.dart';
 import '../../features/booking/presentation/cubit/seat_selection_cubit.dart';
+import '../../features/discovery/presentation/cubit/discovery_cubit.dart';
+import '../../features/discovery/presentation/cubit/show_details_cubit.dart';
 import '../../features/vendor_shows/domain/repositories/shows_repository.dart';
 import '../customer/demo_customer_repository.dart';
 
@@ -29,6 +31,13 @@ void registerCustomerJourney(
   String Function()? newBookingId,
 }) {
   final random = Random.secure();
+  services.registerFactory<DiscoveryCubit>(
+    () => DiscoveryCubit(services<ShowsRepository>()),
+  );
+  services.registerFactoryParam<ShowDetailsCubit, String, Object?>(
+    (showId, _) =>
+        ShowDetailsCubit(services<ShowsRepository>(), showId: showId),
+  );
   String generateId() => List.generate(
     16,
     (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),

@@ -39,7 +39,7 @@ final class DemoCustomerRepository
         showDate: '2026-12-20',
         imageId: entry.key,
         status: ShowStatus.active,
-        bookedCount: seats.length,
+        bookedCount: seats.length + (entry.key == 'demo-success' ? 1 : 0),
         lastBookingId: '',
         createdAt: DateTime.utc(
           2026,
@@ -47,19 +47,25 @@ final class DemoCustomerRepository
           17,
         ).subtract(Duration(minutes: index++)),
       );
-      _sessions[entry.key] = Session(
+      _sessions[(entry.key, '1900')] = Session(
         id: '1900',
         time: SessionTime('19:00'),
         label: 'Evening',
         bookedSeats: seats,
       );
     }
+    _sessions[('demo-success', '1400')] = Session(
+      id: '1400',
+      time: SessionTime('14:00'),
+      label: 'Afternoon',
+      bookedSeats: {7},
+    );
   }
 
   static const customerUid = 'demo-customer';
   final _changes = StreamController<void>.broadcast(sync: true);
   final _shows = <String, Show>{};
-  final _sessions = <String, Session>{};
+  final _sessions = <(String, String), Session>{};
   final _bookings = <String, Booking>{};
   final _posters = <String, Uint8List>{};
   bool _closed = false;
@@ -94,13 +100,15 @@ final class DemoCustomerRepository
   @override
   Stream<Show?> watchShow(String showId) => _watch(() => _shows[showId]);
   @override
-  Stream<List<Session>> watchSessions(String showId) =>
-      _watch(() => [?_sessions[showId]]);
+  Stream<List<Session>> watchSessions(String showId) => _watch(
+    () => [
+      for (final entry in _sessions.entries)
+        if (entry.key.$1 == showId) entry.value,
+    ],
+  );
   @override
   Stream<Session?> watchSession(String showId, String sessionId) => _watch(
-    () => showId == 'demo-unavailable' || _sessions[showId]?.id != sessionId
-        ? null
-        : _sessions[showId],
+    () => showId == 'demo-unavailable' ? null : _sessions[(showId, sessionId)],
   );
   @override
   Stream<Set<int>> watchMySeats(String uid, String showId, String sessionId) =>
@@ -140,7 +148,7 @@ final class DemoCustomerRepository
       );
     }
     final show = _shows[request.showId];
-    final session = _sessions[request.showId];
+    final session = _sessions[(request.showId, request.sessionId)];
     if (show == null ||
         show.status != ShowStatus.active ||
         session == null ||
@@ -150,7 +158,7 @@ final class DemoCustomerRepository
     }
     if (request.showId == 'demo-conflict') {
       final racedSeat = request.seats.first;
-      _sessions[show.id] = Session(
+      _sessions[(show.id, session.id)] = Session(
         id: session.id,
         time: session.time,
         label: session.label,
@@ -169,7 +177,7 @@ final class DemoCustomerRepository
       vendorId: show.vendorId,
       createdAt: DateTime.now().toUtc(),
     );
-    _sessions[show.id] = Session(
+    _sessions[(show.id, session.id)] = Session(
       id: session.id,
       time: session.time,
       label: session.label,
