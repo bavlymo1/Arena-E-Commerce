@@ -117,6 +117,37 @@ final class _StreamingShowDetailsRepository implements ShowsRepository {
 
 void main() {
   test(
+    'restored show offers refresh instead of waiting for unchanged sessions',
+    () async {
+      final repo = _StreamingShowDetailsRepository();
+      final cubit = ShowDetailsCubit(repo, showId: 'show-1');
+      addTearDown(repo.dispose);
+      addTearDown(cubit.close);
+      repo.showController.add(_show());
+      repo.sessionsController.add([
+        _session('19:00', bookedSeats: [1]),
+      ]);
+      await pumpEventQueue();
+      expect(cubit.state.isReady, isTrue);
+      repo.showController.add(null);
+      await pumpEventQueue();
+      expect(cubit.state.isUnavailable, isTrue);
+      expect(cubit.state.sessions, isEmpty);
+      repo.showController.add(_show());
+      await pumpEventQueue();
+      expect(cubit.state.hasError, isTrue);
+      expect(cubit.state.errorMessage, contains('Refresh'));
+      expect(cubit.state.sessions, isEmpty);
+      repo.sessionsController.add([
+        _session('14:00', bookedSeats: [7]),
+      ]);
+      await pumpEventQueue();
+      expect(cubit.state.isReady, isTrue);
+      expect(cubit.state.sessions.single.bookedSeats, {7});
+    },
+  );
+
+  test(
     're-added show cannot reuse sessions from before it became unavailable',
     () async {
       final repo = _StreamingShowDetailsRepository();
@@ -132,7 +163,7 @@ void main() {
       await pumpEventQueue();
       repo.showController.add(_show());
       await pumpEventQueue();
-      expect(cubit.state.status, ShowDetailsStatus.loading);
+      expect(cubit.state.status, ShowDetailsStatus.error);
       expect(cubit.state.sessions, isEmpty);
       repo.sessionsController.add([_session('14:00')]);
       await pumpEventQueue();

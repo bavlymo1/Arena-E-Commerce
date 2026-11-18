@@ -177,9 +177,10 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
     if (state.isUnavailable && !_hasSessionsSnapshot) {
       emit(
         state.copyWith(
-          status: ShowDetailsStatus.loading,
+          status: ShowDetailsStatus.error,
           show: show,
-          clearErrorMessage: true,
+          errorMessage:
+              'Show is available again. Refresh to load its sessions.',
         ),
       );
     }

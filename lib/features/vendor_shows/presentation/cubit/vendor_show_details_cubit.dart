@@ -212,9 +212,10 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     if (state.isUnavailable && !_hasSessionsSnapshot) {
       emit(
         state.copyWith(
-          status: VendorShowDetailsStatus.loading,
+          status: VendorShowDetailsStatus.error,
           show: ownedShow,
-          clearErrorMessage: true,
+          errorMessage:
+              'Show is available again. Refresh to load its sessions.',
         ),
       );
     }
