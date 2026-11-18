@@ -5,8 +5,13 @@ import 'app_variant.dart';
 import 'startup_cubit.dart';
 
 class StartupScreen extends StatelessWidget {
-  const StartupScreen({required this.variant, super.key});
+  const StartupScreen({
+    required this.variant,
+    this.title = 'Setup pending',
+    super.key,
+  });
   final AppVariant variant;
+  final String title;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -28,10 +33,7 @@ class StartupScreen extends StatelessWidget {
                     size: 56,
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'Setup pending',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
+                  Text(title, style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 12),
                   if (state.checking)
                     const CircularProgressIndicator()

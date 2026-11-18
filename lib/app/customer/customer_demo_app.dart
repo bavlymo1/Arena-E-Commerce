@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/customer_auth/presentation/cubit/customer_auth_cubit.dart';
 import '../../features/discovery/presentation/cubit/discovery_cubit.dart';
 import '../../features/discovery/presentation/cubit/show_details_cubit.dart';
 import '../../features/discovery/presentation/screens/discovery_screen.dart';
@@ -11,13 +12,20 @@ import '../di/customer_journey_registration.dart';
 import 'customer_journey_app.dart';
 
 /// Explicit local fixtures; the normal Customer entry point stays unavailable.
-CustomerJourneyApp createCustomerDemoApp({GetIt? services}) {
+CustomerJourneyApp createCustomerDemoApp({
+  GetIt? services,
+  CustomerAuthCubit? auth,
+}) {
   final graph = services ?? createDemoCustomerServices();
   return CustomerJourneyApp(
     services: graph,
-    discoverBuilder: (_, onShow) => BlocProvider(
+    auth: auth,
+    discoverBuilder: (context, onShow) => BlocProvider(
       create: (_) => graph<DiscoveryCubit>(),
-      child: DiscoveryScreen(onShowSelected: onShow),
+      child: DiscoveryScreen(
+        onShowSelected: onShow,
+        onAccount: auth == null ? null : () => context.push('/account'),
+      ),
     ),
     detailsBuilder: (context, showId, onSession) => BlocProvider(
       key: ValueKey(showId),

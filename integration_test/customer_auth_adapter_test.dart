@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:e_commerce_project/features/customer_auth/data/local_auth_emulator.dart';
 import 'package:e_commerce_project/features/customer_auth/domain/models/app_user.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +13,15 @@ void main() {
       final repository = await createLocalAuthRepository();
       await repository.logout();
       final events = <AppUser?>[];
-      final subscription = repository.authChanges().listen(events.add);
+      Completer<void>? signedOutEvent;
+      final subscription = repository.authChanges().listen((user) {
+        events.add(user);
+        if (user == null &&
+            signedOutEvent != null &&
+            !signedOutEvent.isCompleted) {
+          signedOutEvent.complete();
+        }
+      });
       try {
         expect(
           await repository.authChanges().first.timeout(
@@ -51,7 +61,9 @@ void main() {
             .firstWhere((user) => user != null)
             .timeout(const Duration(seconds: 10));
         expect(loggedIn, registered);
+        signedOutEvent = Completer<void>();
         await repository.logout();
+        await signedOutEvent.future.timeout(const Duration(seconds: 10));
         expect(
           await repository.authChanges().first.timeout(
             const Duration(seconds: 10),

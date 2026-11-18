@@ -9,9 +9,14 @@ import '../cubit/discovery_state.dart';
 import '../widgets/show_poster_banner.dart';
 
 class DiscoveryScreen extends StatefulWidget {
-  const DiscoveryScreen({required this.onShowSelected, super.key});
+  const DiscoveryScreen({
+    required this.onShowSelected,
+    this.onAccount,
+    super.key,
+  });
 
   final ValueChanged<String> onShowSelected;
+  final VoidCallback? onAccount;
 
   @override
   State<DiscoveryScreen> createState() => _DiscoveryScreenState();
@@ -40,6 +45,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        actions: [
+          if (widget.onAccount != null)
+            IconButton(
+              tooltip: 'Account',
+              onPressed: widget.onAccount,
+              icon: const Icon(Icons.account_circle_outlined),
+            ),
+        ],
         titleSpacing: 16,
         title: Row(
           children: <Widget>[
