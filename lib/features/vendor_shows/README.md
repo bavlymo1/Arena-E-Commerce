@@ -1,12 +1,12 @@
 # Vendor Shows
 
-**Status: scaffold only.** No feature behavior/configuration is implemented here.
+**Status: read-only presentation implemented and tested with local fixtures.** Vendor-scoped list, details, session selection and the shared 47-seat map are composed by the explicit Vendor demo. Normal startup still reports setup pending.
 
 Show metadata, images, sessions and restart-safe real deletion.
 
 Contracts: Canonical Show, Session, NewShow and ShowsRepository; other features consume these models.
 
-Intended implementation: VendorShowsCubit, ShowFormCubit and FirebaseShowsRepository; repository owns poster cache and delete/resume transaction sequencing.
+Implemented: VendorShowsCubit and VendorShowDetailsCubit, including stream cleanup, retry and poster invalidation. Pending: ShowFormCubit, FirebaseShowsRepository, image acquisition, add/delete/resume writes and real authorized access. Optional action callbacks do not implement those operations.
 
 Dependencies: presentation -> domain contracts/models; data implements domain contracts. Domain has no Firebase/UI/GetIt imports. Cubits receive dependencies through constructors. GetIt resolution belongs to app composition, not this feature. Cross-feature use is through domain contracts; do not import another feature's presentation/data. Use snake_case files, capability_repository.dart, backend-specific implementations, *_cubit.dart, *_state.dart, *_screen.dart and *_test.dart names only when content is implemented.
 
