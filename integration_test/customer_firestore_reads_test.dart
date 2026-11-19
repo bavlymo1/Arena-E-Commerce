@@ -146,22 +146,21 @@ void main() {
         FocusManager.instance.primaryFocus?.unfocus();
         await _wait(tester, find.text(oldTitle));
         expect(find.text(newTitle), findsNothing);
-        await tester.enterText(textField, 'summit');
-        FocusManager.instance.primaryFocus?.unfocus();
+        await _tap(tester, find.byTooltip('Clear search'));
         await _tap(tester, find.text(newTitle));
-        await _wait(tester, find.text('Summit evening'));
+        await _wait(tester, find.text('· Summit evening'));
         expect(find.byKey(const ValueKey('session-chip-1900')), findsOneWidget);
         expect(find.byKey(const ValueKey('session-chip-1400')), findsNothing);
 
         await _commit([_session(_newer, '19:00', 'Summit live update')]);
-        await _wait(tester, find.text('Summit live update'));
+        await _wait(tester, find.text('· Summit live update'));
         await _tap(tester, find.byKey(const ValueKey('session-chip-1900')));
         await _wait(tester, find.text('Booking backend setup pending.'));
         await _commit([_show(_newer, updatedTitle, newDate)]);
         await _tap(tester, find.byTooltip('Back to Discover'));
         await _wait(tester, find.text(updatedTitle));
         await _tap(tester, find.text(updatedTitle));
-        await _wait(tester, find.text('Summit live update'));
+        await _wait(tester, find.text('· Summit live update'));
         await _commit([
           {'delete': '$_documents/shows/$_newer/sessions/1900'},
           {'delete': '$_documents/showImages/$_newer'},
