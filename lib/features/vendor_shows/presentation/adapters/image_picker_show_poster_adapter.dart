@@ -1,0 +1,78 @@
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../cubit/show_form_state.dart';
+
+/// Native [ShowPosterPicker] adapter backed by [ImagePicker].
+final class ImagePickerShowPosterAdapter {
+  ImagePickerShowPosterAdapter({ImagePicker? picker, bool? isAndroid})
+    : _picker = picker ?? ImagePicker(),
+      _isAndroidOverride = isAndroid;
+
+  static const double defaultMaxWidth = 900;
+  static const double defaultMaxHeight = 900;
+  static const int defaultImageQuality = 75;
+
+  final ImagePicker _picker;
+  final bool? _isAndroidOverride;
+  bool _lostDataChecked = false;
+
+  bool get _supportsLostDataRecovery =>
+      _isAndroidOverride ??
+      (!kIsWeb && defaultTargetPlatform == TargetPlatform.android);
+
+  /// Picks an image from [source] and returns its bytes, or `null` on cancel.
+  Future<Uint8List?> pickPoster(ShowPosterSource source) async {
+    final file = await _picker.pickImage(
+      source: _toImageSource(source),
+      maxWidth: defaultMaxWidth,
+      maxHeight: defaultMaxHeight,
+      imageQuality: defaultImageQuality,
+    );
+    if (file == null) return null;
+    return Uint8List.fromList(await file.readAsBytes());
+  }
+
+  /// Callable [ShowPosterPicker] entrypoint forwarding to [pickPoster].
+  Future<Uint8List?> call(ShowPosterSource source) => pickPoster(source);
+
+  /// Retrieves Android lost-activity poster bytes at most once per instance.
+  ///
+  /// Returns `null` off Android, when nothing was lost, for non-image data, or
+  /// on repeat calls; propagates plugin or read errors for caller feedback.
+  Future<Uint8List?> retrieveLostPoster() async {
+    if (_lostDataChecked) return null;
+    // Mark checked before awaiting so concurrent callers cannot double-read.
+    _lostDataChecked = true;
+    if (!_supportsLostDataRecovery) return null;
+
+    final response = await _picker.retrieveLostData();
+    if (response.isEmpty) return null;
+
+    final exception = response.exception;
+    if (exception != null) {
+      throw exception;
+    }
+
+    if (response.type != null && response.type != RetrieveType.image) {
+      return null;
+    }
+
+    final file = _selectRecoveredFile(response);
+    if (file == null) return null;
+    return Uint8List.fromList(await file.readAsBytes());
+  }
+
+  static ImageSource _toImageSource(ShowPosterSource source) =>
+      switch (source) {
+        ShowPosterSource.gallery => ImageSource.gallery,
+        ShowPosterSource.camera => ImageSource.camera,
+      };
+
+  static XFile? _selectRecoveredFile(LostDataResponse response) {
+    if (response.file != null) return response.file;
+    final files = response.files;
+    if (files != null && files.isNotEmpty) return files.last;
+    return null;
+  }
+}
