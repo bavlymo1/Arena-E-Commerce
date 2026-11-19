@@ -53,7 +53,7 @@ class _VendorDemoAppState extends State<VendorDemoApp> {
       GoRoute(
         path: '/add-show',
         redirect: (_, _) => widget.canAddShow ? null : '/shows',
-        builder: (context, _) {
+        pageBuilder: (context, state) {
           void returnToShows() {
             if (context.canPop()) {
               context.pop();
@@ -62,11 +62,14 @@ class _VendorDemoAppState extends State<VendorDemoApp> {
             }
           }
 
-          return BlocProvider(
-            create: (_) => widget.services<ShowFormCubit>(),
-            child: AddShowScreen(
-              onBackToShows: returnToShows,
-              onShowSaved: returnToShows,
+          return MaterialPage<void>(
+            key: state.pageKey,
+            child: BlocProvider(
+              create: (_) => widget.services<ShowFormCubit>(),
+              child: AddShowScreen(
+                onBackToShows: returnToShows,
+                onShowSaved: returnToShows,
+              ),
             ),
           );
         },
