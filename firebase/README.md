@@ -33,11 +33,11 @@ These are static worst-case uncached counts, separate from observed emulator suc
 
 | Operation | Per-write calls | Uncached total |
 | --- | --- | --- |
-| Create show + image + five sessions | show2, image3, each session3 | 20 |
+| Create show + image + five sessions | show7, image3, each session2 | 20 |
 | Four-document booking | show3, session3, booking4, event3 | 13 |
 | Delete three booking/event pairs | each record3 | 18 |
 | Delete five sessions + image | each record2 | 12 |
-| Remove parent after image absent | parent2 | 2 |
+| Remove parent after image and listed sessions are absent | parent7 | 7 |
 
 Four-pair deletion passed with emulator caching, but its uncached count is24. Application cleanup must use at most three pairs per batch for the guaranteed budget; no cleanup repository is implemented here. The booking show write checks that its booking did not already exist, preventing counter replay.
 
@@ -71,8 +71,12 @@ All ten REST tests now pass, including independent paired-field probes, a mixed 
 
 ## Explicit acceptance gaps
 
-- The approved schema contains no session manifest/count. Rules cannot enforce at least one and at most five child sessions at initial creation. A test demonstrates zero and six sessions are accepted; creation of later sessions is denied. Do not claim client validation closes this forged-write gap.
-- Rules cannot enumerate arbitrary children. A test demonstrates that an enrolled vendor can delete a deleting parent after removing its image while sessions/bookings/events remain. The future repository must clean children first; stronger independent parent-last authorization needs an agreed schema/contract change before deployment.
+- New shows require an immutable list of one to five distinct canonical session IDs. Each child write requires the previously absent parent to be created in the same authorized batch. The parent checks each listed child at its own path, and the child checks membership.
+- Final parent removal checks the image and all listed sessions. The repository must still clean booking/event pairs before removing the parent.
+
+### Local legacy migration
+
+Pause all writers and cleanup workers throughout inventory, backfill and Rules/writer cutover. With the local demo emulator already running, use `node firebase/rules_test/migrate_local_manifests.mjs` from the app directory for an inventory. Add `--apply` to backfill valid shows. Rerun inventory to confirm no pending updates. The script only targets demo-arenapass on loopback. It stops before writes on orphan sessions, invalid times or active shows outside the allowed count. Review those records before remediation. Never infer missing slots or remove surplus sessions automatically. For legacy deleting shows the manifest records remaining children, including an empty list after cleanup. Existing manifests of partially deleted shows retain their original IDs. Reads keep the same show/session paths. Old client create requests require the updated writer after cutover.
 - Bare optimistic SDK transactions can still produce permission-denied before their stale-write precondition is reported as a retryable conflict. The local guarded Node writer passes the strict both-success test without changing Rules. It is not a deployed or FlutterFire implementation; preserve the evidence gates above rather than blindly retrying permission failures.
 - The local harness mocks authentication and does not prove sign-in, deployed Rules/indexes, APK Firebase configuration, live automatic transaction retries, calendar cutoffs, image decodability, or restart-safe deletion. MIME/size validation cannot decode JPEG content.
 

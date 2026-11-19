@@ -1,3 +1,4 @@
+import { migrateLocalManifests } from './migrate_local_manifests.mjs';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { after, before, beforeEach, test } from 'node:test';
@@ -74,6 +75,7 @@ function addShow(db = vendor, { id = 'show-a', slots = times, mutate = () => {},
   const s = showData(id);
   const poster = imageData();
   const sessions = slots.map((time) => ({ id: time.replace(':',''), data: sessionData(time) }));
+  s.sessionIds = sessions.map(slot => slot.id);
   mutate({ show: s, image: poster, sessions });
   batch.set(doc(db, `shows/${id}`), s);
   if (image) batch.set(doc(db, `showImages/${id}`), poster);
@@ -272,15 +274,67 @@ test('show without required paired image and orphan image are denied', async () 
   await assertFails(setDoc(doc(vendor, 'showImages/orphan'), imageData()));
 });
 for (const [id, slots] of [['zero-sessions', []], ['six-sessions', [...times, '20:00']]]) {
-  test(`D11 current gap: accepts show with ${slots.length} sessions`, async () => {
-    await assertSucceeds(addShow(vendor, { id, slots }));
-    assert.equal((await getDocFromServer(doc(customer, `shows/${id}`))).exists(), true);
-    assert.equal((await getDocFromServer(doc(customer, `showImages/${id}`))).exists(), true);
-    const stored = await getDocs(collection(customer, `shows/${id}/sessions`));
-    assert.deepEqual(stored.docs.map(slot => slot.id), slots.map(time => time.replace(':', '')).sort());
+  test(`rejects a show with ${slots.length} sessions`, async () => {
+    await assertFails(addShow(vendor, { id, slots }));
+    await assertNoShow(id);
   });
 }
+for (const [name, manifest] of [
+  ['duplicate', ['1000','1000']], ['missing child', ['1000','1200']],
+  ['invalid id', ['2500']], ['unlisted child', ['1200']],
+]) {
+  test(`rejects ${name} in session manifest`, async () => {
+    await assertFails(addShow(vendor, { slots:['10:00'], mutate: ({show}) => { show.sessionIds = manifest; } }));
+    await assertNoShow();
+  });
+}
+test('a session at a different show cannot satisfy the manifest', async () => {
+  await addShow(vendor, {id:'other', slots:['12:00']});
+  await assertFails(addShow(vendor, {slots:['10:00'], mutate: ({show}) => { show.sessionIds.push('1200'); }}));
+  await assertNoShow();
+});
+test('unlisted session is rejected even when all listed sessions exist', async () => {
+  await assertFails(addShow(vendor, {slots:['10:00','12:00'], mutate: ({show}) => { show.sessionIds.pop(); }}));
+  await assertNoShow();
+});
+test('legacy show remains readable and trusted backfill supports later cleanup', async () => {
+  await admin(async db => {
+    await setDoc(doc(db,'shows/show-a'), showData());
+    await setDoc(doc(db,sessionPath), sessionData());
+  });
+  assert.equal((await getDocFromServer(doc(customer,'shows/show-a'))).exists(),true);
+  await assertFails(updateDoc(doc(vendor,'shows/show-a'),{sessionIds:['1900'],updatedAt:serverTimestamp()}));
+  await admin(async db => {
+    assert.deepEqual(await migrateLocalManifests(db), ['show-a']);
+    assert.deepEqual(await migrateLocalManifests(db,true), ['show-a']);
+    assert.deepEqual(await migrateLocalManifests(db,true), []);
+  });
+  await markDeleting();
+  await assertFails(deleteDoc(doc(vendor,'shows/show-a')));
+  await deleteDoc(doc(vendor,sessionPath));
+  await assertSucceeds(deleteDoc(doc(vendor,'shows/show-a')));
+});
+test('migration inventory finds orphan sessions hidden by a missing parent', async () => {
+  await admin(async db => {
+    await setDoc(doc(db,sessionPath), sessionData());
+    await assert.rejects(migrateLocalManifests(db,true), /Orphan/);
+    assert.equal((await getDoc(doc(db,sessionPath))).exists(),true);
+    await deleteDoc(doc(db,sessionPath)); // Cleanup of this test fixture only.
+  });
+  await assertSucceeds(addShow(vendor,{slots:['10:00']}));
+  assert.equal((await getDocs(collection(customer,'shows/show-a/sessions'))).size,1);
+});
 
+for (const slots of [[], [...times,'20:00']]) {
+  test(`migration stops for active legacy show with ${slots.length} children`, async () => {
+    await admin(async db => {
+      await setDoc(doc(db,'shows/show-a'), showData());
+      for (const time of slots) await setDoc(doc(db,'shows/show-a/sessions/'+time.replace(':','')),sessionData(time));
+      await assert.rejects(migrateLocalManifests(db,true), /Review show/);
+      assert.equal((await getDoc(doc(db,'shows/show-a'))).data().sessionIds,undefined);
+    });
+  });
+}
 for (const [declared, actual] of [[1, 0], [5, 6], [2, 1], [1, 1]]) {
   const slots = [...times, '20:00'].slice(0, actual);
   test(`D11 rejects undeclared schema field sessionCount=${declared} with ${actual} actual sessions`, async () => {
@@ -306,6 +360,7 @@ test('D11 vendor cannot edit the session identity or add a count to an active sh
   await addShow(vendor, { slots: ['19:00'] });
   const session = doc(vendor, sessionPath);
   await assertFails(updateDoc(session, {time:'20:00', capacity:40, updatedAt:serverTimestamp()}));
+  await assertFails(updateDoc(doc(vendor, 'shows/show-a'), {sessionIds:['2000'], updatedAt:serverTimestamp()}));
   await assertFails(updateDoc(doc(vendor, 'shows/show-a'), {sessionCount:1, updatedAt:serverTimestamp()}));
   await assertFails(book(customer, 'booking-a', [1], {
     mutate: ({session}) => { session.time = '20:00'; },
@@ -627,10 +682,10 @@ test('four-pair runtime works with emulator caching; not an uncached24-call guar
   for (let i = 1; i <= 4; i++) await book(customer, `booking-${i}`, [i]);
   await markDeleting(); await assertSucceeds(deletePairs(vendor, ['booking-1','booking-2','booking-3','booking-4']));
 });
-test('documented schema limitation: parent deletion cannot prove arbitrary children empty', async () => {
+test('parent deletion waits for all manifest sessions', async () => {
   await addShow(); await book(); await markDeleting();
   await deleteDoc(doc(vendor, 'showImages/show-a'));
-  await assertSucceeds(deleteDoc(doc(vendor, 'shows/show-a')));
+  await assertFails(deleteDoc(doc(vendor, 'shows/show-a')));
   await admin(async (db) => assert.equal((await getDoc(doc(db, sessionPath))).exists(), true));
 });
 test('profile create/get/update are owner-scoped and enrollment cannot be forged', async () => {

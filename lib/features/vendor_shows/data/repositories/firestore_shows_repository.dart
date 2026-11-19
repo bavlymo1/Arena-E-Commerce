@@ -156,6 +156,7 @@ final class FirestoreShowsRepository implements ShowsRepository {
         'description': show.description,
         'showDate': show.showDate,
         'imageId': document.id,
+        'sessionIds': [for (final slot in show.sessions) slot.id],
         'status': 'active',
         'bookedCount': 0,
         'lastBookingId': '',

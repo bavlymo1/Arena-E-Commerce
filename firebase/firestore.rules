@@ -32,7 +32,7 @@ service cloud.firestore {
     }
     function validShow(d, id) {
       return d.keys().hasOnly(['vendorId','title','titleSearch','description','showDate',
-          'createdAt','updatedAt','status','imageId','bookedCount','lastBookingId'])
+          'createdAt','updatedAt','status','imageId','sessionIds','bookedCount','lastBookingId'])
         && d.vendorId is string && d.vendorId.size() > 0
         && d.title is string && d.title.size() > 0 && d.title.size() <= 80
         && d.titleSearch == d.title.lower()
@@ -43,6 +43,20 @@ service cloud.firestore {
         && d.status in ['active','deleting'] && d.imageId == id
         && d.bookedCount is int && d.bookedCount >= 0 && d.bookedCount <= 235
         && d.lastBookingId is string;
+    }
+    function checkSlot(id, slots, index, deleting) {
+      return index >= slots.size() || (
+        slots[index] is string && slots[index].matches('^([01][0-9]|2[0-3])[0-5][0-9]$')
+        && (deleting
+          ? !existsAfter(/databases/$(db)/documents/shows/$(id)/sessions/$(slots[index]))
+          : getAfter(/databases/$(db)/documents/shows/$(id)/sessions/$(slots[index])).data.updatedAt == request.time));
+    }
+    function checkManifest(id, slots, deleting) {
+      return slots is list && (deleting || slots.size() >= 1) && slots.size() <= 5
+        && slots.size() == slots.toSet().size()
+        && checkSlot(id, slots, 0, deleting) && checkSlot(id, slots, 1, deleting)
+        && checkSlot(id, slots, 2, deleting) && checkSlot(id, slots, 3, deleting)
+        && checkSlot(id, slots, 4, deleting);
     }
     function validImage(d) {
       return d.keys().hasOnly(['poster','mimeType','width','height','vendorId'])
@@ -96,8 +110,9 @@ service cloud.firestore {
     match /shows/{id} {
       allow get: if signedIn();
       allow list: if signedIn() && (resource.data.status == 'active' || vendorOwns(resource.data.vendorId));
-      // No session manifest exists: Rules cannot prove a child count of one to five.
+
       allow create: if vendorOwns(request.resource.data.vendorId)
+        && checkManifest(id, request.resource.data.sessionIds, false)
         && validShow(request.resource.data, id) && request.resource.data.status == 'active'
         && request.resource.data.createdAt == request.time
         && request.resource.data.bookedCount == 0 && request.resource.data.lastBookingId == ''
@@ -107,14 +122,16 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'title','titleSearch','description','showDate','status','updatedAt'])
           && !(resource.data.status == 'deleting' && request.resource.data.status == 'active'));
-      // The repository must prove all children are cleaned; Rules cannot enumerate them.
+      // Paired booking/event cleanup remains the responsibility of the deletion workflow.
       allow delete: if vendorOwns(resource.data.vendorId) && resource.data.status == 'deleting'
-        && !existsAfter(/databases/$(db)/documents/showImages/$(id));
+        && !existsAfter(/databases/$(db)/documents/showImages/$(id))
+        && checkManifest(id, resource.data.sessionIds, true);
       match /sessions/{slotId} {
         function createSession() {
           let d = request.resource.data;
           let s = showAfter(id);
-          return vendorOwns(s.vendorId) && s.status == 'active'
+          // The absent-before parent must be created by an independently authorized vendor write.
+          return slotId in s.sessionIds && s.status == 'active'
             && !exists(/databases/$(db)/documents/shows/$(id))
             && d.keys().hasOnly(['time','label','capacity','bookedSeats','lastBookingId','updatedAt'])
             && d.time is string && d.time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
