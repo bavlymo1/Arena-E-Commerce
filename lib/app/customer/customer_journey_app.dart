@@ -238,7 +238,7 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
               child: Text(
                 widget.auth == null
                     ? 'LOCAL DEMO · sample account and data · resets on restart'
-                    : 'LOCAL AUTH EMULATOR · sample shows · booking setup pending',
+                    : 'LOCAL EMULATORS · booking setup pending',
                 textAlign: TextAlign.center,
               ),
             ),

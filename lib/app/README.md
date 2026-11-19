@@ -2,7 +2,7 @@
 
 **Status: startup shells and opt-in local Customer/Vendor journeys implemented.** Normal entrypoints remain setup pending. The explicit `main_customer_demo.dart` and `main_vendor_demo.dart` targets use in-memory fixtures that reset on restart; they do not authenticate or share state between installed apps.
 
-`main_customer_auth_emulator.dart` adds real local Firebase Auth to Customer login/register/Discover/account/logout. One root auth Cubit owns the subscription; redirects keep checking on startup and prevent protected navigation after logout. Identity exit clears posters and replaces protected route state. Its shows are samples and booking stays setup pending; it does not enable a live Firebase project.
+`main_customer_auth_emulator.dart` uses local Firebase Auth and Firestore for Customer login, Discover, Details and Account. One root auth Cubit owns the subscription. Identity exit clears posters and replaces protected route state. Booking stays setup pending in this preview.
 
 Customer/vendor roots and routers live in customer/ and vendor/; router files such as customer_router.dart belong there, not a second routing hierarchy. Startup/splash and startup retry states belong in startup/. DI registration is shared/customer/vendor under di/; theme tokens/component themes stay under app/theme/.
 
