@@ -5,10 +5,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/vendor_shows/presentation/cubit/show_form_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_show_details_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
 import '../../features/vendor_shows/presentation/screens/vendor_show_details_screen.dart';
 import '../../features/vendor_shows/presentation/screens/vendor_shows_screen.dart';
+import '../../features/vendor_shows/presentation/screens/add_show_screen.dart';
 import '../di/vendor_registration.dart';
 import '../theme/app_theme.dart';
 
@@ -17,8 +19,15 @@ VendorDemoApp createVendorDemoApp({GetIt? services}) =>
 
 /// Explicit local preview; enrollment and production startup remain pending.
 class VendorDemoApp extends StatefulWidget {
-  const VendorDemoApp({required this.services, super.key});
+  const VendorDemoApp({
+    required this.services,
+    this.banner = 'LOCAL DEMO · sample vendor and data · resets on restart',
+    this.canAddShow = false,
+    super.key,
+  });
   final GetIt services;
+  final String banner;
+  final bool canAddShow;
 
   @override
   State<VendorDemoApp> createState() => _VendorDemoAppState();
@@ -33,10 +42,34 @@ class _VendorDemoAppState extends State<VendorDemoApp> {
         builder: (context, _) => BlocProvider(
           create: (_) => widget.services<VendorShowsCubit>(),
           child: VendorShowsScreen(
+            onAddShow: widget.canAddShow
+                ? () => context.push('/add-show')
+                : null,
             onShowSelected: (id) =>
                 context.push('/show/${Uri.encodeComponent(id)}'),
           ),
         ),
+      ),
+      GoRoute(
+        path: '/add-show',
+        redirect: (_, _) => widget.canAddShow ? null : '/shows',
+        builder: (context, _) {
+          void returnToShows() {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/shows');
+            }
+          }
+
+          return BlocProvider(
+            create: (_) => widget.services<ShowFormCubit>(),
+            child: AddShowScreen(
+              onBackToShows: returnToShows,
+              onShowSaved: returnToShows,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/show/:showId',
@@ -76,14 +109,11 @@ class _VendorDemoAppState extends State<VendorDemoApp> {
       children: [
         Material(
           color: Theme.of(context).colorScheme.secondaryContainer,
-          child: const SafeArea(
+          child: SafeArea(
             bottom: false,
             child: Padding(
-              padding: EdgeInsets.all(8),
-              child: Text(
-                'LOCAL DEMO · sample vendor and data · resets on restart',
-                textAlign: TextAlign.center,
-              ),
+              padding: const EdgeInsets.all(8),
+              child: Text(widget.banner, textAlign: TextAlign.center),
             ),
           ),
         ),

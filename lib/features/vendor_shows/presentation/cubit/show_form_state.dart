@@ -31,7 +31,7 @@ final class ShowFormState extends Equatable {
   }) : sessionTimes = List<String>.unmodifiable(sessionTimes),
        posterBytes = posterBytes == null
            ? null
-           : Uint8List.fromList(posterBytes);
+           : Uint8List.fromList(posterBytes).asUnmodifiableView();
 
   const ShowFormState._({
     required this.vendorId,
@@ -103,7 +103,7 @@ final class ShowFormState extends Equatable {
     final nextPoster = clearPosterBytes
         ? null
         : (posterBytes != null
-              ? Uint8List.fromList(posterBytes)
+              ? Uint8List.fromList(posterBytes).asUnmodifiableView()
               : this.posterBytes);
 
     return ShowFormState._(

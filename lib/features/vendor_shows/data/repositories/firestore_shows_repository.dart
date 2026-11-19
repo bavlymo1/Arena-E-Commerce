@@ -1,17 +1,21 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../vendor_access/domain/models/vendor_access.dart';
+import '../../../vendor_access/domain/repositories/vendor_access_repository.dart';
 import '../../domain/models/new_show.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/session_time.dart';
 import '../../domain/models/show.dart';
 import '../../domain/repositories/shows_repository.dart';
 
-final class FirestoreCustomerShowsRepository implements ShowsRepository {
-  FirestoreCustomerShowsRepository(this._firestore);
+final class FirestoreShowsRepository implements ShowsRepository {
+  FirestoreShowsRepository(this._firestore, {this._vendorAccess});
 
   final FirebaseFirestore _firestore;
+  final VendorAccessRepository? _vendorAccess;
   final _posters = <String, Uint8List>{};
   int _posterGeneration = 0;
   bool _disposed = false;
@@ -113,18 +117,97 @@ final class FirestoreCustomerShowsRepository implements ShowsRepository {
   }
 
   @override
-  Stream<List<Show>> watchVendorShows(String vendorId) =>
-      Stream.error(UnsupportedError('Customer show reads only'));
+  Stream<List<Show>> watchVendorShows(String vendorId) async* {
+    await _requireVendor(vendorId);
+    yield* _shows
+        .where('vendorId', isEqualTo: vendorId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map(_decodeShow).toList(growable: false),
+        );
+  }
 
   @override
-  Future<void> addShow(NewShow show, Uint8List poster) async =>
-      throw UnsupportedError('Customer show reads only');
+  Future<void> addShow(NewShow show, Uint8List poster) async {
+    if (show.title.length > 80 || show.description.length > 1000) {
+      throw ArgumentError('Show title or description exceeds its limit');
+    }
+    if (poster.length < 3 ||
+        poster.length > 204800 ||
+        poster[0] != 0xff ||
+        poster[1] != 0xd8 ||
+        poster[2] != 0xff) {
+      throw ArgumentError('Expected a JPEG poster up to 200 KiB');
+    }
+    final bytes = Uint8List.fromList(poster);
+    final (width, height) = await _jpegDimensions(bytes);
+    final access = await _requireVendor(show.vendorId);
+    final vendorId = access.vendorId;
+    final document = _shows.doc();
+    final timestamp = FieldValue.serverTimestamp();
+
+    // A transaction waits for the server and avoids exposing pending timestamps.
+    await _firestore.runTransaction<void>((transaction) async {
+      transaction.set(document, {
+        'vendorId': vendorId,
+        'title': show.title,
+        'titleSearch': show.title.toLowerCase(),
+        'description': show.description,
+        'showDate': show.showDate,
+        'imageId': document.id,
+        'status': 'active',
+        'bookedCount': 0,
+        'lastBookingId': '',
+        'createdAt': timestamp,
+        'updatedAt': timestamp,
+      });
+      transaction.set(_firestore.collection('showImages').doc(document.id), {
+        'vendorId': vendorId,
+        'poster': Blob(bytes),
+        'mimeType': 'image/jpeg',
+        'width': width,
+        'height': height,
+      });
+      for (final slot in show.sessions) {
+        transaction.set(document.collection('sessions').doc(slot.id), {
+          'time': slot.value,
+          'capacity': 47,
+          'bookedSeats': <int>[],
+          'lastBookingId': '',
+          'updatedAt': timestamp,
+        });
+      }
+    });
+  }
+
+  static Future<(int, int)> _jpegDimensions(Uint8List bytes) async {
+    final codec = await ui.instantiateImageCodec(bytes);
+    try {
+      final frame = await codec.getNextFrame();
+      try {
+        return (frame.image.width, frame.image.height);
+      } finally {
+        frame.image.dispose();
+      }
+    } finally {
+      codec.dispose();
+    }
+  }
+
+  Future<VendorAllowed> _requireVendor(String vendorId) async {
+    final repository = _vendorAccess;
+    if (repository == null) throw UnsupportedError('Customer show reads only');
+    final access = await repository.check();
+    if (access is VendorAllowed && access.vendorId == vendorId) return access;
+    throw StateError('Vendor is not enrolled for this account');
+  }
 
   @override
   Future<void> deleteShow(String showId) async =>
-      throw UnsupportedError('Customer show reads only');
+      throw UnsupportedError('Show deletion is not configured');
 
   @override
   Future<void> resumeDeletes(String vendorId) async =>
-      throw UnsupportedError('Customer show reads only');
+      throw UnsupportedError('Show deletion is not configured');
 }

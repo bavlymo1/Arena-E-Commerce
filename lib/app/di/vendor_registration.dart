@@ -1,6 +1,8 @@
 import 'package:get_it/get_it.dart';
 
 import '../../features/vendor_shows/domain/repositories/shows_repository.dart';
+import '../../features/vendor_shows/presentation/cubit/show_form_cubit.dart';
+import '../../features/vendor_shows/presentation/cubit/show_form_state.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_show_details_cubit.dart';
 import '../customer/demo_customer_repository.dart';
@@ -13,7 +15,18 @@ GetIt createVendorServices() {
   return services;
 }
 
-void registerVendorJourney(GetIt services, {required String vendorId}) {
+void registerVendorJourney(
+  GetIt services, {
+  required String vendorId,
+  ShowPosterPicker? posterPicker,
+}) {
+  services.registerFactory<ShowFormCubit>(
+    () => ShowFormCubit(
+      services<ShowsRepository>(),
+      vendorId: vendorId,
+      posterPicker: posterPicker,
+    ),
+  );
   services.registerFactory<VendorShowsCubit>(
     () => VendorShowsCubit(services<ShowsRepository>(), vendorId: vendorId),
   );

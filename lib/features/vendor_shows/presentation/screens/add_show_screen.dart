@@ -95,8 +95,8 @@ class _AddShowScreenState extends State<AddShowScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: DateTime(1),
+      lastDate: DateTime(9999, 12, 31),
     );
     if (!mounted || picked == null) return;
     final formatted =
@@ -133,7 +133,7 @@ class _AddShowScreenState extends State<AddShowScreen> {
     final year = int.parse(match.group(1)!);
     final month = int.parse(match.group(2)!);
     final day = int.parse(match.group(3)!);
-    if (year < 2000 || year > 2100) return null;
+    if (year < 1) return null;
     final parsed = DateTime(year, month, day);
     if (parsed.year != year || parsed.month != month || parsed.day != day) {
       return null;
@@ -171,8 +171,12 @@ class _AddShowScreenState extends State<AddShowScreen> {
       },
       builder: (context, state) {
         final cubit = context.read<ShowFormCubit>();
+        void submit() {
+          FocusScope.of(context).unfocus();
+          unawaited(cubit.submit());
+        }
 
-        return Scaffold(
+        final page = Scaffold(
           appBar: AppBar(
             leading: canGoBack
                 ? IconButton(
@@ -534,18 +538,14 @@ class _AddShowScreenState extends State<AddShowScreen> {
                         actionKey: const ValueKey<String>(
                           'add-show-retry-submit-button',
                         ),
-                        onAction: state.isBusy
-                            ? null
-                            : () => unawaited(cubit.submit()),
+                        onAction: state.isBusy ? null : submit,
                       ),
                     ),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
                     key: const ValueKey<String>('add-show-submit-button'),
-                    onPressed: state.isBusy
-                        ? null
-                        : () => unawaited(cubit.submit()),
+                    onPressed: state.isBusy ? null : submit,
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
                       shape: RoundedRectangleBorder(
@@ -575,6 +575,7 @@ class _AddShowScreenState extends State<AddShowScreen> {
             ),
           ),
         );
+        return PopScope(canPop: !state.isSubmitting, child: page);
       },
     );
   }

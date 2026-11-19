@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:e_commerce_project/app/vendor/vendor_demo_app.dart';
 import 'package:e_commerce_project/app/customer/demo_customer_repository.dart';
 import 'package:e_commerce_project/app/di/vendor_registration.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_request.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/repositories/shows_repository.dart';
+import 'package:e_commerce_project/features/vendor_shows/presentation/cubit/show_form_cubit.dart';
+import 'package:e_commerce_project/features/vendor_shows/presentation/screens/add_show_screen.dart';
 import 'package:e_commerce_project/features/vendor_shows/presentation/cubit/vendor_show_details_cubit.dart';
 import 'package:e_commerce_project/features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
 import 'package:e_commerce_project/features/vendor_shows/presentation/screens/vendor_show_details_screen.dart';
@@ -11,8 +15,51 @@ import 'package:e_commerce_project/shared/seating/widgets/seat_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+
+import '../support/fake_shows_repository.dart';
 
 void main() {
+  testWidgets('local Add Show route owns its form and returns after saving', (
+    tester,
+  ) async {
+    final repository = FakeShowsRepository();
+    final services = GetIt.asNewInstance()
+      ..registerSingleton<ShowsRepository>(repository);
+    registerVendorJourney(
+      services,
+      vendorId: 'fixture-vendor',
+      posterPicker: (_) async => Uint8List.fromList([1, 2, 3]),
+    );
+    await tester.pumpWidget(
+      VendorDemoApp(services: services, canAddShow: true),
+    );
+    await tester.pumpAndSettle();
+    final shows = find.byType(VendorShowsScreen);
+    final list = tester.element(shows).read<VendorShowsCubit>();
+    await tester.tap(find.text('Add show').first);
+    await tester.pumpAndSettle();
+    final form = tester
+        .element(find.byType(AddShowScreen))
+        .read<ShowFormCubit>();
+    form.updateTitle('Local route test');
+    form.updateDescription('Fixture description');
+    form.updateShowDate('2026-12-20');
+    form.updateSessionTime(0, '16:23');
+    final poster = Uint8List.fromList([9, 8, 7]);
+    form.setPosterBytes(poster);
+    poster[0] = 0;
+    expect(() => form.state.posterBytes![0] = 0, throwsUnsupportedError);
+    await form.submit();
+    await tester.pumpAndSettle();
+
+    expect(tester.element(shows).read<VendorShowsCubit>(), same(list));
+    expect(form.isClosed, isTrue);
+    expect(repository.added.single.$1.vendorId, 'fixture-vendor');
+    expect(repository.added.single.$1.sessions.single.value, '16:23');
+    expect(repository.added.single.$2, [9, 8, 7]);
+  });
+
   testWidgets('vendor list details session map and back own their Cubits', (
     tester,
   ) async {

@@ -214,12 +214,28 @@ async function assertNoBooking(id = 'booking-a') {
   });
 }
 
-test('enrolled vendor atomically creates show, JPEG and five deterministic sessions', async () => {
-  await assertSucceeds(addShow());
-  const snapshots = await getDocs(collection(customer, 'shows/show-a/sessions'));
-  assert.equal(snapshots.size, 5);
-  assert.equal((await getDoc(doc(customer, 'showImages/show-a'))).data().poster.toUint8Array().length, 4);
-});
+for (let count = 1; count <= 5; count++) {
+  test(`enrolled vendor atomically creates show, JPEG and ${count} deterministic sessions`, async () => {
+    const slots = times.slice(0, count);
+    await assertSucceeds(addShow(vendor, { slots }));
+    const snapshots = await getDocs(collection(customer, 'shows/show-a/sessions'));
+    assert.deepEqual(snapshots.docs.map((slot) => [slot.id, slot.data().time]),
+      slots.map((time) => [time.replace(':', ''), time]).sort());
+    assert.equal((await getDoc(doc(customer, 'shows/show-a'))).data().vendorId, 'vendor-a');
+    assert.equal((await getDoc(doc(customer, 'showImages/show-a'))).data().poster.toUint8Array().length, 4);
+  });
+}
+
+async function assertNoShow() {
+  const [show, poster, sessions] = await Promise.all([
+    getDoc(doc(customer, 'shows/show-a')),
+    getDoc(doc(customer, 'showImages/show-a')),
+    getDocs(collection(customer, 'shows/show-a/sessions')),
+  ]);
+  assert.equal(show.exists(), false);
+  assert.equal(poster.exists(), false);
+  assert.equal(sessions.empty, true);
+}
 for (const [name, mutate] of [
   ['invalid calendar date', ({show}) => { show.showDate = '2026-02-31'; }],
   ['invalid leap day', ({show}) => { show.showDate = '2026-02-29'; }],
@@ -239,14 +255,15 @@ for (const [name, mutate] of [
   ['prebooked session', ({sessions}) => { sessions[0].data.bookedSeats = [1]; }],
   ['forged session timestamp', ({sessions}) => { sessions[0].data.updatedAt = new Date(0); }],
 ]) {
-  test(`addShow denies ${name} and leaves no parent`, async () => {
+  test(`addShow denies ${name} and leaves no partial records`, async () => {
     await assertFails(addShow(vendor, { mutate }));
-    assert.equal((await getDoc(doc(customer, 'shows/show-a'))).exists(), false);
+    await assertNoShow();
   });
 }
 for (const [uid, provider] of [['customer-a','password'], ['vendor-disabled','anonymous'], ['vendor-other','anonymous'], ['unknown','anonymous'], [null,'password']]) {
   test(`show creation denies unenrolled or wrong vendor ${uid}`, async () => {
     await assertFails(addShow(databaseFor(uid, provider)));
+    await assertNoShow();
   });
 }
 test('show without required paired image and orphan image are denied', async () => {
