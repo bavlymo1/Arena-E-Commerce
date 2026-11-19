@@ -30,7 +30,7 @@ final class ImagePickerShowPosterAdapter {
       imageQuality: defaultImageQuality,
     );
     if (file == null) return null;
-    return Uint8List.fromList(await file.readAsBytes());
+    return _readPoster(file);
   }
 
   /// Callable [ShowPosterPicker] entrypoint forwarding to [pickPoster].
@@ -60,7 +60,21 @@ final class ImagePickerShowPosterAdapter {
 
     final file = _selectRecoveredFile(response);
     if (file == null) return null;
-    return Uint8List.fromList(await file.readAsBytes());
+    return _readPoster(file);
+  }
+
+  static Future<Uint8List> _readPoster(XFile file) async {
+    final bytes = await file.readAsBytes();
+    // Leave the form's existing empty-file and size feedback in charge.
+    if (bytes.isNotEmpty &&
+        bytes.length <= ShowFormState.maxPosterBytes &&
+        (bytes.length < 3 ||
+            bytes[0] != 0xff ||
+            bytes[1] != 0xd8 ||
+            bytes[2] != 0xff)) {
+      throw const FormatException('Poster must be JPEG');
+    }
+    return Uint8List.fromList(bytes);
   }
 
   static ImageSource _toImageSource(ShowPosterSource source) =>

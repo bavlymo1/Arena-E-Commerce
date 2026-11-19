@@ -58,6 +58,87 @@ final class _ControllableAddShowRepository implements ShowsRepository {
 }
 
 void main() {
+  test(
+    'recovers startup artwork while the poster field is untouched',
+    () async {
+      final repo = FakeShowsRepository();
+      addTearDown(repo.dispose);
+      final recovery = Completer<Uint8List?>();
+      final cubit = ShowFormCubit(
+        repo,
+        vendorId: 'arena',
+        recoverPoster: () => recovery.future,
+      );
+      addTearDown(cubit.close);
+
+      expect(cubit.state.isBusy, isFalse);
+      final applied = cubit.stream.firstWhere((state) => state.hasPoster);
+      recovery.complete(Uint8List.fromList([1, 2, 3]));
+      expect((await applied).posterBytes, [1, 2, 3]);
+    },
+  );
+
+  for (final source in ShowPosterSource.values) {
+    test(
+      'late startup recovery cannot replace a selected ${source.name} poster',
+      () async {
+        final repo = FakeShowsRepository();
+        addTearDown(repo.dispose);
+        final recovery = Completer<Uint8List?>();
+        final cubit = ShowFormCubit(
+          repo,
+          vendorId: 'arena',
+          posterPicker: (_) async => Uint8List.fromList([8, 9]),
+          recoverPoster: () => recovery.future,
+        );
+        addTearDown(cubit.close);
+
+        await cubit.pickPoster(source);
+        recovery.complete(Uint8List.fromList([1, 2, 3]));
+        await Future<void>.delayed(Duration.zero);
+        expect(cubit.state.posterBytes, [8, 9]);
+      },
+    );
+  }
+
+  test(
+    'cancelling a new pick preserves the poster already recovered',
+    () async {
+      final repo = FakeShowsRepository();
+      addTearDown(repo.dispose);
+      final cubit = ShowFormCubit(
+        repo,
+        vendorId: 'arena',
+        posterPicker: (_) async => null,
+        recoverPoster: () async => Uint8List.fromList([1, 2, 3]),
+      );
+      addTearDown(cubit.close);
+
+      await cubit.stream.firstWhere((state) => state.hasPoster);
+      await cubit.pickPoster(ShowPosterSource.gallery);
+      expect(cubit.state.posterBytes, [1, 2, 3]);
+      expect(cubit.state.posterError, isNull);
+    },
+  );
+
+  test(
+    'startup recovery completing after close cannot change form state',
+    () async {
+      final repo = FakeShowsRepository();
+      addTearDown(repo.dispose);
+      final recovery = Completer<Uint8List?>();
+      final cubit = ShowFormCubit(
+        repo,
+        vendorId: 'arena',
+        recoverPoster: () => recovery.future,
+      );
+      await cubit.close();
+      recovery.complete(Uint8List.fromList([1, 2, 3]));
+      await Future<void>.delayed(Duration.zero);
+      expect(cubit.state.posterBytes, isNull);
+    },
+  );
+
   test('rejects blank vendorId and starts with one empty session slot', () {
     final repo = FakeShowsRepository();
     addTearDown(repo.dispose);

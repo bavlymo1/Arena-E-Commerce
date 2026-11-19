@@ -70,23 +70,26 @@ final class _FailingXFile extends XFile {
       Future<Uint8List>.error(StateError('unreadable'));
 }
 
+Uint8List _jpeg(List<int> payload) =>
+    Uint8List.fromList([0xff, 0xd8, 0xff, ...payload]);
+
 void main() {
   test('maps gallery and camera sources with 900x900 quality 75 defaults and returns defensive byte copies', () async {
-    final gallerySource = Uint8List.fromList(<int>[10, 20, 30, 40]);
-    final cameraSource = Uint8List.fromList(<int>[50, 60, 70]);
+    final gallerySource = _jpeg([10, 20, 30, 40]);
+    final cameraSource = _jpeg([50, 60, 70]);
     final picker = _FakeImagePicker()
       ..onPickImage = () async => XFile.fromData(gallerySource);
     final adapter = ImagePickerShowPosterAdapter(picker: picker);
 
     final ShowPosterPicker callback = adapter.call;
     final galleryBytes = await callback(ShowPosterSource.gallery);
-    expect(galleryBytes, <int>[10, 20, 30, 40]);
-    galleryBytes![0] = 99;
-    expect(gallerySource[0], 10);
+    expect(galleryBytes, _jpeg([10, 20, 30, 40]));
+    galleryBytes![3] = 99;
+    expect(gallerySource[3], 10);
 
     picker.onPickImage = () async => XFile.fromData(cameraSource);
     final cameraBytes = await adapter.pickPoster(ShowPosterSource.camera);
-    expect(cameraBytes, <int>[50, 60, 70]);
+    expect(cameraBytes, _jpeg([50, 60, 70]));
 
     expect(picker.pickCalls, hasLength(2));
     expect(picker.pickCalls[0].source, ImageSource.gallery);
@@ -144,7 +147,7 @@ void main() {
   test('recovers lost Android image from file or files list at most once per adapter instance', () async {
     final picker = _FakeImagePicker()
       ..onRetrieveLostData = () async => LostDataResponse(
-        file: XFile.fromData(Uint8List.fromList(<int>[1, 2, 3])),
+        file: XFile.fromData(_jpeg([1, 2, 3])),
         type: RetrieveType.image,
       );
     final adapter = ImagePickerShowPosterAdapter(
@@ -152,15 +155,15 @@ void main() {
       isAndroid: true,
     );
 
-    expect(await adapter.retrieveLostPoster(), <int>[1, 2, 3]);
+    expect(await adapter.retrieveLostPoster(), _jpeg([1, 2, 3]));
     expect(await adapter.retrieveLostPoster(), isNull);
     expect(picker.retrieveLostDataCalls, 1);
 
     final filesFallbackPicker = _FakeImagePicker()
       ..onRetrieveLostData = () async => LostDataResponse(
         files: <XFile>[
-          XFile.fromData(Uint8List.fromList(<int>[4, 5])),
-          XFile.fromData(Uint8List.fromList(<int>[6, 7, 8])),
+          XFile.fromData(_jpeg([4, 5])),
+          XFile.fromData(_jpeg([6, 7, 8])),
         ],
         type: RetrieveType.image,
       );
@@ -169,7 +172,7 @@ void main() {
       isAndroid: true,
     );
 
-    expect(await filesAdapter.retrieveLostPoster(), <int>[6, 7, 8]);
+    expect(await filesAdapter.retrieveLostPoster(), _jpeg([6, 7, 8]));
     expect(filesFallbackPicker.retrieveLostDataCalls, 1);
   });
 
@@ -186,7 +189,7 @@ void main() {
 
     final videoPicker = _FakeImagePicker()
       ..onRetrieveLostData = () async => LostDataResponse(
-        file: XFile.fromData(Uint8List.fromList(<int>[9, 9])),
+        file: XFile.fromData(_jpeg([9, 9])),
         type: RetrieveType.video,
       );
     final videoAdapter = ImagePickerShowPosterAdapter(
@@ -284,11 +287,11 @@ void main() {
 
     gate.complete(
       LostDataResponse(
-        file: XFile.fromData(Uint8List.fromList(<int>[11, 22])),
+        file: XFile.fromData(_jpeg([11, 22])),
         type: RetrieveType.image,
       ),
     );
-    expect(await firstCall, <int>[11, 22]);
+    expect(await firstCall, _jpeg([11, 22]));
     expect(concurrentPicker.retrieveLostDataCalls, 1);
   });
 
@@ -297,8 +300,7 @@ void main() {
     addTearDown(repo.dispose);
 
     final picker = _FakeImagePicker()
-      ..onPickImage = () async =>
-          XFile.fromData(Uint8List.fromList(<int>[1, 2, 3, 4]));
+      ..onPickImage = () async => XFile.fromData(_jpeg([1, 2, 3, 4]));
     final adapter = ImagePickerShowPosterAdapter(
       picker: picker,
       isAndroid: true,
@@ -318,13 +320,13 @@ void main() {
     cubit.updateSessionTime(1, '19:00');
 
     await cubit.pickPoster(ShowPosterSource.gallery);
-    expect(cubit.state.posterBytes, <int>[1, 2, 3, 4]);
+    expect(cubit.state.posterBytes, _jpeg([1, 2, 3, 4]));
     expect(cubit.state.posterError, isNull);
 
     // Cancel keeps prior poster and form fields.
     picker.onPickImage = () async => null;
     await cubit.pickPoster(ShowPosterSource.camera);
-    expect(cubit.state.posterBytes, <int>[1, 2, 3, 4]);
+    expect(cubit.state.posterBytes, _jpeg([1, 2, 3, 4]));
     expect(cubit.state.posterError, isNull);
     expect(cubit.state.title, 'Neon Finals');
     expect(cubit.state.description, 'Main arena event');
@@ -335,28 +337,35 @@ void main() {
     picker.onPickImage = () async => throw PlatformException(code: 'failed');
     await cubit.pickPoster(ShowPosterSource.camera);
     expect(cubit.state.posterError, ShowFormCubit.posterPickFailedMessage);
-    expect(cubit.state.posterBytes, <int>[1, 2, 3, 4]);
+    expect(cubit.state.posterBytes, _jpeg([1, 2, 3, 4]));
     expect(cubit.state.title, 'Neon Finals');
+
+    // Android can return PNG from Gallery when an image has transparency.
+    picker.onPickImage = () async =>
+        XFile.fromData(Uint8List.fromList([0x89, 0x50, 0x4e, 0x47]));
+    await cubit.pickPoster(ShowPosterSource.gallery);
+    expect(cubit.state.posterError, ShowFormCubit.posterFormatMessage);
+    expect(cubit.state.posterBytes, _jpeg([1, 2, 3, 4]));
 
     // Oversized and empty byte payloads use cubit validation without wiping fields.
     picker.onPickImage = () async =>
         XFile.fromData(Uint8List(ShowFormState.maxPosterBytes + 1));
     await cubit.pickPoster(ShowPosterSource.gallery);
     expect(cubit.state.posterError, ShowFormCubit.posterTooLargeMessage);
-    expect(cubit.state.posterBytes, <int>[1, 2, 3, 4]);
+    expect(cubit.state.posterBytes, _jpeg([1, 2, 3, 4]));
 
     picker.onPickImage = () async => XFile.fromData(Uint8List(0));
     await cubit.pickPoster(ShowPosterSource.gallery);
     expect(cubit.state.posterError, ShowFormCubit.posterEmptyMessage);
-    expect(cubit.state.posterBytes, <int>[1, 2, 3, 4]);
+    expect(cubit.state.posterBytes, _jpeg([1, 2, 3, 4]));
 
     // Recovered lost bytes flow into setPosterBytes cleanly.
     picker.onRetrieveLostData = () async => LostDataResponse(
-      file: XFile.fromData(Uint8List.fromList(<int>[8, 9, 10])),
+      file: XFile.fromData(_jpeg([8, 9, 10])),
       type: RetrieveType.image,
     );
     cubit.setPosterBytes(await adapter.retrieveLostPoster());
-    expect(cubit.state.posterBytes, <int>[8, 9, 10]);
+    expect(cubit.state.posterBytes, _jpeg([8, 9, 10]));
     expect(cubit.state.posterError, isNull);
     expect(cubit.state.title, 'Neon Finals');
     expect(cubit.state.sessionTimes, <String>['14:00', '19:00']);
@@ -372,7 +381,7 @@ void main() {
     );
     cubit.setPosterBytes(await oversizedRecoveryAdapter.retrieveLostPoster());
     expect(cubit.state.posterError, ShowFormCubit.posterTooLargeMessage);
-    expect(cubit.state.posterBytes, <int>[8, 9, 10]);
+    expect(cubit.state.posterBytes, _jpeg([8, 9, 10]));
     expect(cubit.state.title, 'Neon Finals');
   });
 }

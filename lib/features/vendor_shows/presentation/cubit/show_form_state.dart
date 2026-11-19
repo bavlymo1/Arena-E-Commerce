@@ -7,6 +7,7 @@ enum ShowPosterSource { gallery, camera }
 
 /// Injectable poster acquisition callback so presentation remains decoupled from plugins.
 typedef ShowPosterPicker = Future<Uint8List?> Function(ShowPosterSource source);
+typedef ShowPosterRecovery = Future<Uint8List?> Function();
 
 /// Lifecycle states for [ShowFormCubit].
 enum ShowFormStatus { editing, pickingPoster, submitting, submitted, failure }

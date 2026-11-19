@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,8 +10,14 @@ import 'show_form_state.dart';
 
 /// Validates and submits vendor show creation drafts against [ShowsRepository].
 final class ShowFormCubit extends Cubit<ShowFormState> {
-  ShowFormCubit(this._repository, {required String vendorId, this.posterPicker})
-    : super(ShowFormState(vendorId: _requireNonEmpty(vendorId)));
+  ShowFormCubit(
+    this._repository, {
+    required String vendorId,
+    this.posterPicker,
+    ShowPosterRecovery? recoverPoster,
+  }) : super(ShowFormState(vendorId: _requireNonEmpty(vendorId))) {
+    if (recoverPoster != null) unawaited(_recoverPoster(recoverPoster));
+  }
 
   static const String titleRequiredMessage = 'Enter show title.';
   static const String titleTooLongMessage =
@@ -29,6 +36,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
       'Image exceeds the 200 KB limit. Choose a smaller image.';
   static const String posterPickFailedMessage =
       'Unable to select image. Try again.';
+  static const String posterFormatMessage = 'Choose a JPEG image.';
   static const String posterPickerUnavailableMessage =
       'Image selection is not configured in this build.';
   static const String sessionsInvalidMessage =
@@ -43,6 +51,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
   final ShowsRepository _repository;
   final ShowPosterPicker? posterPicker;
   Object? _activeOperation;
+  bool _acceptStartupRecovery = true;
 
   static String _requireNonEmpty(String value) {
     if (value.trim().isEmpty) {
@@ -163,6 +172,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
   /// Applies already-obtained poster bytes; null cancels without clearing prior artwork.
   void setPosterBytes(Uint8List? bytes) {
     if (isClosed || state.isBusy || bytes == null) return;
+    _acceptStartupRecovery = false;
     final validationError = _validatePosterCandidate(bytes);
     if (validationError != null) {
       emit(
@@ -184,6 +194,17 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
     );
   }
 
+  Future<void> _recoverPoster(ShowPosterRecovery recoverPoster) async {
+    try {
+      final bytes = await recoverPoster();
+      if (isClosed || !_acceptStartupRecovery) return;
+      setPosterBytes(bytes);
+    } catch (error) {
+      if (isClosed || !_acceptStartupRecovery) return;
+      emit(state.copyWith(posterError: _posterPickError(error)));
+    }
+  }
+
   /// Acquires poster bytes from [source] via [picker] or the constructor-injected picker.
   Future<void> pickPoster(
     ShowPosterSource source, {
@@ -202,6 +223,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
       return;
     }
 
+    _acceptStartupRecovery = false;
     final operation = Object();
     _activeOperation = operation;
     emit(
@@ -240,13 +262,13 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
           clearPosterError: true,
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (isClosed || !identical(_activeOperation, operation)) return;
       _activeOperation = null;
       emit(
         state.copyWith(
           status: ShowFormStatus.editing,
-          posterError: posterPickFailedMessage,
+          posterError: _posterPickError(error),
         ),
       );
     }
@@ -372,6 +394,9 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
     }
     return null;
   }
+
+  static String _posterPickError(Object error) =>
+      error is FormatException ? posterFormatMessage : posterPickFailedMessage;
 
   static String? _validatePosterForSubmit(Uint8List? bytes) {
     if (bytes == null) return posterRequiredMessage;

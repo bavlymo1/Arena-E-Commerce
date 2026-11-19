@@ -30,6 +30,7 @@ void main() {
       services,
       vendorId: 'fixture-vendor',
       posterPicker: (_) async => Uint8List.fromList([1, 2, 3]),
+      recoverPoster: () async => Uint8List.fromList([6, 5, 4]),
     );
     await tester.pumpWidget(
       VendorDemoApp(services: services, canAddShow: true),
@@ -42,6 +43,7 @@ void main() {
     final form = tester
         .element(find.byType(AddShowScreen))
         .read<ShowFormCubit>();
+    expect(form.state.posterBytes, [6, 5, 4]);
     form.updateTitle('Local route test');
     form.updateDescription('Fixture description');
     form.updateShowDate('2026-12-20');

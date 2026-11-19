@@ -1,6 +1,7 @@
 import 'package:get_it/get_it.dart';
 
 import '../../features/vendor_shows/domain/repositories/shows_repository.dart';
+import '../../features/vendor_shows/presentation/adapters/image_picker_show_poster_adapter.dart';
 import '../../features/vendor_shows/presentation/cubit/show_form_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/show_form_state.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
@@ -19,14 +20,19 @@ void registerVendorJourney(
   GetIt services, {
   required String vendorId,
   ShowPosterPicker? posterPicker,
+  ShowPosterRecovery? recoverPoster,
 }) {
-  services.registerFactory<ShowFormCubit>(
-    () => ShowFormCubit(
+  services.registerFactory<ShowFormCubit>(() {
+    final nativePicker = posterPicker == null
+        ? ImagePickerShowPosterAdapter()
+        : null;
+    return ShowFormCubit(
       services<ShowsRepository>(),
       vendorId: vendorId,
-      posterPicker: posterPicker,
-    ),
-  );
+      posterPicker: posterPicker ?? nativePicker?.call,
+      recoverPoster: recoverPoster ?? nativePicker?.retrieveLostPoster,
+    );
+  });
   services.registerFactory<VendorShowsCubit>(
     () => VendorShowsCubit(services<ShowsRepository>(), vendorId: vendorId),
   );
