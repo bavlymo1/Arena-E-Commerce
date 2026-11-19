@@ -226,11 +226,11 @@ for (let count = 1; count <= 5; count++) {
   });
 }
 
-async function assertNoShow() {
+async function assertNoShow(id = 'show-a') {
   const [show, poster, sessions] = await Promise.all([
-    getDoc(doc(customer, 'shows/show-a')),
-    getDoc(doc(customer, 'showImages/show-a')),
-    getDocs(collection(customer, 'shows/show-a/sessions')),
+    getDoc(doc(customer, `shows/${id}`)),
+    getDoc(doc(customer, `showImages/${id}`)),
+    getDocs(collection(customer, `shows/${id}/sessions`)),
   ]);
   assert.equal(show.exists(), false);
   assert.equal(poster.exists(), false);
@@ -268,16 +268,62 @@ for (const [uid, provider] of [['customer-a','password'], ['vendor-disabled','an
 }
 test('show without required paired image and orphan image are denied', async () => {
   await assertFails(addShow(vendor, { image: false }));
+  await assertNoShow();
   await assertFails(setDoc(doc(vendor, 'showImages/orphan'), imageData()));
 });
-test('late session addition and session management edits are denied', async () => {
+for (const [id, slots] of [['zero-sessions', []], ['six-sessions', [...times, '20:00']]]) {
+  test(`D11 current gap: accepts show with ${slots.length} sessions`, async () => {
+    await assertSucceeds(addShow(vendor, { id, slots }));
+    assert.equal((await getDocFromServer(doc(customer, `shows/${id}`))).exists(), true);
+    assert.equal((await getDocFromServer(doc(customer, `showImages/${id}`))).exists(), true);
+    const stored = await getDocs(collection(customer, `shows/${id}/sessions`));
+    assert.deepEqual(stored.docs.map(slot => slot.id), slots.map(time => time.replace(':', '')).sort());
+  });
+}
+
+for (const [declared, actual] of [[1, 0], [5, 6], [2, 1], [1, 1]]) {
+  const slots = [...times, '20:00'].slice(0, actual);
+  test(`D11 rejects undeclared schema field sessionCount=${declared} with ${actual} actual sessions`, async () => {
+    await assertFails(addShow(vendor, { slots, mutate: ({show}) => { show.sessionCount = declared; } }));
+    await assertNoShow();
+  });
+}
+
+test('D11 a later write cannot add a sixth session or decrease an active show’s count', async () => {
   await addShow();
-  await assertFails(setDoc(doc(vendor, 'shows/show-a/sessions/2000'), sessionData('20:00')));
-  await assertFails(updateDoc(doc(vendor, sessionPath), { capacity: 40 }));
+  const extra = doc(vendor, 'shows/show-a/sessions/2000');
+  await assertFails(setDoc(extra, sessionData('20:00')));
+  await assertFails(deleteDoc(doc(vendor, sessionPath)));
+  const metadataAndExtra = writeBatch(vendor);
+  metadataAndExtra.update(doc(vendor, 'shows/show-a'), {title:'Retitled', titleSearch:'retitled', updatedAt:serverTimestamp()});
+  metadataAndExtra.set(extra, sessionData('20:00'));
+  await assertFails(metadataAndExtra.commit());
+  assert.equal((await getDocs(collection(customer, 'shows/show-a/sessions'))).size, 5);
+  assert.equal((await getDocFromServer(doc(customer, 'shows/show-a'))).data().title, showData('show-a').title);
 });
-test('documented schema limitation: zero and six sessions cannot be counted by Rules', async () => {
-  await assertSucceeds(addShow(vendor, { id: 'no-sessions', slots: [] }));
-  await assertSucceeds(addShow(vendor, { id: 'six-sessions', slots: [...times, '20:00'] }));
+
+test('D11 vendor cannot edit the session identity or add a count to an active show', async () => {
+  await addShow(vendor, { slots: ['19:00'] });
+  const session = doc(vendor, sessionPath);
+  await assertFails(updateDoc(session, {time:'20:00', capacity:40, updatedAt:serverTimestamp()}));
+  await assertFails(updateDoc(doc(vendor, 'shows/show-a'), {sessionCount:1, updatedAt:serverTimestamp()}));
+  await assertFails(book(customer, 'booking-a', [1], {
+    mutate: ({session}) => { session.time = '20:00'; },
+  }));
+  const data = (await getDocFromServer(doc(customer, sessionPath))).data();
+  assert.equal(data.time, '19:00');
+  assert.equal(data.capacity, 47);
+  await assertNoBooking();
+});
+
+test('D11 deleting blocks new sessions and lets only the owner remove the last session', async () => {
+  await addShow(vendor, { slots: ['19:00'] });
+  await markDeleting();
+  await assertFails(setDoc(doc(vendor, 'shows/show-a/sessions/2000'), sessionData('20:00')));
+  await assertFails(deleteDoc(doc(databaseFor('vendor-other','anonymous'), sessionPath)));
+  await assertSucceeds(deleteDoc(doc(vendor, sessionPath)));
+  assert.equal((await getDocs(collection(customer, 'shows/show-a/sessions'))).size, 0);
+  assert.equal((await getDocFromServer(doc(customer, 'shows/show-a'))).data().status, 'deleting');
 });
 
 test('customer books row five (11 seats) atomically with exact totals', async () => {
