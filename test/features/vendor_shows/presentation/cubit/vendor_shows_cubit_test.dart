@@ -39,12 +39,18 @@ final class _StreamingVendorShowsRepository implements ShowsRepository {
   _StreamingVendorShowsRepository({
     Future<void> Function()? onCancel,
     this.loadPosterHandler,
+    this.deleteShowHandler,
+    this.resumeDeletesHandler,
   }) : controller = StreamController<List<Show>>(onCancel: onCancel);
 
   StreamController<List<Show>> controller;
   Future<Uint8List?> Function(String showId)? loadPosterHandler;
+  Future<void> Function(String showId)? deleteShowHandler;
+  Future<void> Function(String vendorId)? resumeDeletesHandler;
   int watchVendorShowsCalls = 0;
   int cacheClears = 0;
+  int resumeDeletesCalls = 0;
+  final deletedShowIds = <String>[];
   String? lastVendorId;
 
   @override
@@ -78,10 +84,20 @@ final class _StreamingVendorShowsRepository implements ShowsRepository {
   Future<void> addShow(NewShow show, Uint8List poster) async {}
 
   @override
-  Future<void> deleteShow(String showId) async {}
+  Future<void> deleteShow(String showId) async {
+    deletedShowIds.add(showId);
+    if (deleteShowHandler != null) {
+      await deleteShowHandler!(showId);
+    }
+  }
 
   @override
-  Future<void> resumeDeletes(String vendorId) async {}
+  Future<void> resumeDeletes(String vendorId) async {
+    resumeDeletesCalls++;
+    if (resumeDeletesHandler != null) {
+      await resumeDeletesHandler!(vendorId);
+    }
+  }
 
   @override
   void dispose() {
@@ -282,4 +298,107 @@ void main() {
       expect(cubit.isClosed, isTrue);
     },
   );
+
+  test('deleteShow tracks deletingShowIds, ignores double-tap, surfaces retryable failure, and succeeds on retry', () async {
+    final firstAttempt = Completer<void>();
+    final secondAttempt = Completer<void>();
+    var attempts = 0;
+
+    final repo = _StreamingVendorShowsRepository(
+      deleteShowHandler: (_) {
+        attempts++;
+        return attempts == 1 ? firstAttempt.future : secondAttempt.future;
+      },
+    );
+    addTearDown(repo.dispose);
+    final cubit = VendorShowsCubit(repo, vendorId: 'vendor-1');
+    addTearDown(cubit.close);
+
+    repo.controller.add(<Show>[
+      _show(id: 'show-1', createdAt: DateTime.utc(2026, 11, 18)),
+    ]);
+    await pumpEventQueue();
+
+    final deleteFuture1 = cubit.deleteShow('show-1');
+    // Double-tap while deleting that showId must be ignored.
+    final deleteFuture2 = cubit.deleteShow('show-1');
+    await deleteFuture2;
+
+    expect(repo.deletedShowIds, <String>['show-1']);
+    expect(cubit.state.isDeletingShow('show-1'), isTrue);
+    expect(cubit.state.deleteErrorFor('show-1'), isNull);
+
+    firstAttempt.completeError(StateError('batch network drop'));
+    await deleteFuture1;
+
+    expect(cubit.state.isDeletingShow('show-1'), isFalse);
+    expect(cubit.state.deleteErrorFor('show-1'), isNotNull);
+    expect(cubit.state.shows.single.id, 'show-1');
+
+    // Retry clears previous error and completes cleanly.
+    final retryFuture = cubit.deleteShow('show-1');
+    expect(cubit.state.isDeletingShow('show-1'), isTrue);
+    expect(cubit.state.deleteErrorFor('show-1'), isNull);
+
+    secondAttempt.complete();
+    await retryFuture;
+
+    expect(repo.deletedShowIds, <String>['show-1', 'show-1']);
+    expect(cubit.state.isDeletingShow('show-1'), isFalse);
+    expect(cubit.state.deleteErrorFor('show-1'), isNull);
+  });
+
+  test('start triggers resumeDeletes, ignores UnsupportedError silently, and surfaces real resume failures without losing shows', () async {
+    final unsupportedRepo = _StreamingVendorShowsRepository(
+      resumeDeletesHandler: (_) =>
+          Future<void>.error(UnsupportedError('demo mode')),
+    );
+    addTearDown(unsupportedRepo.dispose);
+    final unsupportedCubit = VendorShowsCubit(
+      unsupportedRepo,
+      vendorId: 'vendor-1',
+    );
+    addTearDown(unsupportedCubit.close);
+    unsupportedRepo.controller.add(<Show>[
+      _show(id: 'demo-show', createdAt: DateTime.utc(2026, 11, 18)),
+    ]);
+    await pumpEventQueue();
+
+    expect(unsupportedRepo.resumeDeletesCalls, 1);
+    expect(unsupportedCubit.state.isResumingDeletes, isFalse);
+    expect(unsupportedCubit.state.resumeDeleteErrorMessage, isNull);
+    expect(unsupportedCubit.state.shows.single.id, 'demo-show');
+
+    // Real failure during resumeDeletes surfaces retryable resumeDeleteErrorMessage while keeping shows.
+    var shouldFailResume = true;
+    final failingRepo = _StreamingVendorShowsRepository(
+      resumeDeletesHandler: (_) async {
+        if (shouldFailResume) {
+          throw StateError('firestore unavailable');
+        }
+      },
+    );
+    addTearDown(failingRepo.dispose);
+    final failingCubit = VendorShowsCubit(failingRepo, vendorId: 'vendor-1');
+    addTearDown(failingCubit.close);
+    failingRepo.controller.add(<Show>[
+      _show(
+        id: 'interrupted-1',
+        status: ShowStatus.deleting,
+        createdAt: DateTime.utc(2026, 11, 18),
+      ),
+    ]);
+    await pumpEventQueue();
+
+    expect(failingRepo.resumeDeletesCalls, 1);
+    expect(failingCubit.state.isResumingDeletes, isFalse);
+    expect(failingCubit.state.resumeDeleteErrorMessage, isNotNull);
+    expect(failingCubit.state.shows.single.id, 'interrupted-1');
+
+    shouldFailResume = false;
+    await failingCubit.resumeDeletes();
+    expect(failingRepo.resumeDeletesCalls, 2);
+    expect(failingCubit.state.isResumingDeletes, isFalse);
+    expect(failingCubit.state.resumeDeleteErrorMessage, isNull);
+  });
 }

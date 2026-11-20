@@ -24,6 +24,7 @@ final class VendorShowsCubit extends Cubit<VendorShowsState> {
   StreamSubscription<List<Show>>? _showsSubscription;
   Future<void> _cancellation = Future<void>.value();
   Future<void>? _activeStartFuture;
+  Future<void>? _activeResumeFuture;
   int _listenGeneration = 0;
   bool _awaitingInitialEvent = false;
   bool _openingSubscription = false;
@@ -36,13 +37,15 @@ final class VendorShowsCubit extends Cubit<VendorShowsState> {
     return value;
   }
 
-  /// Begins watching shows owned by `state.vendorId`.
+  /// Begins watching shows owned by `state.vendorId` and resumes pending deletes.
   Future<void> start() {
     if (isClosed) return Future<void>.value();
     if (_awaitingInitialEvent && _activeStartFuture != null) {
       return _activeStartFuture!;
     }
-    return _startListening();
+    final future = _startListening();
+    unawaited(resumeDeletes());
+    return future;
   }
 
   /// Re-subscribes after an error and refreshes cached show posters.
@@ -51,7 +54,98 @@ final class VendorShowsCubit extends Cubit<VendorShowsState> {
     if (_openingSubscription && _activeStartFuture != null) {
       return _activeStartFuture!;
     }
-    return _startListening(retryPosters: true);
+    final future = _startListening(retryPosters: true);
+    unawaited(resumeDeletes());
+    return future;
+  }
+
+  /// Resumes any interrupted show deletions for [VendorShowsState.vendorId].
+  Future<void> resumeDeletes() {
+    if (isClosed) return Future<void>.value();
+    if (_activeResumeFuture != null) return _activeResumeFuture!;
+    final future = _runResumeDeletes();
+    _activeResumeFuture = future;
+    return future;
+  }
+
+  Future<void> _runResumeDeletes() async {
+    emit(
+      state.copyWith(
+        isResumingDeletes: true,
+        clearResumeDeleteErrorMessage: true,
+      ),
+    );
+    try {
+      await _repository.resumeDeletes(state.vendorId);
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          isResumingDeletes: false,
+          clearResumeDeleteErrorMessage: true,
+        ),
+      );
+    } on UnsupportedError {
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          isResumingDeletes: false,
+          clearResumeDeleteErrorMessage: true,
+        ),
+      );
+    } catch (_) {
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          isResumingDeletes: false,
+          resumeDeleteErrorMessage:
+              'Unable to finish pending deletions. Try again.',
+        ),
+      );
+    } finally {
+      _activeResumeFuture = null;
+    }
+  }
+
+  /// Deletes [showId] and all child/paired records, ignoring duplicate taps while active.
+  Future<void> deleteShow(String showId) async {
+    if (isClosed || showId.trim().isEmpty) return;
+    if (state.deletingShowIds.contains(showId)) return;
+
+    final nextDeleting = Set<String>.from(state.deletingShowIds)..add(showId);
+    final nextErrors = Map<String, String>.from(state.deleteErrors)
+      ..remove(showId);
+    emit(
+      state.copyWith(deletingShowIds: nextDeleting, deleteErrors: nextErrors),
+    );
+
+    try {
+      await _repository.deleteShow(showId);
+      if (isClosed) return;
+      final remainingDeleting = Set<String>.from(state.deletingShowIds)
+        ..remove(showId);
+      final remainingErrors = Map<String, String>.from(state.deleteErrors)
+        ..remove(showId);
+      emit(
+        state.copyWith(
+          deletingShowIds: remainingDeleting,
+          deleteErrors: remainingErrors,
+        ),
+      );
+    } catch (error) {
+      if (isClosed) return;
+      final remainingDeleting = Set<String>.from(state.deletingShowIds)
+        ..remove(showId);
+      final remainingErrors = Map<String, String>.from(state.deleteErrors)
+        ..[showId] = error is UnsupportedError
+            ? 'Show deletion is not configured in this preview.'
+            : 'Unable to delete show. Try again.';
+      emit(
+        state.copyWith(
+          deletingShowIds: remainingDeleting,
+          deleteErrors: remainingErrors,
+        ),
+      );
+    }
   }
 
   Future<void> _startListening({bool retryPosters = false}) {
@@ -145,6 +239,10 @@ final class VendorShowsCubit extends Cubit<VendorShowsState> {
     final updatedLoading = state.loadingPosterIds
         .where((id) => ownedIds.contains(id) && !changedIds.contains(id))
         .toSet();
+    final retainedErrors = <String, String>{
+      for (final entry in state.deleteErrors.entries)
+        if (ownedIds.contains(entry.key)) entry.key: entry.value,
+    };
 
     final idsToLoad = <String>[];
     for (final show in ownedShows) {
@@ -160,6 +258,7 @@ final class VendorShowsCubit extends Cubit<VendorShowsState> {
         shows: ownedShows,
         posters: retainedPosters,
         loadingPosterIds: updatedLoading,
+        deleteErrors: retainedErrors,
         clearErrorMessage: true,
       ),
     );

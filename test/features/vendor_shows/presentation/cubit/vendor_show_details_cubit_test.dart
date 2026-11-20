@@ -53,6 +53,7 @@ final class _StreamingVendorDetailsRepository implements ShowsRepository {
     Future<void> Function()? onShowCancel,
     Future<void> Function()? onSessionsCancel,
     this.loadPosterHandler,
+    this.deleteShowHandler,
   }) : showController = StreamController<Show?>(onCancel: onShowCancel),
        sessionsController = StreamController<List<Session>>(
          onCancel: onSessionsCancel,
@@ -61,9 +62,11 @@ final class _StreamingVendorDetailsRepository implements ShowsRepository {
   StreamController<Show?> showController;
   StreamController<List<Session>> sessionsController;
   Future<Uint8List?> Function(String showId)? loadPosterHandler;
+  Future<void> Function(String showId)? deleteShowHandler;
   int watchShowCalls = 0;
   int watchSessionsCalls = 0;
   int cacheClears = 0;
+  final deletedShowIds = <String>[];
 
   @override
   Stream<Show?> watchShow(String showId) {
@@ -98,7 +101,12 @@ final class _StreamingVendorDetailsRepository implements ShowsRepository {
   Future<void> addShow(NewShow show, Uint8List poster) async {}
 
   @override
-  Future<void> deleteShow(String showId) async {}
+  Future<void> deleteShow(String showId) async {
+    deletedShowIds.add(showId);
+    if (deleteShowHandler != null) {
+      await deleteShowHandler!(showId);
+    }
+  }
 
   @override
   Future<void> resumeDeletes(String vendorId) async {}
@@ -373,4 +381,83 @@ void main() {
       expect(cubit.state.posterBytes, Uint8List.fromList(<int>[8, 8]));
     },
   );
+
+  test('deleteShow preserves deleting/failed/completed state when watchShow emits status:deleting or null', () async {
+    final firstAttempt = Completer<void>();
+    final secondAttempt = Completer<void>();
+    var attempts = 0;
+
+    final repo = _StreamingVendorDetailsRepository(
+      deleteShowHandler: (_) {
+        attempts++;
+        return attempts == 1 ? firstAttempt.future : secondAttempt.future;
+      },
+    );
+    addTearDown(repo.dispose);
+    final cubit = VendorShowDetailsCubit(
+      repo,
+      vendorId: 'vendor-1',
+      showId: 'show-1',
+    );
+    addTearDown(cubit.close);
+
+    repo.showController.add(_show());
+    repo.sessionsController.add(<Session>[
+      _session('19:00', bookedSeats: <int>[1, 2]),
+    ]);
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorShowDetailsStatus.ready);
+    expect(cubit.state.deleteStatus, VendorShowDeleteStatus.idle);
+
+    // Start deleteShow; double-tap must be ignored while deleting.
+    final delete1 = cubit.deleteShow();
+    final delete2 = cubit.deleteShow();
+    await delete2;
+
+    expect(repo.deletedShowIds, <String>['show-1']);
+    expect(cubit.state.deleteStatus, VendorShowDeleteStatus.deleting);
+    expect(cubit.state.isDeletingShow, isTrue);
+
+    // Firestore watchShow emits status: deleting as step 1 of deleteShow.
+    // MUST NOT overwrite status to unavailable while our own delete is active!
+    repo.showController.add(_show(status: ShowStatus.deleting));
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorShowDetailsStatus.ready);
+    expect(cubit.state.deleteStatus, VendorShowDeleteStatus.deleting);
+    expect(cubit.state.show?.status, ShowStatus.deleting);
+
+    // Simulate batch failure mid-cleanup.
+    firstAttempt.completeError(StateError('batch commit failed'));
+    await delete1;
+    expect(cubit.state.status, VendorShowDetailsStatus.ready);
+    expect(cubit.state.deleteStatus, VendorShowDeleteStatus.failed);
+    expect(cubit.state.hasDeleteFailed, isTrue);
+    expect(cubit.state.deleteErrorMessage, isNotNull);
+
+    // Another snapshot while failed must also preserve failed delete state, not flip to unavailable.
+    repo.showController.add(_show(status: ShowStatus.deleting));
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorShowDetailsStatus.ready);
+    expect(cubit.state.deleteStatus, VendorShowDeleteStatus.failed);
+
+    // Retry deleteShow -> emits null when parent doc is deleted -> completes cleanly for pop.
+    final retryFuture = cubit.deleteShow();
+    expect(cubit.state.deleteStatus, VendorShowDeleteStatus.deleting);
+    expect(cubit.state.deleteErrorMessage, isNull);
+
+    repo.showController.add(null);
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorShowDetailsStatus.ready);
+    expect(cubit.state.deleteStatus, VendorShowDeleteStatus.deleting);
+
+    secondAttempt.complete();
+    await retryFuture;
+    expect(cubit.state.status, VendorShowDetailsStatus.ready);
+    expect(cubit.state.deleteStatus, VendorShowDeleteStatus.completed);
+    expect(cubit.state.isDeleteCompleted, isTrue);
+
+    // Further deleteShow calls after completed are ignored.
+    await cubit.deleteShow();
+    expect(repo.deletedShowIds, <String>['show-1', 'show-1']);
+  });
 }

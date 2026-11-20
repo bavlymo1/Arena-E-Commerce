@@ -8,6 +8,9 @@ import '../../domain/models/show.dart';
 /// Lifecycle states for the vendor show details and read-only map screen.
 enum VendorShowDetailsStatus { loading, ready, unavailable, error }
 
+/// Lifecycle states for deleting a show from details.
+enum VendorShowDeleteStatus { idle, deleting, failed, completed }
+
 /// Immutable state for [VendorShowDetailsCubit].
 final class VendorShowDetailsState extends Equatable {
   VendorShowDetailsState({
@@ -20,6 +23,8 @@ final class VendorShowDetailsState extends Equatable {
     this.posterBytes,
     this.posterLoading = false,
     this.errorMessage,
+    this.deleteStatus = VendorShowDeleteStatus.idle,
+    this.deleteErrorMessage,
   }) : sessions = List<Session>.unmodifiable(sessions);
 
   final String vendorId;
@@ -31,11 +36,17 @@ final class VendorShowDetailsState extends Equatable {
   final Uint8List? posterBytes;
   final bool posterLoading;
   final String? errorMessage;
+  final VendorShowDeleteStatus deleteStatus;
+  final String? deleteErrorMessage;
 
   bool get isLoading => status == VendorShowDetailsStatus.loading;
   bool get isReady => status == VendorShowDetailsStatus.ready;
   bool get isUnavailable => status == VendorShowDetailsStatus.unavailable;
   bool get hasError => status == VendorShowDetailsStatus.error;
+  bool get isDeletingShow => deleteStatus == VendorShowDeleteStatus.deleting;
+  bool get hasDeleteFailed => deleteStatus == VendorShowDeleteStatus.failed;
+  bool get isDeleteCompleted =>
+      deleteStatus == VendorShowDeleteStatus.completed;
 
   /// Currently selected session in [sessions], or `null` if none matches.
   Session? get selectedSession {
@@ -59,6 +70,9 @@ final class VendorShowDetailsState extends Equatable {
     bool? posterLoading,
     String? errorMessage,
     bool clearErrorMessage = false,
+    VendorShowDeleteStatus? deleteStatus,
+    String? deleteErrorMessage,
+    bool clearDeleteErrorMessage = false,
   }) {
     return VendorShowDetailsState(
       vendorId: vendorId,
@@ -74,6 +88,10 @@ final class VendorShowDetailsState extends Equatable {
       errorMessage: clearErrorMessage
           ? null
           : (errorMessage ?? this.errorMessage),
+      deleteStatus: deleteStatus ?? this.deleteStatus,
+      deleteErrorMessage: clearDeleteErrorMessage
+          ? null
+          : (deleteErrorMessage ?? this.deleteErrorMessage),
     );
   }
 
@@ -88,5 +106,7 @@ final class VendorShowDetailsState extends Equatable {
     posterBytes,
     posterLoading,
     errorMessage,
+    deleteStatus,
+    deleteErrorMessage,
   ];
 }

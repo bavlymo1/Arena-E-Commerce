@@ -16,9 +16,15 @@ final class VendorShowsState extends Equatable {
     Map<String, Uint8List?> posters = const <String, Uint8List?>{},
     Set<String> loadingPosterIds = const <String>{},
     this.errorMessage,
+    Set<String> deletingShowIds = const <String>{},
+    Map<String, String> deleteErrors = const <String, String>{},
+    this.isResumingDeletes = false,
+    this.resumeDeleteErrorMessage,
   }) : shows = List<Show>.unmodifiable(shows),
        posters = Map<String, Uint8List?>.unmodifiable(posters),
-       loadingPosterIds = Set<String>.unmodifiable(loadingPosterIds);
+       loadingPosterIds = Set<String>.unmodifiable(loadingPosterIds),
+       deletingShowIds = Set<String>.unmodifiable(deletingShowIds),
+       deleteErrors = Map<String, String>.unmodifiable(deleteErrors);
 
   final String vendorId;
   final VendorShowsStatus status;
@@ -26,11 +32,17 @@ final class VendorShowsState extends Equatable {
   final Map<String, Uint8List?> posters;
   final Set<String> loadingPosterIds;
   final String? errorMessage;
+  final Set<String> deletingShowIds;
+  final Map<String, String> deleteErrors;
+  final bool isResumingDeletes;
+  final String? resumeDeleteErrorMessage;
 
   bool get isLoading => status == VendorShowsStatus.loading;
   bool get isReady => status == VendorShowsStatus.ready;
   bool get hasError => status == VendorShowsStatus.error;
   bool get isEmpty => status == VendorShowsStatus.ready && shows.isEmpty;
+  bool isDeletingShow(String showId) => deletingShowIds.contains(showId);
+  String? deleteErrorFor(String showId) => deleteErrors[showId];
 
   VendorShowsState copyWith({
     VendorShowsStatus? status,
@@ -39,6 +51,11 @@ final class VendorShowsState extends Equatable {
     Set<String>? loadingPosterIds,
     String? errorMessage,
     bool clearErrorMessage = false,
+    Set<String>? deletingShowIds,
+    Map<String, String>? deleteErrors,
+    bool? isResumingDeletes,
+    String? resumeDeleteErrorMessage,
+    bool clearResumeDeleteErrorMessage = false,
   }) {
     return VendorShowsState(
       vendorId: vendorId,
@@ -49,6 +66,12 @@ final class VendorShowsState extends Equatable {
       errorMessage: clearErrorMessage
           ? null
           : (errorMessage ?? this.errorMessage),
+      deletingShowIds: deletingShowIds ?? this.deletingShowIds,
+      deleteErrors: deleteErrors ?? this.deleteErrors,
+      isResumingDeletes: isResumingDeletes ?? this.isResumingDeletes,
+      resumeDeleteErrorMessage: clearResumeDeleteErrorMessage
+          ? null
+          : (resumeDeleteErrorMessage ?? this.resumeDeleteErrorMessage),
     );
   }
 
@@ -60,5 +83,9 @@ final class VendorShowsState extends Equatable {
     posters,
     loadingPosterIds,
     errorMessage,
+    deletingShowIds,
+    deleteErrors,
+    isResumingDeletes,
+    resumeDeleteErrorMessage,
   ];
 }

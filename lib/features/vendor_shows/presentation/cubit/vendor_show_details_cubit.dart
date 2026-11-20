@@ -75,7 +75,9 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
 
   /// Re-subscribes after an error and refreshes the cached show poster.
   Future<void> retry() {
-    if (isClosed) return Future<void>.value();
+    if (isClosed || state.isDeletingShow || state.isDeleteCompleted) {
+      return Future<void>.value();
+    }
     if (_openingSubscriptions && _activeStartFuture != null) {
       return _activeStartFuture!;
     }
@@ -84,11 +86,57 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
 
   /// Switches the inspected session for the read-only seat map.
   void selectSession(String sessionId) {
-    if (isClosed || !state.isReady) return;
+    if (isClosed ||
+        !state.isReady ||
+        state.isDeletingShow ||
+        state.isDeleteCompleted) {
+      return;
+    }
     if (!state.sessions.any((session) => session.id == sessionId)) return;
     _preferredSessionId = sessionId;
     if (state.selectedSessionId == sessionId) return;
     emit(state.copyWith(selectedSessionId: sessionId));
+  }
+
+  /// Deletes this show and emits [VendorShowDeleteStatus.completed] on cleanup.
+  Future<void> deleteShow() async {
+    if (isClosed ||
+        state.deleteStatus == VendorShowDeleteStatus.deleting ||
+        state.deleteStatus == VendorShowDeleteStatus.completed) {
+      return;
+    }
+    if (state.status == VendorShowDetailsStatus.unavailable &&
+        state.deleteStatus == VendorShowDeleteStatus.idle) {
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        deleteStatus: VendorShowDeleteStatus.deleting,
+        clearDeleteErrorMessage: true,
+      ),
+    );
+
+    try {
+      await _repository.deleteShow(state.showId);
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          deleteStatus: VendorShowDeleteStatus.completed,
+          clearDeleteErrorMessage: true,
+        ),
+      );
+    } catch (error) {
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          deleteStatus: VendorShowDeleteStatus.failed,
+          deleteErrorMessage: error is UnsupportedError
+              ? 'Show deletion is not configured in this preview.'
+              : 'Unable to delete show. Try again.',
+        ),
+      );
+    }
   }
 
   Future<void> _startListening({bool refreshPoster = false}) {
@@ -177,6 +225,14 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     _latestShow = show;
 
     if (!_isOwnedActiveShow(show)) {
+      // Preserve own delete lifecycle (deleting/failed/completed) instead of
+      // flipping to unavailable when our own write marks deleting or removes the doc.
+      if (state.deleteStatus != VendorShowDeleteStatus.idle) {
+        if (show != null && show.vendorId == state.vendorId) {
+          emit(state.copyWith(show: show));
+        }
+        return;
+      }
       _hasSessionsSnapshot = false;
       _latestSessions = const <Session>[];
       _posterRequest++;
@@ -309,7 +365,11 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     bool showFailed = false,
     bool sessionsFailed = false,
   }) {
-    if (isClosed || generation != _listenGeneration) return;
+    if (isClosed ||
+        generation != _listenGeneration ||
+        state.deleteStatus != VendorShowDeleteStatus.idle) {
+      return;
+    }
     _awaitingInitialEvent = false;
     if (showFailed) _hasShowSnapshot = false;
     if (sessionsFailed) _hasSessionsSnapshot = false;

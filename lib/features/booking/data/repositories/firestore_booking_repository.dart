@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../vendor_shows/domain/models/session.dart';
 import '../../../vendor_shows/domain/models/session_time.dart';
+import '../../../vendor_shows/domain/models/show.dart';
 import '../../../vendor_shows/domain/repositories/shows_repository.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/booking_recovery.dart';
@@ -29,9 +32,104 @@ final class FirestoreBookingRepository implements BookingRepository {
       (doc['lastBookingId'], doc['updatedAt']);
 
   @override
-  Stream<Session?> watchSession(String showId, String sessionId) => _shows
-      .watchSessions(showId)
-      .map((slots) => slots.where((slot) => slot.id == sessionId).firstOrNull);
+  Stream<Session?> watchSession(String showId, String sessionId) =>
+      Stream<Session?>.multi((sink) {
+        var cancelled = false;
+        var hasShow = false;
+        var hasSessions = false;
+        var showDone = false;
+        var sessionsDone = false;
+        var emittedUnavailable = false;
+        Show? latestShow;
+        List<Session> latestSessions = const <Session>[];
+        StreamSubscription<Show?>? showSub;
+        StreamSubscription<List<Session>>? sessionsSub;
+
+        void emitIfReady() {
+          if (cancelled || sink.isClosed || !hasShow) return;
+          final show = latestShow;
+          if (show == null || show.status != ShowStatus.active) {
+            if (!emittedUnavailable) {
+              emittedUnavailable = true;
+              sink.add(null);
+            }
+            return;
+          }
+          if (!hasSessions) return;
+          emittedUnavailable = false;
+          sink.add(
+            latestSessions.where((slot) => slot.id == sessionId).firstOrNull,
+          );
+        }
+
+        void closeIfBothDone() {
+          if (!cancelled && !sink.isClosed && showDone && sessionsDone) {
+            unawaited(sink.close());
+          }
+        }
+
+        sink.onCancel = () async {
+          cancelled = true;
+          await Future.wait<void>(<Future<void>>[
+            if (showSub != null) showSub.cancel(),
+            if (sessionsSub != null) sessionsSub.cancel(),
+          ]);
+        };
+
+        try {
+          showSub = _shows
+              .watchShow(showId)
+              .listen(
+                (show) {
+                  hasShow = true;
+                  latestShow = show;
+                  emitIfReady();
+                },
+                onError: (Object error, StackTrace stackTrace) {
+                  if (!cancelled && !sink.isClosed) {
+                    sink.addError(error, stackTrace);
+                  }
+                },
+                onDone: () {
+                  showDone = true;
+                  closeIfBothDone();
+                },
+              );
+          if (cancelled || sink.isClosed) {
+            unawaited(showSub.cancel());
+            return;
+          }
+          sessionsSub = _shows
+              .watchSessions(showId)
+              .listen(
+                (sessions) {
+                  hasSessions = true;
+                  latestSessions = sessions;
+                  emitIfReady();
+                },
+                onError: (Object error, StackTrace stackTrace) {
+                  if (!cancelled && !sink.isClosed) {
+                    sink.addError(error, stackTrace);
+                  }
+                },
+                onDone: () {
+                  sessionsDone = true;
+                  closeIfBothDone();
+                },
+              );
+          if (cancelled || sink.isClosed) {
+            unawaited(showSub.cancel());
+            unawaited(sessionsSub.cancel());
+          }
+        } catch (error, stackTrace) {
+          unawaited(showSub?.cancel());
+          unawaited(sessionsSub?.cancel());
+          if (!cancelled && !sink.isClosed) {
+            sink.addError(error, stackTrace);
+            unawaited(sink.close());
+          }
+        }
+      });
 
   @override
   Stream<Set<int>> watchMySeats(String uid, String showId, String sessionId) =>

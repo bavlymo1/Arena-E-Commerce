@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/models/show.dart';
 import '../cubit/vendor_shows_cubit.dart';
 import '../cubit/vendor_shows_state.dart';
+import '../widgets/delete_show_dialog.dart';
 import '../widgets/vendor_show_poster_banner.dart';
 
 /// Displays the vendor-owned list of active and deleting shows.
@@ -24,6 +26,16 @@ class VendorShowsScreen extends StatelessWidget {
   final ValueChanged<String>? onDeleteShow;
   final VoidCallback? onOpenUpdates;
   final int unreadUpdatesCount;
+
+  Future<void> _confirmAndDelete(
+    BuildContext context,
+    VendorShowsCubit cubit,
+    Show show,
+  ) async {
+    final confirmed = await showDeleteShowConfirmDialog(context, show);
+    if (!confirmed || !context.mounted) return;
+    await cubit.deleteShow(show.id);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,141 +82,186 @@ class VendorShowsScreen extends StatelessWidget {
           builder: (context, state) {
             final cubit = context.read<VendorShowsCubit>();
 
-            return ListView(
+            return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-              children: <Widget>[
-                Text(
-                  'ArenaPass Console',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    'ArenaPass Console',
+                    style: textTheme.labelLarge?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'My shows',
-                  style: textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 4),
+                  Text(
+                    'My shows',
+                    style: textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Live seat totals update as customers book.',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                  const SizedBox(height: 6),
+                  Text(
+                    'Live seat totals update as customers book.',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-                if (onAddShow != null || onOpenUpdates != null) ...<Widget>[
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: <Widget>[
-                      if (onAddShow != null)
-                        FilledButton(
+                  if (onAddShow != null || onOpenUpdates != null) ...<Widget>[
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: <Widget>[
+                        if (onAddShow != null)
+                          FilledButton(
+                            key: const ValueKey<String>(
+                              'vendor-shows-add-button',
+                            ),
+                            onPressed: onAddShow,
+                            child: const VendorButtonContent(
+                              icon: Icons.add,
+                              label: 'Add show',
+                            ),
+                          ),
+                        if (onOpenUpdates != null)
+                          OutlinedButton(
+                            key: const ValueKey<String>(
+                              'vendor-shows-open-updates-button',
+                            ),
+                            onPressed: onOpenUpdates,
+                            child: VendorButtonContent(
+                              icon: Icons.notifications_outlined,
+                              label: unreadUpdatesCount > 0
+                                  ? 'Booking updates ($unreadUpdatesCount)'
+                                  : 'Booking updates',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  if (state.isLoading && state.shows.isEmpty)
+                    const Center(
+                      key: ValueKey<String>('vendor-shows-loading'),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('Loading shows…'),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (state.hasError && state.shows.isEmpty)
+                    VendorStatusPanel(
+                      key: const ValueKey<String>('vendor-shows-error-state'),
+                      icon: Icons.error_outline,
+                      title: 'Unable to load shows',
+                      message: state.errorMessage ?? 'Unable to load shows. Your existing data is preserved.',
+                      actionLabel: 'Try again',
+                      actionKey: const ValueKey<String>(
+                        'vendor-shows-retry-button',
+                      ),
+                      onAction: cubit.retry,
+                      isError: true,
+                    )
+                  else if (state.isEmpty)
+                    VendorStatusPanel(
+                      key: const ValueKey<String>('vendor-shows-empty-state'),
+                      icon: Icons.event_note_outlined,
+                      title: 'No shows here yet',
+                      message: 'Add a show with its date, artwork, and up to five daily sessions.',
+                      actionLabel: onAddShow != null ? 'Add show' : null,
+                      actionKey: onAddShow != null
+                          ? const ValueKey<String>(
+                              'vendor-shows-empty-add-button',
+                            )
+                          : null,
+                      onAction: onAddShow,
+                    )
+                  else ...<Widget>[
+                    if (state.hasError)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: VendorNoticeBanner(
                           key: const ValueKey<String>(
-                            'vendor-shows-add-button',
+                            'vendor-shows-inline-error',
                           ),
-                          onPressed: onAddShow,
-                          child: const VendorButtonContent(
-                            icon: Icons.add,
-                            label: 'Add show',
+                          icon: Icons.error_outline,
+                          message: state.errorMessage ?? 'Unable to refresh shows. Showing last loaded shows.',
+                          isError: true,
+                          actionLabel: 'Try again',
+                          actionKey: const ValueKey<String>(
+                            'vendor-shows-inline-retry-button',
                           ),
+                          onAction: cubit.retry,
                         ),
-                      if (onOpenUpdates != null)
-                        OutlinedButton(
+                      ),
+                    if (state.isResumingDeletes)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 16),
+                        child: VendorDeletingProgressBanner(
+                          key: ValueKey<String>('vendor-shows-resuming-banner'),
+                          message: 'Finishing pending show deletions…',
+                        ),
+                      )
+                    else if (state.resumeDeleteErrorMessage
+                        case final resumeError?)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: VendorNoticeBanner(
                           key: const ValueKey<String>(
-                            'vendor-shows-open-updates-button',
+                            'vendor-shows-resume-error-banner',
                           ),
-                          onPressed: onOpenUpdates,
-                          child: VendorButtonContent(
-                            icon: Icons.notifications_outlined,
-                            label: unreadUpdatesCount > 0
-                                ? 'Booking updates ($unreadUpdatesCount)'
-                                : 'Booking updates',
+                          icon: Icons.error_outline,
+                          message: resumeError,
+                          isError: true,
+                          actionLabel: 'Try again',
+                          actionKey: const ValueKey<String>(
+                            'vendor-shows-resume-retry-button',
                           ),
+                          onAction: () => unawaited(cubit.resumeDeletes()),
                         ),
-                    ],
-                  ),
+                      ),
+                    for (final show in state.shows)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _VendorShowCard(
+                          show: show,
+                          posterBytes: state.posters[show.id],
+                          posterLoading: state.loadingPosterIds.contains(
+                            show.id,
+                          ),
+                          isDeleting:
+                              state.isDeletingShow(show.id) ||
+                              (show.status == ShowStatus.deleting &&
+                                  state.isResumingDeletes),
+                          deleteErrorMessage: state.deleteErrorFor(show.id),
+                          onOpenDetails:
+                              show.status == ShowStatus.active &&
+                                  !state.isDeletingShow(show.id)
+                              ? () => onShowSelected(show.id)
+                              : null,
+                          onDeleteShow: onDeleteShow != null
+                              ? () => onDeleteShow!(show.id)
+                              : show.status == ShowStatus.deleting
+                              ? () => unawaited(cubit.deleteShow(show.id))
+                              : () => unawaited(
+                                  _confirmAndDelete(context, cubit, show),
+                                ),
+                          onRetryDelete: onDeleteShow != null
+                              ? () => onDeleteShow!(show.id)
+                              : () => unawaited(cubit.deleteShow(show.id)),
+                        ),
+                      ),
+                  ],
                 ],
-                const SizedBox(height: 20),
-                if (state.isLoading && state.shows.isEmpty)
-                  const Center(
-                    key: ValueKey<String>('vendor-shows-loading'),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Loading shows…'),
-                        ],
-                      ),
-                    ),
-                  )
-                else if (state.hasError && state.shows.isEmpty)
-                  VendorStatusPanel(
-                    key: const ValueKey<String>('vendor-shows-error-state'),
-                    icon: Icons.error_outline,
-                    title: 'Unable to load shows',
-                    message: state.errorMessage ?? 'Unable to load shows. Your existing data is preserved.',
-                    actionLabel: 'Try again',
-                    actionKey: const ValueKey<String>(
-                      'vendor-shows-retry-button',
-                    ),
-                    onAction: cubit.retry,
-                    isError: true,
-                  )
-                else if (state.isEmpty)
-                  VendorStatusPanel(
-                    key: const ValueKey<String>('vendor-shows-empty-state'),
-                    icon: Icons.event_note_outlined,
-                    title: 'No shows here yet',
-                    message: 'Add a show with its date, artwork, and up to five daily sessions.',
-                    actionLabel: onAddShow != null ? 'Add show' : null,
-                    actionKey: onAddShow != null
-                        ? const ValueKey<String>(
-                            'vendor-shows-empty-add-button',
-                          )
-                        : null,
-                    onAction: onAddShow,
-                  )
-                else ...<Widget>[
-                  if (state.hasError)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: VendorNoticeBanner(
-                        key: const ValueKey<String>(
-                          'vendor-shows-inline-error',
-                        ),
-                        icon: Icons.error_outline,
-                        message: state.errorMessage ?? 'Unable to refresh shows. Showing last loaded shows.',
-                        isError: true,
-                        actionLabel: 'Try again',
-                        actionKey: const ValueKey<String>(
-                          'vendor-shows-inline-retry-button',
-                        ),
-                        onAction: cubit.retry,
-                      ),
-                    ),
-                  for (final show in state.shows)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _VendorShowCard(
-                        show: show,
-                        posterBytes: state.posters[show.id],
-                        posterLoading: state.loadingPosterIds.contains(show.id),
-                        onOpenDetails: show.status == ShowStatus.active
-                            ? () => onShowSelected(show.id)
-                            : null,
-                        onDeleteShow: onDeleteShow != null
-                            ? () => onDeleteShow!(show.id)
-                            : null,
-                      ),
-                    ),
-                ],
-              ],
+              ),
             );
           },
         ),
@@ -247,21 +304,28 @@ class _VendorShowCard extends StatelessWidget {
     required this.show,
     required this.posterBytes,
     required this.posterLoading,
+    required this.isDeleting,
+    required this.deleteErrorMessage,
     required this.onOpenDetails,
     required this.onDeleteShow,
+    required this.onRetryDelete,
   });
 
   final Show show;
   final Uint8List? posterBytes;
   final bool posterLoading;
+  final bool isDeleting;
+  final String? deleteErrorMessage;
   final VoidCallback? onOpenDetails;
   final VoidCallback? onDeleteShow;
+  final VoidCallback? onRetryDelete;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final isDeleting = show.status == ShowStatus.deleting;
+    final showDeletingStatus = show.status == ShowStatus.deleting;
+    final badgeDeleting = showDeletingStatus || isDeleting;
     final dateLabel = formatVendorShowDateLabel(show.showDate);
     final bookedSummary = formatVendorShowBookedSummary(show);
 
@@ -303,7 +367,7 @@ class _VendorShowCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _ShowStatusBadge(isDeleting: isDeleting),
+                  _ShowStatusBadge(isDeleting: badgeDeleting),
                 ],
               ),
               const SizedBox(height: 8),
@@ -359,7 +423,7 @@ class _VendorShowCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isDeleting
+          color: badgeDeleting
               ? colorScheme.error.withValues(alpha: 0.45)
               : colorScheme.outlineVariant,
         ),
@@ -372,10 +436,22 @@ class _VendorShowCard extends StatelessWidget {
           if (isDeleting)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: VendorDeletingProgressBanner(
+                key: ValueKey<String>(
+                  'vendor-show-deleting-progress-${show.id}',
+                ),
+                message: 'Finishing delete…',
+              ),
+            )
+          else if (showDeletingStatus)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: VendorNoticeBanner(
                 key: ValueKey<String>('vendor-show-deleting-notice-${show.id}'),
                 icon: Icons.warning_amber_rounded,
-                message: 'Deletion interrupted. Bookings closed.',
+                message: deleteErrorMessage == null
+                    ? 'Deletion interrupted. Bookings closed.'
+                    : 'Deletion interrupted. Bookings closed. $deleteErrorMessage',
                 isError: true,
                 actionLabel: onDeleteShow != null ? 'Resume delete' : null,
                 actionKey: onDeleteShow != null
@@ -384,36 +460,38 @@ class _VendorShowCard extends StatelessWidget {
                 onAction: onDeleteShow,
               ),
             )
-          else if (onOpenDetails != null || onDeleteShow != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  if (onOpenDetails != null)
-                    FilledButton.tonal(
-                      key: ValueKey<String>('vendor-show-seat-maps-${show.id}'),
-                      onPressed: onOpenDetails,
-                      child: const VendorButtonContent(
-                        icon: Icons.event_seat_outlined,
-                        label: 'Seat maps',
-                      ),
-                    ),
-                  if (onDeleteShow != null)
-                    OutlinedButton(
-                      key: ValueKey<String>('vendor-show-delete-${show.id}'),
-                      onPressed: onDeleteShow,
-                      child: const VendorButtonContent(
-                        icon: Icons.delete_outline,
-                        label: 'Delete',
-                      ),
-                    ),
-                ],
+          else ...<Widget>[
+            if (deleteErrorMessage case final error?)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: VendorNoticeBanner(
+                  key: ValueKey<String>('vendor-show-delete-error-${show.id}'),
+                  icon: Icons.error_outline,
+                  message: error,
+                  isError: true,
+                  actionLabel: onRetryDelete != null ? 'Retry delete' : null,
+                  actionKey: onRetryDelete != null
+                      ? ValueKey<String>('vendor-show-retry-delete-${show.id}')
+                      : null,
+                  onAction: onRetryDelete,
+                ),
               ),
-            ),
+            if (onDeleteShow != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton(
+                    key: ValueKey<String>('vendor-show-delete-${show.id}'),
+                    onPressed: onDeleteShow,
+                    child: const VendorButtonContent(
+                      icon: Icons.delete_outline,
+                      label: 'Delete',
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );
