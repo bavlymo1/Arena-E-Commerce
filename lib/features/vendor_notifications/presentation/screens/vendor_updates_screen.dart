@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../shared/seating/seat_numbers.dart';
+import '../../domain/models/booking_alert.dart';
 import '../../domain/models/booking_event.dart';
 import '../cubit/vendor_notifications_cubit.dart';
 import '../cubit/vendor_notifications_state.dart';
+import '../widgets/alert_permission_banner.dart';
 
 /// Displays reverse-chronological booking updates and exact booked totals.
 class VendorUpdatesScreen extends StatelessWidget {
@@ -92,6 +94,15 @@ class VendorUpdatesScreen extends StatelessWidget {
                         child: const Text('Mark all read'),
                       ),
                     ],
+                  ),
+                ],
+                if (state.isAlertPermissionDenied) ...<Widget>[
+                  const SizedBox(height: 12),
+                  AlertPermissionBanner(
+                    key: const ValueKey<String>(
+                      'vendor-updates-permission-denied-banner',
+                    ),
+                    onRetryPermission: cubit.requestAlertPermission,
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -185,9 +196,9 @@ class _BookingEventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final slotLabel = _formatSlotTime12Hour(event.slotTime.value);
+    final slotLabel = formatSlotTime12Hour(event.slotTime.value);
     final timestampLabel = _formatLocalTimestamp(event.createdAt);
-    final seatsLabel = _formatSeatsLabel(event.seats);
+    final seatsLabel = formatBookedSeatsLabel(event.seats);
     final slotTotalLabel = 'Session ${event.slotTotal} / $seatCapacity booked';
     final showTotalLabel = 'Show total: ${event.showTotal} booked';
 
@@ -465,16 +476,6 @@ const List<String> _months = <String>[
   'Dec',
 ];
 
-String _formatSlotTime12Hour(String hhMm) {
-  final match = RegExp(r'^([01]\d|2[0-3]):([0-5]\d)$').firstMatch(hhMm);
-  if (match == null) return hhMm;
-  final hour = int.parse(match.group(1)!);
-  final minute = match.group(2)!;
-  final period = hour < 12 ? 'AM' : 'PM';
-  final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-  return '$displayHour:$minute $period';
-}
-
 String _formatLocalTimestamp(DateTime timestamp) {
   final local = timestamp.toLocal();
   final period = local.hour < 12 ? 'AM' : 'PM';
@@ -483,10 +484,4 @@ String _formatLocalTimestamp(DateTime timestamp) {
       : (local.hour > 12 ? local.hour - 12 : local.hour);
   final minute = local.minute.toString().padLeft(2, '0');
   return '${_months[local.month - 1]} ${local.day}, $displayHour:$minute $period';
-}
-
-String _formatSeatsLabel(Set<int> seats) {
-  final sorted = seats.toList()..sort();
-  final noun = sorted.length == 1 ? 'Seat' : 'Seats';
-  return '$noun ${sorted.join(', ')} booked';
 }
