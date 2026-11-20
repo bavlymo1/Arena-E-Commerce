@@ -157,7 +157,7 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
             final showId = state.pathParameters['showId']!;
             final sessionId = state.pathParameters['sessionId']!;
             return MultiBlocProvider(
-              key: ValueKey((showId, sessionId)),
+              key: ValueKey((_sessionEpoch, showId, sessionId)),
               providers: [
                 BlocProvider(
                   create: (_) => widget.services<SeatSelectionCubit>(
@@ -238,7 +238,7 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
               child: Text(
                 widget.auth == null
                     ? 'LOCAL DEMO · sample account and data · resets on restart'
-                    : 'LOCAL EMULATORS · booking setup pending',
+                    : 'LOCAL EMULATORS',
                 textAlign: TextAlign.center,
               ),
             ),

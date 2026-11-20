@@ -30,8 +30,20 @@ void registerCustomerJourney(
   required String customerUid,
   String Function()? newBookingId,
 }) {
-  final random = Random.secure();
   registerCustomerDiscovery(services);
+  registerCustomerBooking(
+    services,
+    customerUid: () => customerUid,
+    newBookingId: newBookingId,
+  );
+}
+
+void registerCustomerBooking(
+  GetIt services, {
+  required String Function() customerUid,
+  String Function()? newBookingId,
+}) {
+  final random = Random.secure();
   String generateId() => List.generate(
     16,
     (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -39,7 +51,7 @@ void registerCustomerJourney(
   services.registerFactoryParam<SeatSelectionCubit, String, String>(
     (showId, sessionId) => SeatSelectionCubit(
       bookingRepository: services<BookingRepository>(),
-      customerUid: customerUid,
+      customerUid: customerUid(),
       showId: showId,
       sessionId: sessionId,
     ),
@@ -47,7 +59,7 @@ void registerCustomerJourney(
   services.registerFactoryParam<BookingCubit, String, String>(
     (showId, sessionId) => BookingCubit(
       repository: services<BookingRepository>(),
-      customerUid: customerUid,
+      customerUid: customerUid(),
       showId: showId,
       sessionId: sessionId,
       newBookingId: newBookingId ?? generateId,
