@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formatting/date_time_formatting.dart';
 import '../cubit/show_form_cubit.dart';
 import '../cubit/show_form_state.dart';
 import '../widgets/vendor_show_poster_banner.dart';
@@ -89,9 +90,10 @@ class _AddShowScreenState extends State<AddShowScreen> {
   }
 
   Future<void> _chooseDate(BuildContext context, ShowFormCubit cubit) async {
-    final now = DateTime.now();
-    final parsed = _tryParseIsoDate(cubit.state.showDate);
-    final initialDate = parsed ?? now;
+    final parsed = tryParseIsoDateParts(cubit.state.showDate.trim());
+    final initialDate = parsed == null
+        ? DateTime.now()
+        : DateTime(parsed.$1, parsed.$2, parsed.$3);
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -114,8 +116,10 @@ class _AddShowScreenState extends State<AddShowScreen> {
     final current = index < cubit.state.sessionTimes.length
         ? cubit.state.sessionTimes[index]
         : '';
-    final initialTime =
-        _tryParseTimeOfDay(current) ?? const TimeOfDay(hour: 19, minute: 0);
+    final parsed = tryParseHourMinute(current.trim());
+    final initialTime = parsed == null
+        ? const TimeOfDay(hour: 19, minute: 0)
+        : TimeOfDay(hour: parsed.$1, minute: parsed.$2);
     final picked = await showTimePicker(
       context: context,
       initialTime: initialTime,
@@ -125,30 +129,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
         '${picked.hour.toString().padLeft(2, '0')}:'
         '${picked.minute.toString().padLeft(2, '0')}';
     cubit.updateSessionTime(index, formatted);
-  }
-
-  static DateTime? _tryParseIsoDate(String value) {
-    final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value.trim());
-    if (match == null) return null;
-    final year = int.parse(match.group(1)!);
-    final month = int.parse(match.group(2)!);
-    final day = int.parse(match.group(3)!);
-    if (year < 1) return null;
-    final parsed = DateTime(year, month, day);
-    if (parsed.year != year || parsed.month != month || parsed.day != day) {
-      return null;
-    }
-    return parsed;
-  }
-
-  static TimeOfDay? _tryParseTimeOfDay(String value) {
-    final match = RegExp(r'^([01]\d|2[0-3]):([0-5]\d)$')
-        .firstMatch(value.trim());
-    if (match == null) return null;
-    return TimeOfDay(
-      hour: int.parse(match.group(1)!),
-      minute: int.parse(match.group(2)!),
-    );
   }
 
   @override

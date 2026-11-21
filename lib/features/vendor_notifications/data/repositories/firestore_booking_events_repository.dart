@@ -60,10 +60,7 @@ final class FirestoreBookingEventsRepository
         snapshot.docs
             .map((doc) => _decodeEvent(doc, expectedVendorId))
             .toList(growable: false)
-          ..sort((a, b) {
-            final byTime = b.createdAt.compareTo(a.createdAt);
-            return byTime != 0 ? byTime : a.bookingId.compareTo(b.bookingId);
-          });
+          ..sort(BookingEvent.compareNewestFirst);
     return List<BookingEvent>.unmodifiable(events);
   }
 

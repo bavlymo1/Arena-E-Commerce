@@ -1,5 +1,7 @@
 import '../../../../core/formatting/date_time_formatting.dart';
 
+final RegExp _isoDateSyntaxPattern = RegExp(r'^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
 final class SessionTime {
   SessionTime(this.value) {
     if (tryParseHourMinute(value) == null) {
@@ -20,7 +22,7 @@ final class SessionTime {
 
 /// A calendar date without an invented booking cutoff or timezone.
 void validateShowDate(String value) {
-  if (!RegExp(r'^[0-9]{4}-[0-9]{2}-[0-9]{2}$').hasMatch(value)) {
+  if (!_isoDateSyntaxPattern.hasMatch(value)) {
     throw ArgumentError.value(value, 'showDate', 'Expected yyyy-MM-dd');
   }
   if (tryParseIsoDateParts(value) == null) {
