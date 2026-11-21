@@ -271,11 +271,23 @@ final class FirestoreShowsRepository implements ShowsRepository {
         .where('vendorId', isEqualTo: access.vendorId)
         .where('status', isEqualTo: 'deleting')
         .get(_server);
+    Object? firstError;
+    StackTrace? firstStackTrace;
     for (final showDoc in deletingShows.docs) {
-      await _coalesceDelete(
-        showDoc.id,
-        () => _deleteShowInternal(showDoc.id, access.vendorId),
-      );
+      try {
+        await _coalesceDelete(
+          showDoc.id,
+          () => _deleteShowInternal(showDoc.id, access.vendorId),
+        );
+      } catch (error, stackTrace) {
+        if (firstError == null) {
+          firstError = error;
+          firstStackTrace = stackTrace;
+        }
+      }
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError, firstStackTrace!);
     }
   }
 
