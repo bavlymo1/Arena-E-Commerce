@@ -8,7 +8,10 @@ import '../di/customer_registration.dart';
 import '../startup/arena_pass_app.dart';
 import 'customer_demo_app.dart';
 
-Widget createCustomerApp({GetIt? services}) {
+Widget createCustomerApp({
+  GetIt? services,
+  String? banner = 'LOCAL EMULATORS',
+}) {
   final graph = services ?? createCustomerServices();
   if (!graph.isRegistered<CustomerAuthRepository>()) {
     return ArenaPassApp(services: graph);
@@ -19,6 +22,7 @@ Widget createCustomerApp({GetIt? services}) {
       builder: (context) => createCustomerDemoApp(
         services: graph,
         auth: context.read<CustomerAuthCubit>(),
+        banner: banner,
       ),
     ),
   );

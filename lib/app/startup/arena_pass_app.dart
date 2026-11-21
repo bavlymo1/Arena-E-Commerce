@@ -48,6 +48,7 @@ class _ArenaPassAppState extends State<ArenaPassApp> {
     title: 'ArenaPass ${variant.label}',
     debugShowCheckedModeBanner: false,
     theme: buildAppTheme(),
+    darkTheme: buildAppTheme(brightness: Brightness.dark),
     routerConfig: router,
   );
 }

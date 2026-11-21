@@ -76,6 +76,7 @@ class _VendorEnrolledAppState extends State<VendorEnrolledApp> {
           return MaterialApp(
             title: 'ArenaPass Vendor',
             theme: buildAppTheme(),
+            darkTheme: buildAppTheme(brightness: Brightness.dark),
             debugShowCheckedModeBanner: false,
             home: VendorAccessGate(builder: (_, _) => const SizedBox.shrink()),
           );

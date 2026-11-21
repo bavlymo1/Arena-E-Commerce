@@ -11,15 +11,20 @@ import '../../features/discovery/presentation/screens/show_details_screen.dart';
 import '../di/customer_journey_registration.dart';
 import 'customer_journey_app.dart';
 
+const String _defaultDemoBanner =
+    'LOCAL DEMO · sample account and data · resets on restart';
+
 /// Explicit local fixtures; the normal Customer entry point stays unavailable.
 CustomerJourneyApp createCustomerDemoApp({
   GetIt? services,
   CustomerAuthCubit? auth,
+  String? banner = _defaultDemoBanner,
 }) {
   final graph = services ?? createDemoCustomerServices();
   return CustomerJourneyApp(
     services: graph,
     auth: auth,
+    banner: banner,
     discoverBuilder: (context, onShow) => BlocProvider(
       create: (_) => graph<DiscoveryCubit>(),
       child: DiscoveryScreen(

@@ -138,6 +138,7 @@ class _VendorJourneyRouterState extends State<VendorJourneyRouter> {
     return MaterialApp.router(
       title: widget.title,
       theme: buildAppTheme(),
+      darkTheme: buildAppTheme(brightness: Brightness.dark),
       debugShowCheckedModeBanner: false,
       routerConfig: router,
       builder: bannerText == null

@@ -30,6 +30,7 @@ class CustomerJourneyApp extends StatefulWidget {
     required this.detailsBuilder,
     this.initialLocation = '/discover',
     this.auth,
+    this.banner,
     super.key,
   });
   final GetIt services;
@@ -38,6 +39,7 @@ class CustomerJourneyApp extends StatefulWidget {
   detailsBuilder;
   final String initialLocation;
   final CustomerAuthCubit? auth;
+  final String? banner;
 
   @override
   State<CustomerJourneyApp> createState() => _CustomerJourneyAppState();
@@ -224,32 +226,31 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp.router(
-    title: 'ArenaPass Customer',
-    theme: buildAppTheme(),
-    debugShowCheckedModeBanner: false,
-    routerConfig: router,
-    builder: !_hasShows
-        ? null
-        : (context, child) => Column(
-            children: [
-              Material(
-                color: Theme.of(context).colorScheme.secondaryContainer,
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Text(
-                      widget.auth == null
-                          ? 'LOCAL DEMO · sample account and data · resets on restart'
-                          : 'LOCAL EMULATORS',
-                      textAlign: TextAlign.center,
+  Widget build(BuildContext context) {
+    final bannerText = widget.banner;
+    return MaterialApp.router(
+      title: 'ArenaPass Customer',
+      theme: buildAppTheme(),
+      darkTheme: buildAppTheme(brightness: Brightness.dark),
+      debugShowCheckedModeBanner: false,
+      routerConfig: router,
+      builder: !_hasShows || bannerText == null
+          ? null
+          : (context, child) => Column(
+              children: [
+                Material(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(bannerText, textAlign: TextAlign.center),
                     ),
                   ),
                 ),
-              ),
-              Expanded(child: child!),
-            ],
-          ),
-  );
+                Expanded(child: child!),
+              ],
+            ),
+    );
+  }
 }
