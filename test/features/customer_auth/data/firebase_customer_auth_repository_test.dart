@@ -27,6 +27,7 @@ class _Auth extends Fake implements FirebaseAuth {
         message: 'private SDK payload',
       );
     }
+    await Future<void>.value();
     lastLogin = (email, password);
     return _UserCredential();
   }
@@ -42,6 +43,7 @@ class _Auth extends Fake implements FirebaseAuth {
         message: 'private SDK register payload',
       );
     }
+    await Future<void>.value();
     lastRegister = (email, password);
     return _UserCredential();
   }

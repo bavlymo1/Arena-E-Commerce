@@ -805,7 +805,7 @@ void main() {
 
     test('confirm writes 4-doc transaction atomically and handles idempotent replay, conflicts, and unavailable shows', () async {
       final store = _BookingStore()
-        ..setDoc('shows/show-1', showData())
+        ..setDoc('shows/show-1', showData(bookedCount: 5))
         ..setDoc('shows/show-1/sessions/1900', sessionData());
       addTearDown(store.dispose);
       final auth = _StubAuth('cust-1');
@@ -824,14 +824,15 @@ void main() {
         'set:bookings/book-1',
         'set:bookingEvents/book-1',
       ]);
-      expect(store.docs['shows/show-1']!.data!['bookedCount'], 4);
-      expect(store.docs['shows/show-1']!.data!['lastBookingId'], 'book-1');
-      expect(store.docs['shows/show-1/sessions/1900']!.data!['bookedSeats'], [
-        1,
-        2,
-        3,
-        4,
-      ]);
+      final showDoc = store.docs['shows/show-1']!.data!;
+      expect(showDoc['bookedCount'], 7);
+      expect(showDoc['lastBookingId'], 'book-1');
+      expect(showDoc['updatedAt'], isA<FieldValue>());
+
+      final sessionDoc = store.docs['shows/show-1/sessions/1900']!.data!;
+      expect(sessionDoc['bookedSeats'], [1, 2, 3, 4]);
+      expect(sessionDoc['lastBookingId'], 'book-1');
+      expect(sessionDoc['updatedAt'], isA<FieldValue>());
       final bookingDoc = store.docs['bookings/book-1']!.data!;
       expect(bookingDoc['showId'], 'show-1');
       expect(bookingDoc['sessionId'], '1900');
@@ -854,7 +855,7 @@ void main() {
       expect(eventDoc['showTitle'], 'Arena Show');
       expect(eventDoc['slotTime'], '19:00');
       expect(eventDoc['slotTotal'], 4);
-      expect(eventDoc['showTotal'], 4);
+      expect(eventDoc['showTotal'], 7);
       expect(eventDoc['createdAt'], isA<FieldValue>());
 
       // Idempotent replay with same request returns BookingConfirmed with no writes.

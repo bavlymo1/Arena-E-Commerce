@@ -36,7 +36,6 @@ class _ShowStore {
   final List<List<String>> bookingEventBatches = <List<String>>[];
   final Map<String, List<(String id, Map<String, dynamic> data)>>
   sessionDocsByShow = <String, List<(String, Map<String, dynamic>)>>{};
-  final List<String> updatedShowPaths = <String>[];
   final List<(String path, Map<String, dynamic> data)> updates =
       <(String, Map<String, dynamic>)>[];
   final List<(String path, Map<String, dynamic> data)> transactionSets =
@@ -310,7 +309,6 @@ final class _FakeDocumentReference extends Fake
   @override
   Future<void> update(Map<Object, Object?> data) async {
     final normalized = data.map((k, v) => MapEntry(k.toString(), v));
-    store.updatedShowPaths.add(path);
     store.updates.add((path, normalized));
     if (collectionPath == 'shows' && store.deletingShows[id] != null) {
       store.deletingShows[id] = <String, dynamic>{
@@ -663,6 +661,7 @@ void main() {
           .listen(emitted.add, onError: errors.add);
       addTearDown(sub.cancel);
       await pumpEventQueue();
+      expect(store.snapshotCalls, contains(('shows/show-1/sessions', false)));
 
       store.sessionsStreamController.add(
         _FakeQuerySnapshot(<QueryDocumentSnapshot<Map<String, dynamic>>>[
@@ -943,7 +942,6 @@ void main() {
     await firstDelete;
 
     expect(readCount, 1);
-    expect(store.updatedShowPaths, <String>['shows/show-del']);
     expect(store.updates.single.$1, 'shows/show-del');
     expect(store.updates.single.$2['status'], 'deleting');
     expect(store.updates.single.$2['updatedAt'], isA<FieldValue>());
