@@ -430,82 +430,86 @@ void main() {
     },
   );
 
-  test('catch-up grouping threshold: 3 unseen fire individual alerts oldest-first; 4 fire 1 grouped alert', () async {
+  test('persists baseline on empty first launch and catches up 1 individual or >1 grouped bookings on reopen (including >100)', () async {
     final base = DateTime.utc(2026, 11, 20, 12, 0);
 
-    // Threshold 3 -> 3 individual alerts oldest-to-newest.
-    final repo3 = _StreamingBookingEventsRepository();
-    addTearDown(repo3.dispose);
-    final store3 = _FakeWatermarkStore(
-      initial: NotificationWatermark(
-        lastSeenEventAtMs: base.millisecondsSinceEpoch,
-        seenEventIdsAtWatermark: const <String>{'seen-0'},
+    // 1. Confirmed empty first launch saves epoch-0 baseline; 1 booking while closed alerts on reopen.
+    final firstRepo = _StreamingBookingEventsRepository();
+    addTearDown(firstRepo.dispose);
+    final store1 = _FakeWatermarkStore();
+    final first = VendorNotificationsCubit(
+      firstRepo,
+      vendorId: 'vendor-a',
+      watermarkStore: store1,
+    );
+    await pumpEventQueue();
+    firstRepo.controller.add(const <BookingEvent>[]);
+    await pumpEventQueue();
+    await first.close();
+    expect(store1.initial, NotificationWatermark(lastSeenEventAtMs: 0));
+
+    final reopenOneRepo = _StreamingBookingEventsRepository();
+    addTearDown(reopenOneRepo.dispose);
+    final presenter1 = _FakeLocalAlertPresenter();
+    final cubitOne = VendorNotificationsCubit(
+      reopenOneRepo,
+      vendorId: 'vendor-a',
+      watermarkStore: store1,
+      alertPresenter: presenter1,
+    );
+    addTearDown(cubitOne.close);
+    await pumpEventQueue();
+
+    reopenOneRepo.controller.add(<BookingEvent>[
+      _event(
+        bookingId: 'b-single',
+        createdAt: base.add(const Duration(seconds: 5)),
+      ),
+    ]);
+    await pumpEventQueue();
+    expect(presenter1.shownAlerts.map((a) => a.bookingId).toList(), <String>[
+      'b-single',
+    ]);
+    expect(presenter1.groupedCounts, isEmpty);
+    expect(cubitOne.state.unreadEventIds, <String>{'b-single'});
+
+    // 2. Multiple bookings (including 105 unseen) while closed fire one grouped alert with all events retained.
+    final store105 = _FakeWatermarkStore(
+      initial: NotificationWatermark(lastSeenEventAtMs: 0),
+    );
+    final repo105 = _StreamingBookingEventsRepository();
+    addTearDown(repo105.dispose);
+    final presenter105 = _FakeLocalAlertPresenter();
+    final cubit105 = VendorNotificationsCubit(
+      repo105,
+      vendorId: 'vendor-a',
+      watermarkStore: store105,
+      alertPresenter: presenter105,
+    );
+    addTearDown(cubit105.close);
+    await pumpEventQueue();
+
+    final missed105 = List<BookingEvent>.generate(
+      105,
+      (index) => _event(
+        bookingId: 'u-${index + 1}',
+        createdAt: base.add(Duration(seconds: index + 1)),
       ),
     );
-    final presenter3 = _FakeLocalAlertPresenter();
-    final cubit3 = VendorNotificationsCubit(
-      repo3,
-      vendorId: 'vendor-a',
-      watermarkStore: store3,
-      alertPresenter: presenter3,
-    );
-    addTearDown(cubit3.close);
+    repo105.controller.add(missed105);
     await pumpEventQueue();
 
-    repo3.controller.add(<BookingEvent>[
-      _event(bookingId: 'u3', createdAt: base.add(const Duration(seconds: 30))),
-      _event(bookingId: 'u1', createdAt: base.add(const Duration(seconds: 10))),
-      _event(bookingId: 'u2', createdAt: base.add(const Duration(seconds: 20))),
-      _event(bookingId: 'seen-0', createdAt: base),
-    ]);
-    await pumpEventQueue();
-
-    expect(presenter3.shownAlerts.map((a) => a.bookingId).toList(), <String>[
-      'u1',
-      'u2',
-      'u3',
-    ]);
-    expect(presenter3.groupedCounts, isEmpty);
-    expect(cubit3.state.unreadEventIds, <String>{'u1', 'u2', 'u3'});
-
-    // Threshold 4 -> 1 grouped alert(4).
-    final repo4 = _StreamingBookingEventsRepository();
-    addTearDown(repo4.dispose);
-    final store4 = _FakeWatermarkStore(
-      initial: NotificationWatermark(
-        lastSeenEventAtMs: base.millisecondsSinceEpoch,
-        seenEventIdsAtWatermark: const <String>{'seen-0'},
-      ),
-    );
-    final presenter4 = _FakeLocalAlertPresenter();
-    final cubit4 = VendorNotificationsCubit(
-      repo4,
-      vendorId: 'vendor-a',
-      watermarkStore: store4,
-      alertPresenter: presenter4,
-    );
-    addTearDown(cubit4.close);
-    await pumpEventQueue();
-
-    repo4.controller.add(<BookingEvent>[
-      _event(bookingId: 'u1', createdAt: base.add(const Duration(seconds: 10))),
-      _event(bookingId: 'u2', createdAt: base.add(const Duration(seconds: 20))),
-      _event(bookingId: 'u3', createdAt: base.add(const Duration(seconds: 30))),
-      _event(bookingId: 'u4', createdAt: base.add(const Duration(seconds: 40))),
-      _event(bookingId: 'seen-0', createdAt: base),
-    ]);
-    await pumpEventQueue();
-
-    expect(presenter4.shownAlerts, isEmpty);
-    expect(presenter4.groupedCounts, <int>[4]);
-    expect(cubit4.state.unreadEventIds, <String>{'u1', 'u2', 'u3', 'u4'});
+    expect(presenter105.shownAlerts, isEmpty);
+    expect(presenter105.groupedCounts, <int>[105]);
+    expect(cubit105.state.events, hasLength(105));
+    expect(cubit105.state.unreadEventIds, hasLength(105));
     expect(
-      store4.saved.last,
+      store105.saved.last,
       NotificationWatermark(
         lastSeenEventAtMs: base
-            .add(const Duration(seconds: 40))
+            .add(const Duration(seconds: 105))
             .millisecondsSinceEpoch,
-        seenEventIdsAtWatermark: const <String>{'u4'},
+        seenEventIdsAtWatermark: const <String>{'u-105'},
       ),
     );
   });
@@ -759,15 +763,9 @@ void main() {
       ),
       saveHandler: (_, _) => saveGate.future,
     );
-    var alertCalls = 0;
     final presenter = _FakeLocalAlertPresenter(
       trace: trace,
-      showAlertHandler: (_) async {
-        alertCalls++;
-        if (alertCalls == 1) {
-          await firstAlertGate.future;
-        }
-      },
+      showGroupedHandler: (_) => firstAlertGate.future,
     );
 
     final cubit = VendorNotificationsCubit(
@@ -794,7 +792,11 @@ void main() {
     expect(cubit.state.status, VendorNotificationsStatus.ready);
     expect(cubit.state.events.map((e) => e.id), <String>['e2', 'e1']);
     expect(cubit.state.unreadEventIds, <String>{'e1', 'e2'});
-    expect(trace, <String>['requestPermission', 'load(vendor-a)', 'alert(e1)']);
+    expect(trace, <String>[
+      'requestPermission',
+      'load(vendor-a)',
+      'grouped(2)',
+    ]);
     expect(store.saved, isEmpty);
 
     // Second live snapshot arrives while first pipeline item is blocked.
@@ -806,15 +808,18 @@ void main() {
     await pumpEventQueue();
     expect(cubit.state.events.map((e) => e.id), <String>['e3', 'e2', 'e1']);
     // Serialized pipeline waits for e1+e2 alert+save before alerting e3.
-    expect(trace, <String>['requestPermission', 'load(vendor-a)', 'alert(e1)']);
+    expect(trace, <String>[
+      'requestPermission',
+      'load(vendor-a)',
+      'grouped(2)',
+    ]);
 
     firstAlertGate.complete();
     await pumpEventQueue();
     expect(trace, <String>[
       'requestPermission',
       'load(vendor-a)',
-      'alert(e1)',
-      'alert(e2)',
+      'grouped(2)',
       'save(${t2.millisecondsSinceEpoch},e2)',
     ]);
 
@@ -823,14 +828,13 @@ void main() {
     expect(trace, <String>[
       'requestPermission',
       'load(vendor-a)',
-      'alert(e1)',
-      'alert(e2)',
+      'grouped(2)',
       'save(${t2.millisecondsSinceEpoch},e2)',
       'alert(e3)',
       'save(${t3.millisecondsSinceEpoch},e3)',
     ]);
     expect(
-      trace.indexOf('alert(e2)'),
+      trace.indexOf('grouped(2)'),
       lessThan(trace.indexOf('save(${t2.millisecondsSinceEpoch},e2)')),
     );
     expect(
@@ -872,8 +876,8 @@ void main() {
       alertGate.complete();
       await pumpEventQueue();
 
-      expect(store.saved, isEmpty);
-      expect(trace.where((entry) => entry.startsWith('save(')), isEmpty);
+      expect(store.saved.single, NotificationWatermark(lastSeenEventAtMs: 0));
+      expect(trace.where((entry) => entry.startsWith('save(')), ['save(0,)']);
     },
   );
 

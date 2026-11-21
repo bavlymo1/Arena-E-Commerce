@@ -26,9 +26,6 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
     }
   }
 
-  /// Catch-up launches with more than 3 unseen events show one grouped alert.
-  static const int catchUpGroupThreshold = 3;
-
   final BookingEventsRepository _repository;
   final WatermarkStore _watermarkStore;
   final LocalAlertPresenter? _alertPresenter;
@@ -46,7 +43,6 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
   bool _initialPermissionRequested = false;
   bool _initialSnapshotProcessed = false;
   NotificationWatermark _watermark = const NotificationWatermark.empty();
-  final Set<String> _handledEventIds = <String>{};
 
   static String _requireNonEmpty(String value) {
     if (value.trim().isEmpty) {
@@ -227,20 +223,17 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
       nextUnread = const <String>{};
       alertsToFire = const <BookingEvent>[];
       isCatchUp = false;
-      for (final event in ownedEvents) {
-        _handledEventIds.add(event.id);
+      var cursor = ownedEvents.isEmpty
+          ? NotificationWatermark(lastSeenEventAtMs: 0)
+          : _watermark;
+      for (final event in ownedEvents.reversed) {
+        cursor = cursor.advance(
+          createdAtMs: event.createdAt.millisecondsSinceEpoch,
+          eventId: event.id,
+        );
       }
-      if (ownedEvents.isNotEmpty) {
-        var nextWatermark = _watermark;
-        for (final event in ownedEvents.reversed) {
-          nextWatermark = nextWatermark.advance(
-            createdAtMs: event.createdAt.millisecondsSinceEpoch,
-            eventId: event.id,
-          );
-        }
-        _watermark = nextWatermark;
-        watermarkToPersist = nextWatermark;
-      }
+      _watermark = cursor;
+      watermarkToPersist = cursor;
     } else {
       nextUnread = state.unreadEventIds.where(ownedIds.contains).toSet();
       final oldestFirst = ownedEvents.toList(growable: false)
@@ -250,8 +243,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
 
       for (final event in oldestFirst) {
         final ms = event.createdAt.millisecondsSinceEpoch;
-        if (!_handledEventIds.contains(event.id) &&
-            nextWatermark.isUnseen(ms, event.id)) {
+        if (nextWatermark.isUnseen(ms, event.id)) {
           unseen.add(event);
           nextUnread.add(event.id);
           nextWatermark = nextWatermark.advance(
@@ -259,7 +251,6 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
             eventId: event.id,
           );
         }
-        _handledEventIds.add(event.id);
       }
 
       _watermark = nextWatermark;
@@ -296,7 +287,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
     _alertPipeline = _alertPipeline.then((_) async {
       if (isClosed) return;
       final pendingPermission = _permissionRequestFuture;
-      if (pendingPermission != null) {
+      if (events.isNotEmpty && pendingPermission != null) {
         await pendingPermission;
         if (isClosed) return;
       }
@@ -305,7 +296,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
       if (presenter != null &&
           events.isNotEmpty &&
           state.alertPermission == AlertPermission.granted) {
-        if (isCatchUp && events.length > catchUpGroupThreshold) {
+        if (isCatchUp && events.length > 1) {
           try {
             await presenter.showGroupedAlert(events.length);
           } catch (_) {

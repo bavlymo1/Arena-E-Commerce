@@ -257,7 +257,7 @@ void main() {
     },
   );
 
-  test('queries bookingEvents, skips pending/empty-cache snapshots, and decodes descending with tie-break', () async {
+  test('queries bookingEvents unbounded by default, skips pending/cached snapshots, and decodes descending with tie-break', () async {
     final recorder = _QueryRecorder();
     addTearDown(recorder.dispose);
     final repository = FirestoreBookingEventsRepository(
@@ -265,7 +265,6 @@ void main() {
       _FakeVendorAccessRepository(
         () async => VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
       ),
-      limit: 25,
     );
 
     final emitted = <List<BookingEvent>>[];
@@ -276,11 +275,23 @@ void main() {
     expect(recorder.requestedCollections, <String>['bookingEvents']);
     expect(recorder.whereCalls, <(Object, Object?)>[('vendorId', 'vendor-a')]);
     expect(recorder.orderByCalls, <(Object, bool)>[('createdAt', true)]);
-    expect(recorder.limitCalls, <int>[25]);
+    expect(recorder.limitCalls, isEmpty);
     expect(recorder.includeMetadataCalls, <bool>[true]);
 
     // Ignored: empty cache snapshot before server confirmation.
     recorder.controller.add(_FakeQuerySnapshot(const [], isFromCache: true));
+    await pumpEventQueue();
+    expect(emitted, isEmpty);
+
+    // Ignored: non-empty cached snapshot before server confirmation.
+    recorder.controller.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot(
+          'b-cached',
+          _validEventData(bookingId: 'b-cached'),
+        ),
+      ], isFromCache: true),
+    );
     await pumpEventQueue();
     expect(emitted, isEmpty);
 
@@ -341,6 +352,25 @@ void main() {
     expect(first.slotTime, SessionTime('19:00'));
     expect(first.slotTotal, 4);
     expect(first.showTotal, 19);
+
+    // Emits >100 bookings without truncation when limit is omitted.
+    final baseTime = DateTime.utc(2026, 11, 20, 13, 0);
+    final docs105 = List<_FakeQueryDocumentSnapshot>.generate(
+      105,
+      (index) => _FakeQueryDocumentSnapshot(
+        'b-${index.toString().padLeft(3, '0')}',
+        _validEventData(
+          bookingId: 'b-${index.toString().padLeft(3, '0')}',
+          createdAt: Timestamp.fromDate(baseTime.add(Duration(seconds: index))),
+        ),
+      ),
+    );
+    recorder.controller.add(_FakeQuerySnapshot(docs105));
+    await pumpEventQueue();
+    expect(emitted, hasLength(3));
+    expect(emitted.last, hasLength(105));
+    expect(emitted.last.first.bookingId, 'b-104');
+    expect(emitted.last.last.bookingId, 'b-000');
   });
 
   test('rejects malformed event documents cleanly', () async {

@@ -12,12 +12,14 @@ final class FirestoreBookingEventsRepository
   FirestoreBookingEventsRepository(
     this._firestore,
     this._vendorAccess, {
-    int limit = 100,
-  }) : _limit = limit < 1 ? throw ArgumentError.value(limit, 'limit') : limit;
+    int? limit,
+  }) : _limit = limit != null && limit < 1
+           ? throw ArgumentError.value(limit, 'limit')
+           : limit;
 
   final FirebaseFirestore _firestore;
   final VendorAccessRepository _vendorAccess;
-  final int _limit;
+  final int? _limit;
 
   @override
   Stream<List<BookingEvent>> watchEvents(String vendorId) {
@@ -29,16 +31,17 @@ final class FirestoreBookingEventsRepository
 
   Stream<List<BookingEvent>> _watchEvents(String vendorId) async* {
     await _requireVendor(vendorId);
-    yield* _firestore
+    final query = _firestore
         .collection('bookingEvents')
         .where('vendorId', isEqualTo: vendorId)
-        .orderBy('createdAt', descending: true)
-        .limit(_limit)
+        .orderBy('createdAt', descending: true);
+    final limit = _limit;
+    yield* (limit == null ? query : query.limit(limit))
         .snapshots(includeMetadataChanges: true)
         .where(
           (snapshot) =>
               !snapshot.metadata.hasPendingWrites &&
-              (snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache),
+              !snapshot.metadata.isFromCache,
         )
         .map((snapshot) => _decodeSnapshot(snapshot, vendorId));
   }
