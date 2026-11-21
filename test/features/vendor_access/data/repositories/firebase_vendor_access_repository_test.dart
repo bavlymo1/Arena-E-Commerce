@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:e_commerce_project/features/vendor_access/data/firebase_vendor_access_repository.dart';
+import 'package:e_commerce_project/features/vendor_access/data/repositories/firebase_vendor_access_repository.dart';
 import 'package:e_commerce_project/features/vendor_access/domain/models/vendor_access.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';

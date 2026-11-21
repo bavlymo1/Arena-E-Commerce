@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../domain/models/vendor_access.dart';
-import '../domain/repositories/vendor_access_repository.dart';
+import '../../domain/models/vendor_access.dart';
+import '../../domain/repositories/vendor_access_repository.dart';
 
 /// Enrollment proposal for explicit local testing while D01 is open.
 final class FirebaseVendorAccessRepository implements VendorAccessRepository {

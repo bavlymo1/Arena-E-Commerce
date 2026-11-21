@@ -2,9 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get_it/get_it.dart';
 
-import '../../features/vendor_access/data/firebase_vendor_access_repository.dart';
+import '../../features/vendor_access/data/repositories/firebase_vendor_access_repository.dart';
 import '../../features/vendor_access/domain/repositories/vendor_access_repository.dart';
-import '../../features/vendor_access/vendor_access_registration.dart';
+import '../../features/vendor_access/presentation/cubit/vendor_access_cubit.dart';
 import '../../features/vendor_notifications/data/repositories/firestore_booking_events_repository.dart';
 import '../../features/vendor_notifications/data/repositories/flutter_local_alert_presenter.dart';
 import '../../features/vendor_notifications/data/repositories/shared_preferences_watermark_store.dart';
@@ -27,6 +27,21 @@ GetIt createVendorServices() {
   final services = GetIt.asNewInstance();
   registerShared(services, AppVariant.vendor);
   return services;
+}
+
+/// Registers vendor access dependencies into [services].
+///
+/// Registers [repository] as a singleton [VendorAccessRepository] and
+/// [VendorAccessCubit] as a factory so root `BlocProvider(create: ...)` owns
+/// its lifecycle and closes it on teardown.
+void registerVendorAccess(
+  GetIt services, {
+  required VendorAccessRepository repository,
+}) {
+  services.registerSingleton<VendorAccessRepository>(repository);
+  services.registerFactory<VendorAccessCubit>(
+    () => VendorAccessCubit(services<VendorAccessRepository>()),
+  );
 }
 
 ShowFormCubit _buildShowFormCubit(

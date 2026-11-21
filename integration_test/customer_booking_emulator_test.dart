@@ -10,7 +10,7 @@ import 'package:e_commerce_project/features/booking/domain/models/booking_recove
 import 'package:e_commerce_project/features/booking/domain/models/booking_request.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_result.dart';
 import 'package:e_commerce_project/features/booking/domain/repositories/booking_repository.dart';
-import 'package:e_commerce_project/features/vendor_access/data/firebase_vendor_access_repository.dart';
+import 'package:e_commerce_project/features/vendor_access/data/repositories/firebase_vendor_access_repository.dart';
 import 'package:e_commerce_project/features/vendor_shows/data/repositories/firestore_shows_repository.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';

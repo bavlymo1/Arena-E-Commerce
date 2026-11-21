@@ -10,7 +10,7 @@ import 'package:e_commerce_project/features/booking/presentation/cubit/seat_sele
 import 'package:e_commerce_project/features/discovery/presentation/cubit/discovery_cubit.dart';
 import 'package:e_commerce_project/features/discovery/presentation/cubit/show_details_cubit.dart';
 import 'package:e_commerce_project/features/discovery/presentation/cubit/show_details_state.dart';
-import 'package:e_commerce_project/features/vendor_access/data/firebase_vendor_access_repository.dart';
+import 'package:e_commerce_project/features/vendor_access/data/repositories/firebase_vendor_access_repository.dart';
 import 'package:e_commerce_project/features/vendor_shows/data/repositories/firestore_shows_repository.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';

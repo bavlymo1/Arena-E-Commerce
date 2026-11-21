@@ -10,7 +10,6 @@ import 'package:e_commerce_project/features/vendor_access/domain/models/vendor_a
 import 'package:e_commerce_project/features/vendor_access/domain/repositories/vendor_access_repository.dart';
 import 'package:e_commerce_project/features/vendor_access/presentation/cubit/vendor_access_cubit.dart';
 import 'package:e_commerce_project/features/vendor_access/presentation/screens/vendor_not_enrolled_screen.dart';
-import 'package:e_commerce_project/features/vendor_access/vendor_access_registration.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/models/alert_permission.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/models/booking_alert.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/models/booking_event.dart';
