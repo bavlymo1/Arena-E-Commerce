@@ -1017,4 +1017,52 @@ void main() {
       'save(${t1.millisecondsSinceEpoch},b1)',
     ]);
   });
+
+  test('suppresses alerts while persisting watermark when delayed requestPermission denies', () async {
+    final repo = _StreamingBookingEventsRepository();
+    addTearDown(repo.dispose);
+    final trace = <String>[];
+    final permissionCompleter = Completer<AlertPermission>();
+    final base = DateTime.utc(2026, 11, 20, 21, 5);
+    final store = _FakeWatermarkStore(
+      trace: trace,
+      initial: NotificationWatermark(
+        lastSeenEventAtMs: base.millisecondsSinceEpoch,
+        seenEventIdsAtWatermark: const <String>{'seed'},
+      ),
+    );
+    final presenter = _FakeLocalAlertPresenter(
+      trace: trace,
+      requestPermissionHandler: () => permissionCompleter.future,
+    );
+
+    final cubit = VendorNotificationsCubit(
+      repo,
+      vendorId: 'vendor-a',
+      watermarkStore: store,
+      alertPresenter: presenter,
+    );
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    final t1 = base.add(const Duration(minutes: 1));
+    repo.controller.add(<BookingEvent>[_event(bookingId: 'b1', createdAt: t1)]);
+    await pumpEventQueue();
+
+    expect(presenter.shownAlerts, isEmpty);
+    expect(store.saved, isEmpty);
+
+    permissionCompleter.complete(AlertPermission.denied);
+    await pumpEventQueue();
+
+    expect(cubit.state.alertPermission, AlertPermission.denied);
+    expect(presenter.shownAlerts, isEmpty);
+    expect(presenter.groupedCounts, isEmpty);
+    expect(store.saved, hasLength(1));
+    expect(trace, <String>[
+      'requestPermission',
+      'load(vendor-a)',
+      'save(${t1.millisecondsSinceEpoch},b1)',
+    ]);
+  });
 }

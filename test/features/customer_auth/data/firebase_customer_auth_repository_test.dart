@@ -3,32 +3,60 @@ import 'package:e_commerce_project/features/customer_auth/domain/models/app_user
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class _UserCredential extends Fake implements UserCredential {}
+
 class _Auth extends Fake implements FirebaseAuth {
-  _Auth(this.users);
+  _Auth(this.users, {this.failOperations = true});
   final Stream<User?> users;
+  final bool failOperations;
+  (String email, String password)? lastLogin;
+  (String email, String password)? lastRegister;
+  int signOutCalls = 0;
+
   @override
   Stream<User?> authStateChanges() => users;
+
   @override
   Future<UserCredential> signInWithEmailAndPassword({
     required String email,
     required String password,
-  }) async => throw FirebaseAuthException(
-    code: 'invalid-credential',
-    message: 'private SDK payload',
-  );
+  }) async {
+    if (failOperations) {
+      throw FirebaseAuthException(
+        code: 'invalid-credential',
+        message: 'private SDK payload',
+      );
+    }
+    lastLogin = (email, password);
+    return _UserCredential();
+  }
+
   @override
   Future<UserCredential> createUserWithEmailAndPassword({
     required String email,
     required String password,
-  }) async => throw FirebaseAuthException(
-    code: 'email-already-in-use',
-    message: 'private SDK register payload',
-  );
+  }) async {
+    if (failOperations) {
+      throw FirebaseAuthException(
+        code: 'email-already-in-use',
+        message: 'private SDK register payload',
+      );
+    }
+    lastRegister = (email, password);
+    return _UserCredential();
+  }
+
   @override
-  Future<void> signOut() async => throw FirebaseAuthException(
-    code: 'network-request-failed',
-    message: 'private SDK logout payload',
-  );
+  Future<void> signOut() async {
+    if (failOperations) {
+      throw FirebaseAuthException(
+        code: 'network-request-failed',
+        message: 'private SDK logout payload',
+      );
+    }
+    await Future<void>.value();
+    signOutCalls++;
+  }
 }
 
 class _User extends Fake implements User {
@@ -114,4 +142,20 @@ void main() {
       ),
     );
   });
+
+  test(
+    'login, register, and logout forward arguments and await SDK calls',
+    () async {
+      final auth = _Auth(const Stream.empty(), failOperations: false);
+      final repository = FirebaseCustomerAuthRepository(auth);
+
+      await repository.login('customer@example.test', 'secret-pass');
+      await repository.register('new@example.test', 'new-secret');
+      await repository.logout();
+
+      expect(auth.lastLogin, ('customer@example.test', 'secret-pass'));
+      expect(auth.lastRegister, ('new@example.test', 'new-secret'));
+      expect(auth.signOutCalls, 1);
+    },
+  );
 }

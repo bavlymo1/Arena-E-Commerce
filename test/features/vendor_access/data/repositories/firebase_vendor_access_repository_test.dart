@@ -156,8 +156,11 @@ void main() {
 
       expect(auth.signInCalls, 1);
       expect(store.getCalls.single.$2, 'anon-new');
+      expect(store.getCalls.single.$3?.source, Source.server);
       expect(result, isA<VendorAllowed>());
-      expect((result as VendorAllowed).vendorId, 'arena-east');
+      final allowed = result as VendorAllowed;
+      expect(allowed.uid, 'anon-new');
+      expect(allowed.vendorId, 'arena-east');
     },
   );
 
@@ -228,4 +231,25 @@ void main() {
 
     await expectLater(repository.check(), throwsStateError);
   });
+
+  test(
+    'throws StateError when user signs out mid-flight during enrollment check',
+    () async {
+      final auth = _FakeFirebaseAuth(user: _FakeUser(uid: 'anon-1'));
+      final store = _Store()
+        ..docs['vendorDevices/anon-1'] = <String, dynamic>{
+          'enabled': true,
+          'vendorId': 'arena',
+        }
+        ..onBeforeGet = () async {
+          auth.user = null;
+        };
+      final repository = FirebaseVendorAccessRepository(
+        auth,
+        _FakeFirestore(store),
+      );
+
+      await expectLater(repository.check(), throwsStateError);
+    },
+  );
 }

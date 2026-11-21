@@ -66,9 +66,14 @@ final class _BookingStore {
   mySeatsController =
       StreamController<QuerySnapshot<Map<String, dynamic>>>.broadcast();
   final List<(Object field, Object? value)> whereCalls = <(Object, Object?)>[];
+  final List<String> queriedCollections = <String>[];
+  final List<(String path, bool includeMetadataChanges)> snapshotListeners =
+      <(String, bool)>[];
   final List<String> transactionWrites = <String>[];
-  final List<String> getPaths = <String>[];
+  final List<(String path, GetOptions? options)> getCalls =
+      <(String, GetOptions?)>[];
   Object? Function(String path, GetOptions? options)? onGet;
+  void Function(String path, GetOptions? options)? onBeforeGet;
   Future<void> Function(int attempt)? onBeforeTransactionCommit;
   int transactionAttempts = 0;
 
@@ -104,7 +109,7 @@ final class _FakeBookingFirestore extends Fake implements FirebaseFirestore {
     int maxAttempts = 5,
   }) async {
     store.transactionAttempts++;
-    final tx = _FakeTransaction(store, this);
+    final tx = _FakeTransaction(store);
     final result = await transactionHandler(tx);
     await store.onBeforeTransactionCommit?.call(store.transactionAttempts);
     tx.apply();
@@ -145,25 +150,29 @@ final class _FakeCollectionReference extends Fake
     Iterable<Object?>? whereIn,
     Iterable<Object?>? whereNotIn,
     bool? isNull,
-  }) => _FakeQuery(store).where(
-    field,
-    isEqualTo: isEqualTo,
-    isNotEqualTo: isNotEqualTo,
-    isLessThan: isLessThan,
-    isLessThanOrEqualTo: isLessThanOrEqualTo,
-    isGreaterThan: isGreaterThan,
-    isGreaterThanOrEqualTo: isGreaterThanOrEqualTo,
-    arrayContains: arrayContains,
-    arrayContainsAny: arrayContainsAny,
-    whereIn: whereIn,
-    whereNotIn: whereNotIn,
-    isNull: isNull,
-  );
+  }) {
+    store.queriedCollections.add(path);
+    return _FakeQuery(path, store).where(
+      field,
+      isEqualTo: isEqualTo,
+      isNotEqualTo: isNotEqualTo,
+      isLessThan: isLessThan,
+      isLessThanOrEqualTo: isLessThanOrEqualTo,
+      isGreaterThan: isGreaterThan,
+      isGreaterThanOrEqualTo: isGreaterThanOrEqualTo,
+      arrayContains: arrayContains,
+      arrayContainsAny: arrayContainsAny,
+      whereIn: whereIn,
+      whereNotIn: whereNotIn,
+      isNull: isNull,
+    );
+  }
 }
 
 final class _FakeQuery extends Fake implements Query<Map<String, dynamic>> {
-  _FakeQuery(this.store);
+  _FakeQuery(this.path, this.store);
 
+  final String path;
   final _BookingStore store;
 
   @override
@@ -189,7 +198,10 @@ final class _FakeQuery extends Fake implements Query<Map<String, dynamic>> {
   Stream<QuerySnapshot<Map<String, dynamic>>> snapshots({
     bool includeMetadataChanges = false,
     ListenSource source = ListenSource.defaultSource,
-  }) => store.mySeatsController.stream;
+  }) {
+    store.snapshotListeners.add((path, includeMetadataChanges));
+    return store.mySeatsController.stream;
+  }
 }
 
 final class _FakeDocumentReference extends Fake
@@ -214,7 +226,8 @@ final class _FakeDocumentReference extends Fake
   Future<DocumentSnapshot<Map<String, dynamic>>> get([
     GetOptions? options,
   ]) async {
-    store.getPaths.add(path);
+    store.getCalls.add((path, options));
+    store.onBeforeGet?.call(path, options);
     final custom = store.onGet?.call(path, options);
     if (custom != null) {
       if (custom is Future<DocumentSnapshot<Map<String, dynamic>>>) {
@@ -318,10 +331,9 @@ final class _FakeQueryDocumentSnapshot extends Fake
 }
 
 final class _FakeTransaction extends Fake implements Transaction {
-  _FakeTransaction(this.store, this.firestore);
+  _FakeTransaction(this.store);
 
   final _BookingStore store;
-  final FirebaseFirestore firestore;
   final List<void Function()> _staged = <void Function()>[];
 
   @override
@@ -653,6 +665,8 @@ void main() {
       addTearDown(sub.cancel);
       await pumpEventQueue();
 
+      expect(store.queriedCollections, <String>['bookings']);
+      expect(store.snapshotListeners, <(String, bool)>[('bookings', true)]);
       expect(store.whereCalls, <(Object, Object?)>[
         ('customerUid', 'cust-1'),
         ('showId', 'show-1'),
@@ -714,6 +728,15 @@ void main() {
         await repo.recover(bookingId: 'b1', customerUid: 'cust-2'),
         isA<RecoveryUnresolved>(),
       );
+      expect(store.getCalls, isEmpty);
+
+      auth.user = null;
+      expect(
+        await repo.recover(bookingId: 'b1', customerUid: 'cust-1'),
+        isA<RecoveryUnresolved>(),
+      );
+      expect(store.getCalls, isEmpty);
+      auth.user = _FakeUser('cust-1');
 
       store.setDoc('bookings/b1', bookingData(), isFromCache: true);
       expect(
@@ -755,6 +778,23 @@ void main() {
       expect(decoded.request.seats, <int>{3, 4});
       expect(decoded.showTitle, 'Arena Show');
       expect(decoded.slotTime, SessionTime('19:00'));
+      expect(
+        store.getCalls.every(
+          (call) =>
+              call.$1 == 'bookings/b1' && call.$2?.source == Source.server,
+        ),
+        isTrue,
+      );
+
+      store.onBeforeGet = (_, _) {
+        auth.user = null;
+      };
+      expect(
+        await repo.recover(bookingId: 'b1', customerUid: 'cust-1'),
+        isA<RecoveryUnresolved>(),
+      );
+      store.onBeforeGet = null;
+      auth.user = _FakeUser('cust-1');
 
       store.onGet = (_, _) => StateError('network unavailable');
       expect(
@@ -792,9 +832,30 @@ void main() {
         3,
         4,
       ]);
-      expect(store.docs['bookings/book-1']!.data!['status'], 'confirmed');
-      expect(store.docs['bookingEvents/book-1']!.data!['slotTotal'], 4);
-      expect(store.docs['bookingEvents/book-1']!.data!['showTotal'], 4);
+      final bookingDoc = store.docs['bookings/book-1']!.data!;
+      expect(bookingDoc['showId'], 'show-1');
+      expect(bookingDoc['sessionId'], '1900');
+      expect(bookingDoc['customerUid'], 'cust-1');
+      expect(bookingDoc['seats'], <int>[3, 4]);
+      expect(bookingDoc['showTitle'], 'Arena Show');
+      expect(bookingDoc['showDate'], '2026-12-20');
+      expect(bookingDoc['slotTime'], '19:00');
+      expect(bookingDoc['vendorId'], 'vendor-1');
+      expect(bookingDoc['status'], 'confirmed');
+      expect(bookingDoc['createdAt'], isA<FieldValue>());
+
+      final eventDoc = store.docs['bookingEvents/book-1']!.data!;
+      expect(eventDoc['bookingId'], 'book-1');
+      expect(eventDoc['kind'], 'booked');
+      expect(eventDoc['showId'], 'show-1');
+      expect(eventDoc['sessionId'], '1900');
+      expect(eventDoc['seats'], <int>[3, 4]);
+      expect(eventDoc['vendorId'], 'vendor-1');
+      expect(eventDoc['showTitle'], 'Arena Show');
+      expect(eventDoc['slotTime'], '19:00');
+      expect(eventDoc['slotTotal'], 4);
+      expect(eventDoc['showTotal'], 4);
+      expect(eventDoc['createdAt'], isA<FieldValue>());
 
       // Idempotent replay with same request returns BookingConfirmed with no writes.
       store.transactionWrites.clear();
@@ -819,6 +880,23 @@ void main() {
       expect(conflict, isA<BookingConflict>());
       expect((conflict as BookingConflict).conflictSeats, <int>{2});
       expect(store.transactionWrites, isEmpty);
+
+      // Missing or cache-only session rejects cleanly.
+      store.setDoc('shows/show-1/sessions/1900', null);
+      expect(
+        await repo.confirm(makeRequest(bookingId: 'book-missing-slot')),
+        isA<BookingUnavailable>(),
+      );
+      store.setDoc(
+        'shows/show-1/sessions/1900',
+        sessionData(),
+        hasPendingWrites: true,
+      );
+      expect(
+        await repo.confirm(makeRequest(bookingId: 'book-cached-slot')),
+        isA<BookingUnconfirmed>(),
+      );
+      store.setDoc('shows/show-1/sessions/1900', sessionData());
 
       // Deleting or missing show returns BookingUnavailable.
       store.setDoc('shows/show-1', showData(status: 'deleting'));
@@ -869,6 +947,85 @@ void main() {
       );
       expect(okAfterRetry, isA<BookingConfirmed>());
       expect(store.transactionAttempts, 3);
+      expect(store.getCalls, hasLength(6));
+      expect(
+        store.getCalls.every((call) => call.$2?.source == Source.server),
+        isTrue,
+      );
+      expect(store.getCalls.map((call) => call.$1), <String>[
+        'bookings/book-retry',
+        'shows/show-1',
+        'shows/show-1/sessions/1900',
+        'bookings/book-retry',
+        'shows/show-1',
+        'shows/show-1/sessions/1900',
+      ]);
+
+      // Slot-only revision change still triggers retry and succeeds on attempt 2.
+      store.transactionAttempts = 0;
+      store.getCalls.clear();
+      store.setDoc('shows/show-1', showData());
+      store.setDoc('shows/show-1/sessions/1900', sessionData());
+      store.onBeforeTransactionCommit = (attempt) async {
+        if (attempt == 1) {
+          store.setDoc(
+            'shows/show-1/sessions/1900',
+            sessionData(
+              bookedSeats: const <int>[1, 2, 10],
+              lastBookingId: 'slot-only-change',
+              updatedAt: Timestamp.fromDate(DateTime.utc(2026, 11, 20, 11, 0)),
+            ),
+          );
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+          );
+        }
+      };
+      final slotRevisionRetry = await repo.confirm(
+        makeRequest(bookingId: 'book-slot-retry', seats: const <int>{7}),
+      );
+      expect(slotRevisionRetry, isA<BookingConfirmed>());
+      expect(store.transactionAttempts, 2);
+
+      // Attempt 3 still failing permission-denied stops cleanly at 3 attempts.
+      store.transactionAttempts = 0;
+      store.getCalls.clear();
+      store.onBeforeTransactionCommit = (attempt) async {
+        store.setDoc(
+          'shows/show-1',
+          showData(
+            lastBookingId: 'exhaust-$attempt',
+            updatedAt: Timestamp.fromDate(
+              DateTime.utc(2026, 11, 20, 12, attempt),
+            ),
+          ),
+        );
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'permission-denied',
+        );
+      };
+      final exhausted = await repo.confirm(
+        makeRequest(bookingId: 'book-exhaust', seats: const <int>{8}),
+      );
+      expect(exhausted, isA<BookingUnconfirmed>());
+      expect(store.transactionAttempts, 3);
+      expect(store.getCalls, hasLength(6));
+
+      // Non-permission-denied FirebaseException aborts immediately without retry.
+      store.transactionAttempts = 0;
+      store.getCalls.clear();
+      store.onBeforeTransactionCommit = (_) async {
+        store.setDoc('shows/show-1', showData(lastBookingId: 'unavailable'));
+        throw FirebaseException(plugin: 'cloud_firestore', code: 'unavailable');
+      };
+      final unavailableError = await repo.confirm(
+        makeRequest(bookingId: 'book-unavailable-err', seats: const <int>{8}),
+      );
+      expect(unavailableError, isA<BookingUnconfirmed>());
+      expect(store.transactionAttempts, 1);
+      expect(store.getCalls, isEmpty);
 
       // Revision unchanged -> aborts immediately without retrying.
       store.transactionAttempts = 0;
@@ -879,7 +1036,7 @@ void main() {
         );
       };
       final unchanged = await repo.confirm(
-        makeRequest(bookingId: 'book-no-retry', seats: const <int>{7}),
+        makeRequest(bookingId: 'book-no-retry', seats: const <int>{8}),
       );
       expect(unchanged, isA<BookingUnconfirmed>());
       expect(store.transactionAttempts, 1);
@@ -907,6 +1064,41 @@ void main() {
       expect(
         await repo.confirm(
           makeRequest(bookingId: 'book-cached', seats: const <int>{9}),
+        ),
+        isA<BookingUnconfirmed>(),
+      );
+
+      // Unauthenticated, wrong account, or mid-flight sign-out -> BookingUnconfirmed.
+      store.setDoc('shows/show-1', showData());
+      store.transactionAttempts = 0;
+      auth.user = null;
+      expect(
+        await repo.confirm(
+          makeRequest(bookingId: 'book-signed-out', seats: const <int>{9}),
+        ),
+        isA<BookingUnconfirmed>(),
+      );
+      expect(store.transactionAttempts, 0);
+
+      auth.user = _FakeUser('cust-2');
+      expect(
+        await repo.confirm(
+          makeRequest(bookingId: 'book-wrong-user', seats: const <int>{9}),
+        ),
+        isA<BookingUnconfirmed>(),
+      );
+      expect(store.transactionAttempts, 0);
+
+      auth.user = _FakeUser('cust-1');
+      store.onBeforeTransactionCommit = (_) async {
+        auth.user = null;
+      };
+      expect(
+        await repo.confirm(
+          makeRequest(
+            bookingId: 'book-midflight-logout',
+            seats: const <int>{9},
+          ),
         ),
         isA<BookingUnconfirmed>(),
       );
