@@ -379,7 +379,18 @@ async function ensureAuthCustomer(
 }
 
 async function commitDocuments({ firestoreHost, projectId }, docs, fetchImpl) {
-  const writes = docs.map((entry) => ({
+  // A repeat run must preserve seats booked or shows deleted during rehearsal.
+  const root = `http://${firestoreHost}/v1/projects/${projectId}/databases/(default)/documents`;
+  const marker = 'emulatorSeeds/tier1';
+  const existing = await fetchImpl(`${root}/${marker}`, {
+    headers: { Authorization: 'Bearer owner' },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (existing.ok) return;
+  if (existing.status !== 404) throw new Error(`Seed marker read failed (${existing.status})`);
+  const entries = [...docs, { path: marker, data: { version: 1 } }];
+  const writes = entries.map((entry) => ({
+    currentDocument: { exists: false },
     update: {
       name: `projects/${projectId}/databases/(default)/documents/${entry.path}`,
       fields: toFirestoreFields(entry.data),

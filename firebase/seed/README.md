@@ -22,6 +22,8 @@ There is no fallback to live Firebase endpoints.
   - `seed-show-midnight-drift` (`Midnight Drift`, `2026-12-22`, slots `16:00` / `20:00`).
 - **Posters:** `showImages/{showId}` binary `bytesValue` blobs loaded from `assets/demo/*.jpg` (`< 150 KiB`), `mimeType: 'image/jpeg'`, with integer `width` and `height`.
 
+The first run creates the fixture documents and an emulator-only marker in one atomic commit. Later runs preserve rehearsal changes, including bookings and deleted shows. Use a fresh disposable emulator to restore the original fixtures. An older or partial seed with colliding document IDs fails without overwriting Firestore records.
+
 ## Commands
 
 Run from `e_commerce_project/`:

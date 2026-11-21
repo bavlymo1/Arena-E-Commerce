@@ -188,6 +188,9 @@ test('seedEmulator targets only loopback endpoints and uses Bearer owner', async
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
     }
+    if (url.endsWith('/emulatorSeeds/tier1')) {
+      return new Response(null, { status: 404 });
+    }
     if (url.includes('documents:commit')) {
       return new Response(JSON.stringify({ writeResults: [] }), {
         status: 200,
@@ -207,11 +210,13 @@ test('seedEmulator targets only loopback endpoints and uses Bearer owner', async
   });
 
   assert.equal(summary.projectId, 'demo-arenapass');
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.ok(calls.every((c) => /^http:\/\/(127\.0\.0\.1|localhost):/.test(c.url)));
-  const commitCall = calls[2];
+  const commitCall = calls[3];
   assert.equal(commitCall.init.headers.Authorization, 'Bearer owner');
   const payload = JSON.parse(commitCall.init.body);
+  assert.ok(payload.writes.every((write) => write.currentDocument.exists === false));
+  assert.ok(payload.writes.some((write) => write.update.name.endsWith('/emulatorSeeds/tier1')));
   const skylineImg = payload.writes.find((w) =>
     w.update.name.endsWith('/showImages/seed-show-skyline-jam'),
   );
