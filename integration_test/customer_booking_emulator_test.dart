@@ -75,6 +75,17 @@ Future<void> waitFor(WidgetTester tester, Finder finder) async {
   expect(finder, findsOneWidget);
 }
 
+Future<void> scrollAndWaitFor(WidgetTester tester, Finder finder) async {
+  final scrollable = find.byType(Scrollable);
+  for (var i = 0; i < 150 && finder.evaluate().isEmpty; i++) {
+    if (i % 5 == 0 && scrollable.evaluate().isNotEmpty) {
+      await tester.drag(scrollable.first, const Offset(0, -250));
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  expect(finder, findsOneWidget);
+}
+
 Future<void> tap(WidgetTester tester, Finder finder) async {
   await waitFor(tester, finder);
   await tester.ensureVisible(finder);
@@ -166,7 +177,7 @@ void main() {
       registerVendorJourney(vendorGraph, vendorId: vendorId);
       await tester.pumpWidget(VendorDemoApp(services: vendorGraph));
       await tap(tester, find.text(title));
-      await waitFor(tester, tile(1, SeatVisualStatus.bookedByOther));
+      await scrollAndWaitFor(tester, tile(1, SeatVisualStatus.bookedByOther));
       expect(
         tester
             .widget<SeatTile>(tile(1, SeatVisualStatus.bookedByOther))
