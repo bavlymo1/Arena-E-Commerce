@@ -9,5 +9,26 @@
     "hub": { "host": "127.0.0.1", "port": 4400 },
     "ui": { "enabled": false },
     "singleProjectMode": true
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "buildConfigurations": {
+          "src\\customer": {
+            "projectId": "arenapass-demo",
+            "appId": "1:167616601158:android:60ae2780e0c553eb24be47",
+            "fileOutput": "android/app/src/customer/google-services.json"
+          }
+        }
+      },
+      "dart": {
+        "lib/firebase_options_customer.dart": {
+          "projectId": "arenapass-demo",
+          "configurations": {
+            "android": "1:167616601158:android:60ae2780e0c553eb24be47"
+          }
+        }
+      }
+    }
   }
 }

@@ -15,17 +15,19 @@ GetIt createCustomerServices() {
 
 GetIt createAuthenticatedCustomerServices({
   required CustomerAuthRepository authRepository,
-  required ShowsRepository showsRepository,
+  ShowsRepository? showsRepository,
 }) {
   final services = createCustomerServices();
   services.registerSingleton<CustomerAuthRepository>(authRepository);
-  services.registerSingleton<ShowsRepository>(
-    showsRepository,
-    dispose: (repository) => repository.dispose(),
-  );
   services.registerFactory<CustomerAuthCubit>(
     () => CustomerAuthCubit(services<CustomerAuthRepository>()),
   );
-  registerCustomerDiscovery(services);
+  if (showsRepository != null) {
+    services.registerSingleton<ShowsRepository>(
+      showsRepository,
+      dispose: (repository) => repository.dispose(),
+    );
+    registerCustomerDiscovery(services);
+  }
   return services;
 }

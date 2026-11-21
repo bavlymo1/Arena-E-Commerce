@@ -49,6 +49,9 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
   String? _sessionUid;
   int _sessionEpoch = 0;
 
+  bool get _hasShows => widget.services.isRegistered<ShowsRepository>();
+  String get _home => _hasShows ? '/discover' : '/account';
+
   @override
   void initState() {
     super.initState();
@@ -58,15 +61,13 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
     _authSubscription = widget.auth?.stream.listen((state) {
       final uid = state.isSignedIn ? state.user!.uid : null;
       if (uid != _sessionUid) {
-        if (_sessionUid != null) {
+        if (_sessionUid != null && _hasShows) {
           widget.services<ShowsRepository>().clearPosterCache();
         }
         _sessionUid = uid;
         _sessionEpoch++;
         router.go(
-          uid == null
-              ? (state.isChecking ? '/startup' : '/login')
-              : '/discover',
+          uid == null ? (state.isChecking ? '/startup' : '/login') : _home,
         );
       }
       _authRefresh.value++;
@@ -89,6 +90,7 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
       if (!state.isSignedIn) {
         return path == '/login' || path == '/register' ? null : '/login';
       }
+      if (!_hasShows) return path == '/account' ? null : '/account';
       return path == '/startup' || path == '/login' || path == '/register'
           ? '/discover'
           : null;
@@ -223,29 +225,31 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp.router(
-    title: 'ArenaPass Customer · Demo',
+    title: 'ArenaPass Customer',
     theme: buildAppTheme(),
     debugShowCheckedModeBanner: false,
     routerConfig: router,
-    builder: (context, child) => Column(
-      children: [
-        Material(
-          color: Theme.of(context).colorScheme.secondaryContainer,
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                widget.auth == null
-                    ? 'LOCAL DEMO · sample account and data · resets on restart'
-                    : 'LOCAL EMULATORS',
-                textAlign: TextAlign.center,
+    builder: !_hasShows
+        ? null
+        : (context, child) => Column(
+            children: [
+              Material(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      widget.auth == null
+                          ? 'LOCAL DEMO · sample account and data · resets on restart'
+                          : 'LOCAL EMULATORS',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              Expanded(child: child!),
+            ],
           ),
-        ),
-        Expanded(child: child!),
-      ],
-    ),
   );
 }
