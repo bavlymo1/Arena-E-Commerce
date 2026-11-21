@@ -51,6 +51,8 @@ final class _ControllableVendorDetailsRepository implements ShowsRepository {
   StreamController<Show?> showController = StreamController<Show?>();
   StreamController<List<Session>> sessionsController =
       StreamController<List<Session>>();
+  final deletedShowIds = <String>[];
+  Future<void> Function(String showId)? deleteShowHandler;
 
   @override
   Stream<Show?> watchShow(String showId) => showController.stream;
@@ -84,7 +86,12 @@ final class _ControllableVendorDetailsRepository implements ShowsRepository {
   Future<void> addShow(NewShow show, Uint8List poster) async {}
 
   @override
-  Future<void> deleteShow(String showId) async {}
+  Future<void> deleteShow(String showId) async {
+    deletedShowIds.add(showId);
+    if (deleteShowHandler != null) {
+      await deleteShowHandler!(showId);
+    }
+  }
 
   @override
   Future<void> resumeDeletes(String vendorId) async {}
@@ -316,6 +323,134 @@ void main() {
         );
         expect(find.byType(SeatMapView), findsOneWidget);
         expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(cubit.close);
+      }
+    },
+  );
+
+  testWidgets(
+    'built-in delete confirmation shows progress without flipping to unavailable, retries on error, and pops on completion',
+    (tester) async {
+      final firstAttempt = Completer<void>();
+      final secondAttempt = Completer<void>();
+      var attempts = 0;
+      final repo = _ControllableVendorDetailsRepository()
+        ..deleteShowHandler = (_) {
+          attempts++;
+          return attempts == 1 ? firstAttempt.future : secondAttempt.future;
+        };
+      addTearDown(repo.dispose);
+      final cubit = VendorShowDetailsCubit(
+        repo,
+        vendorId: 'vendor-1',
+        showId: 'apex',
+      );
+      var backTapped = 0;
+
+      try {
+        repo.showController.add(_show(bookedCount: 5));
+        repo.sessionsController.add(<Session>[
+          _session('19:00', label: 'Evening', bookedSeats: <int>[1, 2]),
+        ]);
+
+        await tester.pumpWidget(
+          _buildApp(cubit, onBackToShows: () => backTapped++),
+        );
+        await tester.pump();
+
+        // Tap Delete show button -> confirm dialog -> Cancel first.
+        await tester.ensureVisible(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-delete-button'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-delete-button'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey<String>('delete-show-confirm-dialog')),
+          findsOneWidget,
+        );
+        expect(find.text('Delete Apex Finals?'), findsOneWidget);
+
+        await tester.tap(
+          find.byKey(const ValueKey<String>('delete-show-cancel-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(repo.deletedShowIds, isEmpty);
+
+        // Tap Delete and confirm.
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-delete-button'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey<String>('delete-show-confirm-button')),
+        );
+        await tester.pump();
+
+        expect(repo.deletedShowIds, <String>['apex']);
+        expect(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-deleting-progress'),
+          ),
+          findsOneWidget,
+        );
+
+        // Snapshot emits status: deleting mid-delete -> must stay on progress screen, NOT unavailable!
+        repo.showController.add(_show(status: ShowStatus.deleting));
+        await tester.pump();
+        expect(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-unavailable-state'),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-deleting-progress'),
+          ),
+          findsOneWidget,
+        );
+
+        // Fail first attempt -> shows retryable error banner.
+        firstAttempt.completeError(StateError('batch failed'));
+        await tester.pump();
+        expect(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-delete-error'),
+          ),
+          findsOneWidget,
+        );
+        expect(backTapped, 0);
+
+        // Tap Retry delete -> parent deleted (null snapshot) -> completes -> BlocListener pops back to My Shows.
+        await tester.ensureVisible(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-delete-retry-button'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-delete-retry-button'),
+          ),
+        );
+        await tester.pump();
+        repo.showController.add(null);
+        await tester.pump();
+        secondAttempt.complete();
+        await tester.pump();
+
+        expect(backTapped, 1);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.runAsync(cubit.close);

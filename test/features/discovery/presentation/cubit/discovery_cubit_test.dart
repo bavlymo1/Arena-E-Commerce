@@ -399,4 +399,47 @@ void main() {
     expect(cubit.isClosed, isTrue);
     expect(cubit.state.posters.containsKey('s1'), isFalse);
   });
+
+  test('hides show from open discovery feed immediately when its status transitions to deleting', () async {
+    final repo = _StreamingShowsRepository();
+    addTearDown(repo.dispose);
+    final cubit = DiscoveryCubit(repo);
+    addTearDown(cubit.close);
+
+    await pumpEventQueue();
+    repo.controller.add(<Show>[
+      _show(
+        id: 's1',
+        title: 'Active Show',
+        createdAt: DateTime.utc(2026, 11, 18),
+      ),
+      _show(
+        id: 's2',
+        title: 'Soon Deleting Show',
+        createdAt: DateTime.utc(2026, 11, 19),
+      ),
+    ]);
+    await pumpEventQueue();
+    expect(cubit.state.shows.map((s) => s.id).toList(), <String>['s2', 's1']);
+
+    // Show s2 transitions to ShowStatus.deleting while feed is open.
+    repo.controller.add(<Show>[
+      _show(
+        id: 's1',
+        title: 'Active Show',
+        createdAt: DateTime.utc(2026, 11, 18),
+      ),
+      _show(
+        id: 's2',
+        title: 'Soon Deleting Show',
+        status: ShowStatus.deleting,
+        createdAt: DateTime.utc(2026, 11, 19),
+      ),
+    ]);
+    await pumpEventQueue();
+
+    expect(cubit.state.shows.map((s) => s.id).toList(), <String>['s1']);
+    expect(cubit.state.filteredShows.map((s) => s.id).toList(), <String>['s1']);
+    expect(cubit.state.posters.containsKey('s2'), isFalse);
+  });
 }
