@@ -966,4 +966,55 @@ void main() {
       base.add(const Duration(seconds: 4)).millisecondsSinceEpoch,
     );
   });
+
+  test('awaits delayed requestPermission resolution before firing alert or persisting watermark', () async {
+    final repo = _StreamingBookingEventsRepository();
+    addTearDown(repo.dispose);
+    final trace = <String>[];
+    final permissionCompleter = Completer<AlertPermission>();
+    final base = DateTime.utc(2026, 11, 20, 21, 0);
+    final store = _FakeWatermarkStore(
+      trace: trace,
+      initial: NotificationWatermark(
+        lastSeenEventAtMs: base.millisecondsSinceEpoch,
+        seenEventIdsAtWatermark: const <String>{'seed'},
+      ),
+    );
+    final presenter = _FakeLocalAlertPresenter(
+      trace: trace,
+      requestPermissionHandler: () => permissionCompleter.future,
+    );
+
+    final cubit = VendorNotificationsCubit(
+      repo,
+      vendorId: 'vendor-a',
+      watermarkStore: store,
+      alertPresenter: presenter,
+    );
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    final t1 = base.add(const Duration(minutes: 1));
+    repo.controller.add(<BookingEvent>[_event(bookingId: 'b1', createdAt: t1)]);
+    await pumpEventQueue();
+
+    // State updates immediately, while alert & watermark save wait for permission.
+    expect(cubit.state.status, VendorNotificationsStatus.ready);
+    expect(cubit.state.unreadEventIds, <String>{'b1'});
+    expect(presenter.shownAlerts, isEmpty);
+    expect(store.saved, isEmpty);
+
+    permissionCompleter.complete(AlertPermission.granted);
+    await pumpEventQueue();
+
+    expect(cubit.state.alertPermission, AlertPermission.granted);
+    expect(presenter.shownAlerts.map((a) => a.bookingId), <String>['b1']);
+    expect(store.saved, hasLength(1));
+    expect(trace, <String>[
+      'requestPermission',
+      'load(vendor-a)',
+      'alert(b1)',
+      'save(${t1.millisecondsSinceEpoch},b1)',
+    ]);
+  });
 }

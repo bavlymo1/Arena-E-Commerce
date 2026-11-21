@@ -16,6 +16,19 @@ class _Auth extends Fake implements FirebaseAuth {
     code: 'invalid-credential',
     message: 'private SDK payload',
   );
+  @override
+  Future<UserCredential> createUserWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async => throw FirebaseAuthException(
+    code: 'email-already-in-use',
+    message: 'private SDK register payload',
+  );
+  @override
+  Future<void> signOut() async => throw FirebaseAuthException(
+    code: 'network-request-failed',
+    message: 'private SDK logout payload',
+  );
 }
 
 class _User extends Fake implements User {
@@ -72,6 +85,26 @@ void main() {
     );
     await expectLater(
       repository.login('customer@example.test', 'invalid'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'safe message',
+          'Customer authentication failed.',
+        ),
+      ),
+    );
+    await expectLater(
+      repository.register('customer@example.test', 'invalid'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'safe message',
+          'Customer authentication failed.',
+        ),
+      ),
+    );
+    await expectLater(
+      repository.logout(),
       throwsA(
         isA<StateError>().having(
           (error) => error.message,
