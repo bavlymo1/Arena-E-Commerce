@@ -1,16 +1,22 @@
 # Vendor Notifications
 
-**Status: event stream, Cubit, and Updates screen implemented; app wiring, persistent watermark, and device/FCM alerts pending.**
+**Status: event stream, watermark persistence contract, local alert orchestration, Updates screen, and permission fallback implemented; app DI/route wiring, plugin packages, and device/FCM delivery pending.**
 
 Implemented files:
-- `data/repositories/firestore_booking_events_repository.dart`: enrolled-vendor `bookingEvents` Firestore query (`vendorId` + `createdAt` desc) decoding immutable `BookingEvent` records with exact `slotTotal` and `showTotal` from the booking transaction.
-- `presentation/cubit/vendor_notifications_state.dart`, `presentation/cubit/vendor_notifications_cubit.dart`: stream lifecycle, vendor isolation filter, watermark + tie-set unread tracking, and retry/close guards.
-- `presentation/screens/vendor_updates_screen.dart`: Loading, empty, error/retry, inline refresh error, unread badges/mark-read actions, and reverse-chronological update cards.
+- `domain/models/booking_event.dart`: immutable booking event record with atomic commit-time `slotTotal` and `showTotal`.
+- `domain/models/notification_watermark.dart`: `NotificationWatermark` (`lastSeenEventAtMs` + `seenEventIdsAtWatermark`) with same-millisecond tie awareness.
+- `domain/models/alert_permission.dart`, `domain/models/booking_alert.dart`: permission state, `BookingAlert` payload model, and 12-hour/seat formatting helpers matching merged plan §3.
+- `domain/repositories/booking_events_repository.dart`: vendor-scoped event stream contract.
+- `domain/repositories/watermark_store.dart`: `WatermarkStore` contract and `InMemoryWatermarkStore` fallback.
+- `domain/repositories/local_alert_presenter.dart`: `LocalAlertPresenter` contract for permission requests and individual/grouped local alerts.
+- `data/repositories/firestore_booking_events_repository.dart`: enrolled-vendor `bookingEvents` Firestore query (`vendorId` + `createdAt` desc) decoding immutable `BookingEvent` records.
+- `presentation/cubit/vendor_notifications_state.dart`, `presentation/cubit/vendor_notifications_cubit.dart`: stream lifecycle, vendor isolation filter, first-launch watermark seeding, oldest-to-newest catch-up grouping (>3 -> grouped alert), live individual alerts, lifetime ID deduplication, serialized advance-after-handle persistence, and error/close guards.
+- `presentation/screens/vendor_updates_screen.dart`, `presentation/widgets/alert_permission_banner.dart`: Loading, empty, error/retry, inline refresh error, visible permission-denied fallback banner with retry, unread badges/mark-read actions, and reverse-chronological update cards.
 
 Remaining work:
+- Lead dependency additions (`shared_preferences: ^2.5.6`, `flutter_local_notifications: ^23.0.2`), Android manifest/Gradle desugaring setup, and wiring of the prepared `SharedPreferencesWatermarkStore` and `FlutterLocalAlertPresenter` adapters.
 - Lead DI/route wiring (`VendorRegistration`, `VendorDemoApp` / `VendorApp` connecting `VendorShowsScreen.onOpenUpdates`, `unreadUpdatesCount`, and event selection to show details).
-- `SharedPreferencesAsync` persistence for `lastSeenEventAtMs` and `seenEventIdsAtWatermark`.
-- Local OS alerts (`POST_NOTIFICATIONS` permission fallback + foreground/catch-up notification delivery) and optional Tier 2 approved FCM sender.
+- Optional Tier 2 approved FCM sender.
 
 Dependencies: presentation -> domain contracts/models; data implements domain contracts. Domain has no Firebase/UI/GetIt imports. Cubits receive dependencies through constructors. GetIt resolution belongs to app composition, not this feature. Cross-feature use is through domain contracts; do not import another feature's presentation/data.
 

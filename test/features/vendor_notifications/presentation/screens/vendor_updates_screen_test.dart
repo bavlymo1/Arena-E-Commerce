@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:e_commerce_project/features/vendor_notifications/domain/models/alert_permission.dart';
+import 'package:e_commerce_project/features/vendor_notifications/domain/models/booking_alert.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/models/booking_event.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/repositories/booking_events_repository.dart';
+import 'package:e_commerce_project/features/vendor_notifications/domain/repositories/local_alert_presenter.dart';
 import 'package:e_commerce_project/features/vendor_notifications/presentation/cubit/vendor_notifications_cubit.dart';
 import 'package:e_commerce_project/features/vendor_notifications/presentation/screens/vendor_updates_screen.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
@@ -48,6 +51,28 @@ final class _ControllableEventsRepository implements BookingEventsRepository {
   void dispose() {
     unawaited(controller.close());
   }
+}
+
+final class _FakeScreenAlertPresenter implements LocalAlertPresenter {
+  _FakeScreenAlertPresenter(this.results);
+
+  final List<AlertPermission> results;
+  int requestCalls = 0;
+
+  @override
+  Future<AlertPermission> requestPermission() async {
+    final index = requestCalls < results.length
+        ? requestCalls
+        : results.length - 1;
+    requestCalls++;
+    return results[index];
+  }
+
+  @override
+  Future<void> showBookingAlert(BookingAlert alert) async {}
+
+  @override
+  Future<void> showGroupedAlert(int count) async {}
 }
 
 Widget _buildApp(
@@ -271,6 +296,96 @@ void main() {
           scrollable: find.byType(Scrollable).first,
         );
         expect(find.text('Show total: 112 booked'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(cubit.close);
+      }
+    },
+  );
+
+  testWidgets(
+    'shows permission-denied fallback banner, retains events, allows retry, and fits 300x640 @ 2.0x text scale',
+    (tester) async {
+      tester.view.physicalSize = const Size(300, 640);
+      tester.view.devicePixelRatio = 1.0;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+      });
+
+      final repo = _ControllableEventsRepository();
+      addTearDown(repo.dispose);
+      final presenter = _FakeScreenAlertPresenter(const <AlertPermission>[
+        AlertPermission.denied,
+        AlertPermission.granted,
+      ]);
+      final cubit = VendorNotificationsCubit(
+        repo,
+        vendorId: 'vendor-a',
+        alertPresenter: presenter,
+      );
+
+      try {
+        await tester.pumpWidget(_buildApp(cubit));
+        await tester.pump();
+
+        repo.controller.add(const <BookingEvent>[]);
+        await tester.pump();
+
+        repo.controller.add(<BookingEvent>[
+          _event(
+            id: 'b-denied-ui',
+            title: 'Champions Cup Finals',
+            slot: '19:00',
+            seats: const <int>[3, 4],
+            slotTotal: 8,
+            showTotal: 14,
+            createdAt: DateTime.utc(2026, 11, 20, 19, 0),
+          ),
+        ]);
+        await tester.pump();
+
+        expect(cubit.state.alertPermission, AlertPermission.denied);
+        final bannerFinder = find.byKey(
+          const ValueKey<String>('vendor-updates-permission-denied-banner'),
+        );
+        await tester.scrollUntilVisible(
+          bannerFinder,
+          150,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(bannerFinder, findsOneWidget);
+        expect(
+          find.text('Device alerts are off. New bookings still appear here.'),
+          findsOneWidget,
+        );
+        await tester.scrollUntilVisible(
+          find.text('Champions Cup Finals'),
+          150,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Champions Cup Finals'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await tester.scrollUntilVisible(
+          find.byKey(
+            const ValueKey<String>('vendor-updates-permission-retry-button'),
+          ),
+          -150,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>('vendor-updates-permission-retry-button'),
+          ),
+        );
+        await tester.pump();
+
+        expect(presenter.requestCalls, 2);
+        expect(bannerFinder, findsNothing);
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());

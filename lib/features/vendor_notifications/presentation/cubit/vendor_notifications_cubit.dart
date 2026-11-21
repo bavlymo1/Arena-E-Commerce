@@ -2,34 +2,51 @@ import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../domain/models/alert_permission.dart';
+import '../../domain/models/booking_alert.dart';
 import '../../domain/models/booking_event.dart';
+import '../../domain/models/notification_watermark.dart';
 import '../../domain/repositories/booking_events_repository.dart';
+import '../../domain/repositories/local_alert_presenter.dart';
+import '../../domain/repositories/watermark_store.dart';
 import 'vendor_notifications_state.dart';
 
-/// Streams vendor-scoped booking events and tracks unseen updates by watermark.
+/// Streams vendor booking events, persists watermarks, and triggers local alerts.
 final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
   VendorNotificationsCubit(
     this._repository, {
     required String vendorId,
+    WatermarkStore? watermarkStore,
+    this._alertPresenter,
     bool autoStart = true,
-  }) : super(VendorNotificationsState(vendorId: _requireNonEmpty(vendorId))) {
+  }) : _watermarkStore = watermarkStore ?? InMemoryWatermarkStore(),
+       super(VendorNotificationsState(vendorId: _requireNonEmpty(vendorId))) {
     if (autoStart) {
       unawaited(start());
     }
   }
 
+  /// Catch-up launches with more than 3 unseen events show one grouped alert.
+  static const int catchUpGroupThreshold = 3;
+
   final BookingEventsRepository _repository;
+  final WatermarkStore _watermarkStore;
+  final LocalAlertPresenter? _alertPresenter;
+
   StreamSubscription<List<BookingEvent>>? _eventsSubscription;
   Future<void> _cancellation = Future<void>.value();
   Future<void>? _activeStartFuture;
+  Future<void>? _watermarkLoadFuture;
+  Future<void>? _permissionRequestFuture;
+  Future<void> _alertPipeline = Future<void>.value();
   int _listenGeneration = 0;
   bool _awaitingInitialEvent = false;
   bool _openingSubscription = false;
-
-  // shortcut: watermark state is held in memory until shared_preferences is wired by lead, upgrade to SharedPreferencesAsync persistence for lastSeenEventAtMs and seenEventIdsAtWatermark when OS alerts or FCM are enabled
-  bool _watermarkSeeded = false;
-  int? _lastSeenEventAtMs;
-  final Set<String> _seenEventIdsAtWatermark = <String>{};
+  bool _watermarkLoaded = false;
+  bool _initialPermissionRequested = false;
+  bool _initialSnapshotProcessed = false;
+  NotificationWatermark _watermark = const NotificationWatermark.empty();
+  final Set<String> _handledEventIds = <String>{};
 
   static String _requireNonEmpty(String value) {
     if (value.trim().isEmpty) {
@@ -38,7 +55,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
     return value;
   }
 
-  /// Begins watching booking events owned by `state.vendorId`.
+  /// Loads watermark, checks alert permission, and watches vendor events.
   Future<void> start() {
     if (isClosed) return Future<void>.value();
     if (_awaitingInitialEvent && _activeStartFuture != null) {
@@ -56,6 +73,24 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
     return _startListening();
   }
 
+  /// Requests OS notification permission and updates [VendorNotificationsState].
+  Future<void> requestAlertPermission() {
+    if (isClosed) return Future<void>.value();
+    final presenter = _alertPresenter;
+    if (presenter == null) return Future<void>.value();
+    final inFlight = _permissionRequestFuture;
+    if (inFlight != null) return inFlight;
+
+    late final Future<void> requestFuture;
+    requestFuture = _performPermissionRequest(presenter).whenComplete(() {
+      if (identical(_permissionRequestFuture, requestFuture)) {
+        _permissionRequestFuture = null;
+      }
+    });
+    _permissionRequestFuture = requestFuture;
+    return requestFuture;
+  }
+
   /// Clears unread status for a single event without removing history.
   void markEventRead(String eventId) {
     if (isClosed || !state.unreadEventIds.contains(eventId)) return;
@@ -67,6 +102,56 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
   void markAllRead() {
     if (isClosed || state.unreadEventIds.isEmpty) return;
     emit(state.copyWith(unreadEventIds: const <String>{}));
+  }
+
+  Future<void> _performPermissionRequest(LocalAlertPresenter presenter) async {
+    AlertPermission resolved;
+    try {
+      resolved = await presenter.requestPermission();
+    } catch (_) {
+      resolved = AlertPermission.denied;
+    }
+    if (isClosed) return;
+    if (state.alertPermission != resolved) {
+      emit(state.copyWith(alertPermission: resolved));
+    }
+  }
+
+  Future<void> _ensureInitialPermissionRequested() {
+    if (_initialPermissionRequested || _alertPresenter == null) {
+      return _permissionRequestFuture ?? Future<void>.value();
+    }
+    _initialPermissionRequested = true;
+    return requestAlertPermission();
+  }
+
+  Future<void> _ensureWatermarkLoaded() {
+    if (_watermarkLoaded) return Future<void>.value();
+    final inFlight = _watermarkLoadFuture;
+    if (inFlight != null) return inFlight;
+
+    late final Future<void> loadFuture;
+    loadFuture = _loadWatermark().whenComplete(() {
+      if (identical(_watermarkLoadFuture, loadFuture)) {
+        _watermarkLoadFuture = null;
+      }
+    });
+    _watermarkLoadFuture = loadFuture;
+    return loadFuture;
+  }
+
+  Future<void> _loadWatermark() async {
+    try {
+      final loaded = await _watermarkStore.load(state.vendorId);
+      if (isClosed) return;
+      if (loaded != null && loaded.lastSeenEventAtMs != null) {
+        _watermark = loaded;
+      }
+    } catch (_) {
+      // Recover with empty watermark so stream updates remain available.
+    } finally {
+      _watermarkLoaded = true;
+    }
   }
 
   Future<void> _startListening() {
@@ -85,8 +170,12 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
   }
 
   Future<void> _openSubscription(int generation) async {
+    final permissionFuture = _ensureInitialPermissionRequested();
     try {
-      await _cancelSubscription();
+      await Future.wait<void>(<Future<void>>[
+        _cancelSubscription(),
+        _ensureWatermarkLoaded(),
+      ]);
       if (isClosed || generation != _listenGeneration) return;
       _eventsSubscription = _repository
           .watchEvents(state.vendorId)
@@ -106,32 +195,79 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
     } finally {
       if (generation == _listenGeneration) _openingSubscription = false;
     }
+    await permissionFuture;
   }
 
   void _onEventsSnapshot(int generation, List<BookingEvent> rawEvents) {
     if (isClosed || generation != _listenGeneration) return;
     _awaitingInitialEvent = false;
 
-    final sortedRaw =
+    final sortedNewestFirst =
         rawEvents
             .where((event) => event.vendorId == state.vendorId)
             .toList(growable: false)
           ..sort(_compareEventsNewestFirst);
     final seenIds = <String>{};
     final ownedEvents = <BookingEvent>[
-      for (final event in sortedRaw)
+      for (final event in sortedNewestFirst)
         if (seenIds.add(event.bookingId)) event,
     ];
     final ownedIds = ownedEvents.map((event) => event.id).toSet();
 
+    final isInitial = !_initialSnapshotProcessed;
+    _initialSnapshotProcessed = true;
+
     late final Set<String> nextUnread;
-    if (!_watermarkSeeded) {
-      _watermarkSeeded = true;
-      _seedWatermark(ownedEvents);
+    late final List<BookingEvent> alertsToFire;
+    late final bool isCatchUp;
+    NotificationWatermark? watermarkToPersist;
+
+    if (isInitial && _watermark.isEmpty) {
+      // First-time launch with no watermark: seed cursor without alerts.
       nextUnread = const <String>{};
+      alertsToFire = const <BookingEvent>[];
+      isCatchUp = false;
+      for (final event in ownedEvents) {
+        _handledEventIds.add(event.id);
+      }
+      if (ownedEvents.isNotEmpty) {
+        var nextWatermark = _watermark;
+        for (final event in ownedEvents.reversed) {
+          nextWatermark = nextWatermark.advance(
+            createdAtMs: event.createdAt.millisecondsSinceEpoch,
+            eventId: event.id,
+          );
+        }
+        _watermark = nextWatermark;
+        watermarkToPersist = nextWatermark;
+      }
     } else {
       nextUnread = state.unreadEventIds.where(ownedIds.contains).toSet();
-      _advanceWatermark(ownedEvents, nextUnread);
+      final oldestFirst = ownedEvents.toList(growable: false)
+        ..sort(_compareEventsOldestFirst);
+      final unseen = <BookingEvent>[];
+      var nextWatermark = _watermark;
+
+      for (final event in oldestFirst) {
+        final ms = event.createdAt.millisecondsSinceEpoch;
+        if (!_handledEventIds.contains(event.id) &&
+            nextWatermark.isUnseen(ms, event.id)) {
+          unseen.add(event);
+          nextUnread.add(event.id);
+          nextWatermark = nextWatermark.advance(
+            createdAtMs: ms,
+            eventId: event.id,
+          );
+        }
+        _handledEventIds.add(event.id);
+      }
+
+      _watermark = nextWatermark;
+      alertsToFire = unseen;
+      isCatchUp = isInitial;
+      if (unseen.isNotEmpty) {
+        watermarkToPersist = nextWatermark;
+      }
     }
 
     emit(
@@ -142,52 +278,58 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
         clearErrorMessage: true,
       ),
     );
-  }
 
-  void _seedWatermark(List<BookingEvent> events) {
-    _seenEventIdsAtWatermark.clear();
-    if (events.isEmpty) {
-      _lastSeenEventAtMs = null;
-      return;
-    }
-    final maxMs = events
-        .map((event) => event.createdAt.millisecondsSinceEpoch)
-        .reduce((a, b) => a > b ? a : b);
-    _lastSeenEventAtMs = maxMs;
-    for (final event in events) {
-      if (event.createdAt.millisecondsSinceEpoch == maxMs) {
-        _seenEventIdsAtWatermark.add(event.id);
-      }
+    if (watermarkToPersist != null || alertsToFire.isNotEmpty) {
+      _enqueueAlertAndPersist(
+        events: alertsToFire,
+        isCatchUp: isCatchUp,
+        watermarkToPersist: watermarkToPersist ?? _watermark,
+      );
     }
   }
 
-  void _advanceWatermark(
-    List<BookingEvent> newestFirstEvents,
-    Set<String> nextUnread,
-  ) {
-    var watermarkMs = _lastSeenEventAtMs;
-    final tieIds = Set<String>.from(_seenEventIdsAtWatermark);
-    for (final event in newestFirstEvents.reversed) {
-      final ms = event.createdAt.millisecondsSinceEpoch;
-      final isUnseen =
-          watermarkMs == null ||
-          ms > watermarkMs ||
-          (ms == watermarkMs && !tieIds.contains(event.id));
-      if (!isUnseen) continue;
-      nextUnread.add(event.id);
-      if (watermarkMs == null || ms > watermarkMs) {
-        watermarkMs = ms;
-        tieIds
-          ..clear()
-          ..add(event.id);
-      } else if (ms == watermarkMs) {
-        tieIds.add(event.id);
+  void _enqueueAlertAndPersist({
+    required List<BookingEvent> events,
+    required bool isCatchUp,
+    required NotificationWatermark watermarkToPersist,
+  }) {
+    _alertPipeline = _alertPipeline.then((_) async {
+      if (isClosed) return;
+      final pendingPermission = _permissionRequestFuture;
+      if (pendingPermission != null) {
+        await pendingPermission;
+        if (isClosed) return;
       }
-    }
-    _lastSeenEventAtMs = watermarkMs;
-    _seenEventIdsAtWatermark
-      ..clear()
-      ..addAll(tieIds);
+
+      final presenter = _alertPresenter;
+      if (presenter != null &&
+          events.isNotEmpty &&
+          state.alertPermission == AlertPermission.granted) {
+        if (isCatchUp && events.length > catchUpGroupThreshold) {
+          try {
+            await presenter.showGroupedAlert(events.length);
+          } catch (_) {
+            // Presenter failures must not prevent watermark progression.
+          }
+        } else {
+          for (final event in events) {
+            if (isClosed) return;
+            try {
+              await presenter.showBookingAlert(BookingAlert.fromEvent(event));
+            } catch (_) {
+              // Continue delivering remaining alerts and persisting watermark.
+            }
+          }
+        }
+      }
+
+      if (isClosed) return;
+      try {
+        await _watermarkStore.save(state.vendorId, watermarkToPersist);
+      } catch (_) {
+        // Store write failures must not break the event stream.
+      }
+    });
   }
 
   void _onStreamError(int generation) {
@@ -205,6 +347,11 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
 
   static int _compareEventsNewestFirst(BookingEvent a, BookingEvent b) {
     final byTime = b.createdAt.compareTo(a.createdAt);
+    return byTime != 0 ? byTime : a.bookingId.compareTo(b.bookingId);
+  }
+
+  static int _compareEventsOldestFirst(BookingEvent a, BookingEvent b) {
+    final byTime = a.createdAt.compareTo(b.createdAt);
     return byTime != 0 ? byTime : a.bookingId.compareTo(b.bookingId);
   }
 
