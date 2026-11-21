@@ -41,6 +41,7 @@ import 'package:e_commerce_project/main_vendor.dart' as vendor_entry;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
 
 import '../../support/fake_booking_repository.dart';
 import '../../support/fake_shows_repository.dart';
@@ -423,5 +424,23 @@ void main() {
     await customShowsCubit.close();
     await customServices.reset();
     expect(fakeShows.disposed, isTrue);
+  });
+
+  test('registerVendorAccess registers repository singleton and factory cubits into passed container', () async {
+    final services = GetIt.asNewInstance();
+    final repo = _StubAccessRepository(
+      VendorAllowed(uid: 'u1', vendorId: 'arena'),
+    );
+
+    registerVendorAccess(services, repository: repo);
+
+    expect(identical(services<VendorAccessRepository>(), repo), isTrue);
+    final first = services<VendorAccessCubit>();
+    final second = services<VendorAccessCubit>();
+    expect(identical(first, second), isFalse);
+
+    await first.close();
+    await second.close();
+    await services.reset();
   });
 }

@@ -12,7 +12,7 @@ Implemented files:
 - `data/repositories/firestore_booking_events_repository.dart`: enrolled-vendor `bookingEvents` Firestore query (`vendorId` + `createdAt` desc) decoding immutable `BookingEvent` records.
 - `data/repositories/shared_preferences_watermark_store.dart`: `SharedPreferences` watermark persistence adapter.
 - `data/repositories/flutter_local_alert_presenter.dart`: `flutter_local_notifications` OS permission and local notification adapter.
-- `presentation/cubit/vendor_notifications_state.dart`, `presentation/cubit/vendor_notifications_cubit.dart`: stream lifecycle, vendor isolation filter, first-launch watermark seeding, oldest-to-newest catch-up grouping (>3 -> grouped alert), live individual alerts, lifetime ID deduplication, serialized advance-after-handle persistence, and error/close guards.
+- `presentation/cubit/vendor_notifications_state.dart`, `presentation/cubit/vendor_notifications_cubit.dart`: stream lifecycle, vendor isolation filter, first-launch watermark seeding, oldest-to-newest catch-up grouping (>1 -> grouped alert), live individual alerts, lifetime ID deduplication, serialized advance-after-handle persistence, and error/close guards.
 - `presentation/screens/vendor_updates_screen.dart`, `presentation/widgets/alert_permission_banner.dart`: Loading, empty, error/retry, inline refresh error, visible permission-denied fallback banner with retry, unread badges/mark-read actions, and reverse-chronological update cards.
 
 Remaining work:
