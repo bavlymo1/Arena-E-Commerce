@@ -1,6 +1,8 @@
+import '../../../../core/formatting/date_time_formatting.dart';
+
 final class SessionTime {
   SessionTime(this.value) {
-    if (!RegExp(r'^([01][0-9]|2[0-3]):[0-5][0-9]$').hasMatch(value)) {
+    if (tryParseHourMinute(value) == null) {
       throw ArgumentError.value(value, 'time', 'Expected HH:mm');
     }
   }
@@ -21,12 +23,7 @@ void validateShowDate(String value) {
   if (!RegExp(r'^[0-9]{4}-[0-9]{2}-[0-9]{2}$').hasMatch(value)) {
     throw ArgumentError.value(value, 'showDate', 'Expected yyyy-MM-dd');
   }
-  final parts = value.split('-').map(int.parse).toList();
-  final parsed = DateTime.utc(parts[0], parts[1], parts[2]);
-  if (parts[0] < 1 ||
-      parsed.year != parts[0] ||
-      parsed.month != parts[1] ||
-      parsed.day != parts[2]) {
+  if (tryParseIsoDateParts(value) == null) {
     throw ArgumentError.value(value, 'showDate', 'Invalid calendar date');
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../vendor_shows/domain/models/session.dart';
 import '../cubit/show_details_cubit.dart';
 import '../cubit/show_details_state.dart';
@@ -216,13 +217,9 @@ class _SessionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final remaining = (session.capacity - session.bookedSeats.length).clamp(
-      0,
-      session.capacity,
-    );
-    final isSoldOut = remaining == 0;
+    final isSoldOut = session.isSoldOut;
     final time24 = session.time.value;
-    final time12 = formatSessionTime12Hour(time24);
+    final time12 = formatTime12Hour(time24);
     final label = session.label?.trim();
     final hasLabel = label != null && label.isNotEmpty;
     final seatsLabel = formatRemainingSeatsLabel(session);

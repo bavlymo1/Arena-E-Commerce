@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formatting/date_time_formatting.dart';
 import '../../domain/models/show.dart';
 import '../cubit/vendor_shows_cubit.dart';
 import '../cubit/vendor_shows_state.dart';
@@ -326,7 +327,7 @@ class _VendorShowCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final showDeletingStatus = show.status == ShowStatus.deleting;
     final badgeDeleting = showDeletingStatus || isDeleting;
-    final dateLabel = formatVendorShowDateLabel(show.showDate);
+    final dateLabel = formatShowDateLabel(show.showDate);
     final bookedSummary = formatVendorShowBookedSummary(show);
 
     final Widget summaryBody = Column(

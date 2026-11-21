@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/seat_numbers.dart';
+import '../../../vendor_shows/domain/models/new_show.dart';
 import '../../../vendor_shows/domain/models/session_time.dart';
 import 'booking_event.dart';
 
@@ -29,7 +31,7 @@ final class BookingAlert extends Equatable {
         slotTotal < this.seats.length ||
         slotTotal > seatCapacity ||
         showTotal < slotTotal ||
-        showTotal > 235) {
+        showTotal > maxShowBookedCount) {
       throw ArgumentError('Invalid booking alert context or seat totals');
     }
   }
@@ -60,7 +62,7 @@ final class BookingAlert extends Equatable {
   final Set<int> seats;
   final DateTime createdAt;
 
-  String get formattedSlotTime => formatSlotTime12Hour(slotTime.value);
+  String get formattedSlotTime => formatTime12Hour(slotTime.value);
 
   String get seatsLabel => formatBookedSeatsLabel(seats);
 
@@ -91,22 +93,4 @@ final class BookingAlert extends Equatable {
     seats,
     createdAt,
   ];
-}
-
-/// Formats `HH:mm` into 12-hour display text (e.g. `19:00` -> `7:00 PM`).
-String formatSlotTime12Hour(String hhMm) {
-  final match = RegExp(r'^([01]\d|2[0-3]):([0-5]\d)$').firstMatch(hhMm);
-  if (match == null) return hhMm;
-  final hour = int.parse(match.group(1)!);
-  final minute = match.group(2)!;
-  final period = hour < 12 ? 'AM' : 'PM';
-  final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-  return '$displayHour:$minute $period';
-}
-
-/// Formats sorted seat numbers as `Seat 9 booked` or `Seats 2, 5 booked`.
-String formatBookedSeatsLabel(Set<int> seats) {
-  final sorted = seats.toList()..sort();
-  final noun = sorted.length == 1 ? 'Seat' : 'Seats';
-  return '$noun ${sorted.join(', ')} booked';
 }

@@ -22,4 +22,6 @@ final class Session {
   final String lastBookingId;
   final DateTime? updatedAt;
   int get capacity => seatCapacity;
+  int get remainingSeats => (capacity - bookedSeats.length).clamp(0, capacity);
+  bool get isSoldOut => remainingSeats == 0;
 }

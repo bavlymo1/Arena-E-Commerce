@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/widgets/seat_map_view.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
@@ -130,7 +131,7 @@ class VendorShowDetailsScreen extends StatelessWidget {
                   }
 
                   final show = state.show!;
-                  final dateLabel = formatVendorShowDateLabel(show.showDate);
+                  final dateLabel = formatShowDateLabel(show.showDate);
                   final selectedSession = state.selectedSession;
                   final isDeletingBadge =
                       show.status == ShowStatus.deleting ||
@@ -438,7 +439,7 @@ class VendorShowDetailsScreen extends StatelessWidget {
 
   static String _selectedSessionSubtitle(Session session) {
     final label = session.label?.trim();
-    final timeLabel = formatVendorSessionTime12Hour(session.time.value);
+    final timeLabel = formatTime12Hour(session.time.value);
     return label != null && label.isNotEmpty
         ? '${session.time.value} · $timeLabel · $label'
         : '${session.time.value} · $timeLabel';
@@ -461,7 +462,7 @@ class _VendorSessionOptionTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final time24 = session.time.value;
-    final time12 = formatVendorSessionTime12Hour(time24);
+    final time12 = formatTime12Hour(time24);
     final label = session.label?.trim();
     final hasLabel = label != null && label.isNotEmpty;
     final bookedLabel = formatVendorSessionBookedSummary(session);

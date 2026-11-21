@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/models/show.dart';
 import '../../domain/repositories/shows_repository.dart';
-import 'vendor_poster_revision.dart';
 import 'vendor_shows_state.dart';
 
 /// Manages the vendor-owned list of active and deleting shows plus posters.
@@ -213,13 +212,13 @@ final class VendorShowsCubit extends Cubit<VendorShowsState> {
                       show.status == ShowStatus.deleting),
             )
             .toList()
-          ..sort(_compareShowsNewestFirst);
+          ..sort(Show.compareNewestFirst);
     final ownedIds = ownedShows.map((show) => show.id).toSet();
     final previous = {for (final show in state.shows) show.id: show};
     final changedIds = {
       for (final show in ownedShows)
         if (previous[show.id] case final old?
-            when vendorPosterRevision(old) != vendorPosterRevision(show))
+            when old.posterRevision != show.posterRevision)
           show.id,
     };
     final removedIds = previous.keys.toSet().difference(ownedIds);
@@ -309,15 +308,6 @@ final class VendorShowsCubit extends Cubit<VendorShowsState> {
         errorMessage: 'Unable to load shows. Your existing data is preserved.',
       ),
     );
-  }
-
-  static int _compareShowsNewestFirst(Show a, Show b) {
-    final aCreated = a.createdAt;
-    final bCreated = b.createdAt;
-    if (aCreated == null && bCreated == null) return 0;
-    if (aCreated == null) return 1;
-    if (bCreated == null) return -1;
-    return bCreated.compareTo(aCreated);
   }
 
   Future<void> _cancelSubscription() {

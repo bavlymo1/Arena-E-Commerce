@@ -3,11 +3,11 @@ import 'dart:typed_data';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../vendor_shows/domain/models/new_show.dart';
 import '../../../vendor_shows/domain/models/session.dart';
 import '../../../vendor_shows/domain/models/show.dart';
 import '../../../vendor_shows/domain/repositories/shows_repository.dart';
 import 'show_details_state.dart';
-import 'poster_revision.dart';
 
 final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
   ShowDetailsCubit(
@@ -20,7 +20,7 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
     }
   }
 
-  static const int maxSessions = 5;
+  static const int maxSessions = maxShowSessions;
 
   final ShowsRepository _repository;
   StreamSubscription<Show?>? _showSubscription;
@@ -165,7 +165,7 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
       return;
     }
 
-    final revision = posterRevision(show);
+    final revision = show.posterRevision;
     if (_posterRevision != null && _posterRevision != revision) {
       _posterRequest++;
       _posterRequestStarted = false;

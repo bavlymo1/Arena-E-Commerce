@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:equatable/equatable.dart';
 
+import '../../domain/models/new_show.dart';
+
 /// Image input source for show poster selection.
 enum ShowPosterSource { gallery, camera }
 
@@ -51,10 +53,10 @@ final class ShowFormState extends Equatable {
     required this.submissionCount,
   });
 
-  static const int maxSessions = 5;
-  static const int maxTitleLength = 80;
-  static const int maxDescriptionLength = 1000;
-  static const int maxPosterBytes = 204800;
+  static const int maxSessions = maxShowSessions;
+  static const int maxTitleLength = maxShowTitleLength;
+  static const int maxDescriptionLength = maxShowDescriptionLength;
+  static const int maxPosterBytes = maxShowPosterBytes;
 
   final String vendorId;
   final String title;

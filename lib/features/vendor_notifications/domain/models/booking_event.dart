@@ -1,4 +1,5 @@
 import '../../../../shared/seating/seat_numbers.dart';
+import '../../../vendor_shows/domain/models/new_show.dart';
 import '../../../vendor_shows/domain/models/session_time.dart';
 
 final class BookingEvent {
@@ -25,7 +26,7 @@ final class BookingEvent {
         slotTotal < this.seats.length ||
         slotTotal > seatCapacity ||
         showTotal < slotTotal ||
-        showTotal > 235) {
+        showTotal > maxShowBookedCount) {
       throw ArgumentError('Invalid event context or event-time seat totals');
     }
   }
@@ -44,4 +45,14 @@ final class BookingEvent {
   final int slotTotal;
   final int showTotal;
   final DateTime createdAt;
+
+  static int compareNewestFirst(BookingEvent a, BookingEvent b) {
+    final byTime = b.createdAt.compareTo(a.createdAt);
+    return byTime != 0 ? byTime : a.bookingId.compareTo(b.bookingId);
+  }
+
+  static int compareOldestFirst(BookingEvent a, BookingEvent b) {
+    final byTime = a.createdAt.compareTo(b.createdAt);
+    return byTime != 0 ? byTime : a.bookingId.compareTo(b.bookingId);
+  }
 }

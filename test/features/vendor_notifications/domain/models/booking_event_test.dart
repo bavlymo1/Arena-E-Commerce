@@ -41,4 +41,31 @@ void main() {
     expect(() => event(showTotal: 1), throwsArgumentError);
     expect(() => event(showTotal: 236), throwsArgumentError);
   });
+
+  test('compareNewestFirst and compareOldestFirst break timestamp ties by bookingId', () {
+    BookingEvent build(String id, DateTime createdAt) => BookingEvent(
+      bookingId: id,
+      vendorId: 'arena',
+      showId: 'show-a',
+      sessionId: '1900',
+      seats: const [1],
+      showTitle: 'Show',
+      slotTime: SessionTime('19:00'),
+      slotTotal: 1,
+      showTotal: 1,
+      createdAt: createdAt,
+    );
+
+    final t1 = DateTime.utc(2026, 11, 20, 10, 0);
+    final t2 = DateTime.utc(2026, 11, 20, 10, 5);
+    final a = build('b-a', t1);
+    final b = build('b-b', t1);
+    final c = build('b-c', t2);
+
+    final newestFirst = [a, b, c]..sort(BookingEvent.compareNewestFirst);
+    expect(newestFirst.map((e) => e.bookingId), ['b-c', 'b-a', 'b-b']);
+
+    final oldestFirst = [c, b, a]..sort(BookingEvent.compareOldestFirst);
+    expect(oldestFirst.map((e) => e.bookingId), ['b-a', 'b-b', 'b-c']);
+  });
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:e_commerce_project/core/formatting/date_time_formatting.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/models/booking_alert.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/models/booking_event.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/models/notification_watermark.dart';
@@ -61,9 +62,9 @@ void main() {
     test(
       'formats 12-hour boundary times and validates seat/total invariants',
       () {
-        expect(formatSlotTime12Hour('00:05'), '12:05 AM');
-        expect(formatSlotTime12Hour('12:30'), '12:30 PM');
-        expect(formatSlotTime12Hour('14:00'), '2:00 PM');
+        expect(formatTime12Hour('00:05'), '12:05 AM');
+        expect(formatTime12Hour('12:30'), '12:30 PM');
+        expect(formatTime12Hour('14:00'), '2:00 PM');
         expect(formatBookedSeatsLabel(<int>{9}), 'Seat 9 booked');
 
         expect(

@@ -202,7 +202,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
         rawEvents
             .where((event) => event.vendorId == state.vendorId)
             .toList(growable: false)
-          ..sort(_compareEventsNewestFirst);
+          ..sort(BookingEvent.compareNewestFirst);
     final seenIds = <String>{};
     final ownedEvents = <BookingEvent>[
       for (final event in sortedNewestFirst)
@@ -237,7 +237,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
     } else {
       nextUnread = state.unreadEventIds.where(ownedIds.contains).toSet();
       final oldestFirst = ownedEvents.toList(growable: false)
-        ..sort(_compareEventsOldestFirst);
+        ..sort(BookingEvent.compareOldestFirst);
       final unseen = <BookingEvent>[];
       var nextWatermark = _watermark;
 
@@ -334,16 +334,6 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
             : 'Unable to refresh booking updates. Showing last loaded updates.',
       ),
     );
-  }
-
-  static int _compareEventsNewestFirst(BookingEvent a, BookingEvent b) {
-    final byTime = b.createdAt.compareTo(a.createdAt);
-    return byTime != 0 ? byTime : a.bookingId.compareTo(b.bookingId);
-  }
-
-  static int _compareEventsOldestFirst(BookingEvent a, BookingEvent b) {
-    final byTime = a.createdAt.compareTo(b.createdAt);
-    return byTime != 0 ? byTime : a.bookingId.compareTo(b.bookingId);
   }
 
   Future<void> _cancelSubscription() {

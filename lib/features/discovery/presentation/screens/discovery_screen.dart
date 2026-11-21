@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../vendor_shows/domain/models/show.dart';
 import '../cubit/discovery_cubit.dart';
 import '../cubit/discovery_state.dart';

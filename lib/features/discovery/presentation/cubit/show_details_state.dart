@@ -43,9 +43,7 @@ final class ShowDetailsState extends Equatable {
   bool get isAllSessionsSoldOut =>
       isReady &&
       sessions.isNotEmpty &&
-      sessions.every(
-        (session) => session.bookedSeats.length >= session.capacity,
-      );
+      sessions.every((session) => session.isSoldOut);
 
   ShowDetailsState copyWith({
     ShowDetailsStatus? status,

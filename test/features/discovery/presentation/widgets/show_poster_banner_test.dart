@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:e_commerce_project/core/formatting/date_time_formatting.dart';
 import 'package:e_commerce_project/features/discovery/presentation/widgets/show_poster_banner.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
@@ -84,11 +85,11 @@ void main() {
       expect(formatShowDateLabel('2026-02-30'), '2026-02-30');
       expect(formatShowDateLabel('invalid'), 'invalid');
 
-      expect(formatSessionTime12Hour('00:30'), '12:30 AM');
-      expect(formatSessionTime12Hour('12:00'), '12:00 PM');
-      expect(formatSessionTime12Hour('14:00'), '2:00 PM');
-      expect(formatSessionTime12Hour('19:00'), '7:00 PM');
-      expect(formatSessionTime12Hour('99:00'), '99:00');
+      expect(formatTime12Hour('00:30'), '12:30 AM');
+      expect(formatTime12Hour('12:00'), '12:00 PM');
+      expect(formatTime12Hour('14:00'), '2:00 PM');
+      expect(formatTime12Hour('19:00'), '7:00 PM');
+      expect(formatTime12Hour('99:00'), '99:00');
 
       expect(
         formatRemainingSeatsLabel(

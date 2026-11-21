@@ -5,51 +5,6 @@ import 'package:flutter/material.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
 
-const List<String> _monthAbbreviations = <String>[
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-/// Formats an ISO `yyyy-MM-dd` show date into a concise UTC calendar label,
-/// falling back to [isoDate] if the input is malformed.
-String formatVendorShowDateLabel(String isoDate) {
-  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(isoDate);
-  if (match == null) return isoDate;
-  final year = int.parse(match.group(1)!);
-  final month = int.parse(match.group(2)!);
-  final day = int.parse(match.group(3)!);
-  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) {
-    return isoDate;
-  }
-  final parsed = DateTime.utc(year, month, day);
-  if (parsed.year != year || parsed.month != month || parsed.day != day) {
-    return isoDate;
-  }
-  return '${_monthAbbreviations[month - 1]} $day, $year';
-}
-
-/// Formats a 24-hour `HH:mm` session time into 12-hour clock text,
-/// falling back to [hhMm] if the input is malformed.
-String formatVendorSessionTime12Hour(String hhMm) {
-  final match = RegExp(r'^([01]\d|2[0-3]):([0-5]\d)$').firstMatch(hhMm);
-  if (match == null) return hhMm;
-  final hour = int.parse(match.group(1)!);
-  final minute = match.group(2)!;
-  final period = hour < 12 ? 'AM' : 'PM';
-  final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-  return '$displayHour:$minute $period';
-}
-
 /// Returns a bounded `X / capacity booked` summary for a vendor session.
 String formatVendorSessionBookedSummary(Session session) {
   final booked = session.bookedSeats.length.clamp(0, session.capacity);

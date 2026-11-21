@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../../shared/seating/seat_numbers.dart';
 import '../../../vendor_access/domain/models/vendor_access.dart';
 import '../../../vendor_access/domain/repositories/vendor_access_repository.dart';
 import '../../domain/models/new_show.dart';
@@ -71,7 +72,7 @@ final class FirestoreShowsRepository implements ShowsRepository {
         (snapshot) => snapshot.docs
             .map((doc) {
               final data = doc.data();
-              if (data['capacity'] != 47) {
+              if (data['capacity'] != seatCapacity) {
                 throw FormatException('Invalid session capacity');
               }
               return Session(
@@ -149,14 +150,11 @@ final class FirestoreShowsRepository implements ShowsRepository {
 
   @override
   Future<void> addShow(NewShow show, Uint8List poster) async {
-    if (show.title.length > 80 || show.description.length > 1000) {
+    if (show.title.length > maxShowTitleLength ||
+        show.description.length > maxShowDescriptionLength) {
       throw ArgumentError('Show title or description exceeds its limit');
     }
-    if (poster.length < 3 ||
-        poster.length > 204800 ||
-        poster[0] != 0xff ||
-        poster[1] != 0xd8 ||
-        poster[2] != 0xff) {
+    if (poster.length > maxShowPosterBytes || !hasJpegHeader(poster)) {
       throw ArgumentError('Expected a JPEG poster up to 200 KiB');
     }
     final bytes = Uint8List.fromList(poster);
@@ -192,7 +190,7 @@ final class FirestoreShowsRepository implements ShowsRepository {
       for (final slot in show.sessions) {
         transaction.set(document.collection('sessions').doc(slot.id), {
           'time': slot.value,
-          'capacity': 47,
+          'capacity': seatCapacity,
           'bookedSeats': <int>[],
           'lastBookingId': '',
           'updatedAt': timestamp,

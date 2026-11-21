@@ -167,4 +167,51 @@ void main() {
       fake.dispose();
     },
   );
+
+  test('domain helpers compute posterRevision, newest-first order, remainingSeats, and JPEG headers', () {
+    final older = show(
+      id: 'older',
+      imageId: 'older',
+      createdAt: DateTime.utc(2026, 11, 15),
+    );
+    final newer = show(
+      id: 'newer',
+      imageId: 'newer',
+      createdAt: DateTime.utc(2026, 11, 16),
+    );
+    final uncreated = show(id: 'uncreated', imageId: 'uncreated');
+
+    final sorted = [uncreated, older, newer]..sort(Show.compareNewestFirst);
+    expect(sorted.map((s) => s.id), ['newer', 'older', 'uncreated']);
+
+    expect(
+      older.posterRevision,
+      show(
+        id: 'older',
+        imageId: 'older',
+        createdAt: DateTime.utc(2026, 11, 15),
+      ).posterRevision,
+    );
+    expect(older.posterRevision, isNot(newer.posterRevision));
+
+    final partialSession = Session(
+      id: '1900',
+      time: SessionTime('19:00'),
+      bookedSeats: [1, 2],
+    );
+    expect(partialSession.remainingSeats, 45);
+    expect(partialSession.isSoldOut, isFalse);
+
+    final fullSession = Session(
+      id: '1900',
+      time: SessionTime('19:00'),
+      bookedSeats: List<int>.generate(47, (i) => i + 1),
+    );
+    expect(fullSession.remainingSeats, 0);
+    expect(fullSession.isSoldOut, isTrue);
+
+    expect(hasJpegHeader(Uint8List.fromList([0xff, 0xd8, 0xff])), isTrue);
+    expect(hasJpegHeader(Uint8List.fromList([0xff, 0xd8])), isFalse);
+    expect(hasJpegHeader(Uint8List.fromList([0x89, 0x50, 0x4e])), isFalse);
+  });
 }

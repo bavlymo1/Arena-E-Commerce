@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/seat_numbers.dart';
-import '../../domain/models/booking_alert.dart';
 import '../../domain/models/booking_event.dart';
 import '../cubit/vendor_notifications_cubit.dart';
 import '../cubit/vendor_notifications_state.dart';
@@ -196,8 +196,8 @@ class _BookingEventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final slotLabel = formatSlotTime12Hour(event.slotTime.value);
-    final timestampLabel = _formatLocalTimestamp(event.createdAt);
+    final slotLabel = formatTime12Hour(event.slotTime.value);
+    final timestampLabel = formatLocalTimestamp(event.createdAt);
     final seatsLabel = formatBookedSeatsLabel(event.seats);
     final slotTotalLabel = 'Session ${event.slotTotal} / $seatCapacity booked';
     final showTotalLabel = 'Show total: ${event.showTotal} booked';
@@ -459,29 +459,4 @@ class _UpdatesStatusPanel extends StatelessWidget {
       ),
     );
   }
-}
-
-const List<String> _months = <String>[
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-String _formatLocalTimestamp(DateTime timestamp) {
-  final local = timestamp.toLocal();
-  final period = local.hour < 12 ? 'AM' : 'PM';
-  final displayHour = local.hour == 0
-      ? 12
-      : (local.hour > 12 ? local.hour - 12 : local.hour);
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '${_months[local.month - 1]} ${local.day}, $displayHour:$minute $period';
 }

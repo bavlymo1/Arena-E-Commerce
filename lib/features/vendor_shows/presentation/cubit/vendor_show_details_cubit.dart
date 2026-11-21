@@ -3,10 +3,10 @@ import 'dart:typed_data';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../domain/models/new_show.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
 import '../../domain/repositories/shows_repository.dart';
-import 'vendor_poster_revision.dart';
 import 'vendor_show_details_state.dart';
 
 /// Manages vendor-owned show metadata, daily sessions, poster, and selected session.
@@ -30,7 +30,7 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     }
   }
 
-  static const int maxSessions = 5;
+  static const int maxSessions = maxShowSessions;
 
   final ShowsRepository _repository;
   StreamSubscription<Show?>? _showSubscription;
@@ -256,7 +256,7 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     }
 
     final ownedShow = show!;
-    final revision = vendorPosterRevision(ownedShow);
+    final revision = ownedShow.posterRevision;
     if (_posterRevision != null && _posterRevision != revision) {
       _posterRequest++;
       _posterRequestStarted = false;

@@ -1,3 +1,4 @@
+import 'new_show.dart';
 import 'session_time.dart';
 
 enum ShowStatus { active, deleting }
@@ -19,7 +20,7 @@ final class Show {
     if ([id, vendorId, title, imageId].any((value) => value.trim().isEmpty) ||
         imageId != id ||
         bookedCount < 0 ||
-        bookedCount > 235) {
+        bookedCount > maxShowBookedCount) {
       throw ArgumentError('Invalid show identity, image or seat total');
     }
     validateShowDate(showDate);
@@ -37,4 +38,18 @@ final class Show {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   String get titleSearch => title.toLowerCase();
+
+  /// The current contract has no image-only revision. Poster writers must also
+  /// update show metadata; repository implementations own internal cache races.
+  Object get posterRevision =>
+      (imageId, createdAt, updatedAt, title, description, showDate);
+
+  static int compareNewestFirst(Show a, Show b) {
+    final aCreated = a.createdAt;
+    final bCreated = b.createdAt;
+    if (aCreated == null && bCreated == null) return 0;
+    if (aCreated == null) return 1;
+    if (bCreated == null) return -1;
+    return bCreated.compareTo(aCreated);
+  }
 }

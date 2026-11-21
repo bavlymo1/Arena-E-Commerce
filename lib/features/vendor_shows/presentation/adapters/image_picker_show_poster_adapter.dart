@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../domain/models/new_show.dart';
 import '../cubit/show_form_state.dart';
 
 /// Native [ShowPosterPicker] adapter backed by [ImagePicker].
@@ -67,11 +68,8 @@ final class ImagePickerShowPosterAdapter {
     final bytes = await file.readAsBytes();
     // Leave the form's existing empty-file and size feedback in charge.
     if (bytes.isNotEmpty &&
-        bytes.length <= ShowFormState.maxPosterBytes &&
-        (bytes.length < 3 ||
-            bytes[0] != 0xff ||
-            bytes[1] != 0xd8 ||
-            bytes[2] != 0xff)) {
+        bytes.length <= maxShowPosterBytes &&
+        !hasJpegHeader(bytes)) {
       throw const FormatException('Poster must be JPEG');
     }
     return Uint8List.fromList(bytes);

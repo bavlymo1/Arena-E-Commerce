@@ -6,7 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../vendor_shows/domain/models/show.dart';
 import '../../../vendor_shows/domain/repositories/shows_repository.dart';
 import 'discovery_state.dart';
-import 'poster_revision.dart';
 
 final class DiscoveryCubit extends Cubit<DiscoveryState> {
   DiscoveryCubit(this._repository, {bool autoStart = true})
@@ -116,13 +115,13 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
 
     final activeShows =
         rawShows.where((show) => show.status == ShowStatus.active).toList()
-          ..sort(_compareShowsNewestFirst);
+          ..sort(Show.compareNewestFirst);
     final activeIds = activeShows.map((show) => show.id).toSet();
     final previous = {for (final show in state.shows) show.id: show};
     final changedIds = {
       for (final show in activeShows)
         if (previous[show.id] case final old?
-            when posterRevision(old) != posterRevision(show))
+            when old.posterRevision != show.posterRevision)
           show.id,
     };
     final removedIds = previous.keys.toSet().difference(activeIds);
@@ -208,15 +207,6 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
             'Unable to load shows. Your existing choices are preserved.',
       ),
     );
-  }
-
-  static int _compareShowsNewestFirst(Show a, Show b) {
-    final aCreated = a.createdAt;
-    final bCreated = b.createdAt;
-    if (aCreated == null && bCreated == null) return 0;
-    if (aCreated == null) return 1;
-    if (bCreated == null) return -1;
-    return bCreated.compareTo(aCreated);
   }
 
   static List<Show> _filterShows(List<Show> shows, String query) {
