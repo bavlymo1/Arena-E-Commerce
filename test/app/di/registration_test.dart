@@ -33,6 +33,11 @@ import 'package:e_commerce_project/features/vendor_shows/presentation/cubit/show
 import 'package:e_commerce_project/features/vendor_shows/presentation/cubit/vendor_show_details_cubit.dart';
 import 'package:e_commerce_project/features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
 import 'package:e_commerce_project/features/vendor_shows/presentation/screens/vendor_shows_screen.dart';
+import 'package:e_commerce_project/firebase_options_customer.dart'
+    as customer_firebase;
+import 'package:e_commerce_project/firebase_options_vendor.dart'
+    as vendor_firebase;
+import 'package:e_commerce_project/main_vendor.dart' as vendor_entry;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,6 +50,9 @@ import '../../support/fake_shows_repository.dart';
 final class _FakeUser extends Fake implements User {
   @override
   String get uid => 'fake-uid';
+
+  @override
+  bool get isAnonymous => false;
 }
 
 final class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
@@ -332,4 +340,88 @@ void main() {
       await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
     },
   );
+
+  test('Customer and Vendor FirebaseOptions target arenapass-demo with distinct app IDs and D01 remains gated', () {
+    const customerOptions = customer_firebase.DefaultFirebaseOptions.android;
+    const vendorOptions = vendor_firebase.DefaultFirebaseOptions.android;
+
+    expect(customerOptions.projectId, 'arenapass-demo');
+    expect(vendorOptions.projectId, customerOptions.projectId);
+    expect(vendorOptions.messagingSenderId, '167616601158');
+    expect(vendorOptions.messagingSenderId, customerOptions.messagingSenderId);
+    expect(vendorOptions.storageBucket, 'arenapass-demo.firebasestorage.app');
+    expect(vendorOptions.storageBucket, customerOptions.storageBucket);
+    expect(
+      customerOptions.appId,
+      '1:167616601158:android:60ae2780e0c553eb24be47',
+    );
+    expect(
+      vendorOptions.appId,
+      '1:167616601158:android:ab6e0d5eb0ae6f9024be47',
+    );
+    expect(vendorOptions.appId, isNot(customerOptions.appId));
+    expect(vendor_entry.kVendorD01Approved, isFalse);
+  });
+
+  test('createLiveVendorServices registers live repositories, adapters, and disposes cleanly', () async {
+    final defaultServices = createLiveVendorServices(
+      auth: _FakeFirebaseAuth(),
+      firestore: _FakeFirebaseFirestore(),
+      watermarkStore: InMemoryWatermarkStore(),
+      alertPresenter: _StubAlertPresenter(),
+      posterPicker: (_) async => Uint8List(0),
+      recoverPoster: () async => null,
+    );
+    expect(defaultServices<AppVariant>(), AppVariant.vendor);
+    expect(defaultServices.isRegistered<VendorAccessRepository>(), isTrue);
+    expect(defaultServices.isRegistered<ShowsRepository>(), isTrue);
+    expect(defaultServices.isRegistered<BookingEventsRepository>(), isTrue);
+    expect(defaultServices.isRegistered<WatermarkStore>(), isTrue);
+    expect(defaultServices.isRegistered<LocalAlertPresenter>(), isTrue);
+
+    final accessCubit = defaultServices<VendorAccessCubit>();
+    final formCubit = defaultServices<ShowFormCubit>(param1: 'vendor-live');
+    final showsCubit = defaultServices<VendorShowsCubit>(param1: 'vendor-live');
+    final detailsCubit = defaultServices<VendorShowDetailsCubit>(
+      param1: 'vendor-live',
+      param2: 'show-1',
+    );
+    final notificationsCubit = defaultServices<VendorNotificationsCubit>(
+      param1: 'vendor-live',
+    );
+    expect(showsCubit.state.vendorId, 'vendor-live');
+    expect(detailsCubit.state.showId, 'show-1');
+    expect(notificationsCubit.state.vendorId, 'vendor-live');
+
+    await Future<void>.delayed(Duration.zero);
+    await accessCubit.close();
+    await formCubit.close();
+    await showsCubit.close();
+    await detailsCubit.close();
+    await notificationsCubit.close();
+    await defaultServices.reset();
+    expect(defaultServices.isRegistered<ShowsRepository>(), isFalse);
+
+    final fakeShows = FakeShowsRepository();
+    final customServices = createLiveVendorServices(
+      auth: _FakeFirebaseAuth(),
+      firestore: _FakeFirebaseFirestore(),
+      accessRepository: _StubAccessRepository(
+        VendorAllowed(uid: 'anon-1', vendorId: 'vendor-custom'),
+      ),
+      showsRepository: fakeShows,
+      bookingEventsRepository: _StubBookingEventsRepository(),
+      watermarkStore: InMemoryWatermarkStore(),
+      alertPresenter: _StubAlertPresenter(),
+      posterPicker: (_) async => Uint8List(0),
+      recoverPoster: () async => null,
+    );
+    final customShowsCubit = customServices<VendorShowsCubit>(
+      param1: 'vendor-custom',
+    );
+    expect(customShowsCubit.state.vendorId, 'vendor-custom');
+    await customShowsCubit.close();
+    await customServices.reset();
+    expect(fakeShows.disposed, isTrue);
+  });
 }

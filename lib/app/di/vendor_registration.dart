@@ -121,10 +121,13 @@ void registerVendorEnrolledJourney(
   );
 }
 
-GetIt createLocalVendorServices({
+/// Registers the live Firebase Auth + Firestore Shows/Events vendor graph.
+GetIt createLiveVendorServices({
   required FirebaseAuth auth,
   required FirebaseFirestore firestore,
   VendorAccessRepository? accessRepository,
+  ShowsRepository? showsRepository,
+  BookingEventsRepository? bookingEventsRepository,
   WatermarkStore? watermarkStore,
   LocalAlertPresenter? alertPresenter,
   ShowPosterPicker? posterPicker,
@@ -135,11 +138,13 @@ GetIt createLocalVendorServices({
       accessRepository ?? FirebaseVendorAccessRepository(auth, firestore);
   registerVendorAccess(services, repository: vendorAccess);
   services.registerSingleton<ShowsRepository>(
-    FirestoreShowsRepository(firestore, vendorAccess: vendorAccess),
+    showsRepository ??
+        FirestoreShowsRepository(firestore, vendorAccess: vendorAccess),
     dispose: (repository) => repository.dispose(),
   );
   services.registerSingleton<BookingEventsRepository>(
-    FirestoreBookingEventsRepository(firestore, vendorAccess),
+    bookingEventsRepository ??
+        FirestoreBookingEventsRepository(firestore, vendorAccess),
   );
   services.registerSingleton<WatermarkStore>(
     watermarkStore ?? SharedPreferencesWatermarkStore(),
@@ -154,6 +159,24 @@ GetIt createLocalVendorServices({
   );
   return services;
 }
+
+GetIt createLocalVendorServices({
+  required FirebaseAuth auth,
+  required FirebaseFirestore firestore,
+  VendorAccessRepository? accessRepository,
+  WatermarkStore? watermarkStore,
+  LocalAlertPresenter? alertPresenter,
+  ShowPosterPicker? posterPicker,
+  ShowPosterRecovery? recoverPoster,
+}) => createLiveVendorServices(
+  auth: auth,
+  firestore: firestore,
+  accessRepository: accessRepository,
+  watermarkStore: watermarkStore,
+  alertPresenter: alertPresenter,
+  posterPicker: posterPicker,
+  recoverPoster: recoverPoster,
+);
 
 GetIt createDemoVendorServices() {
   final services = GetIt.asNewInstance();
