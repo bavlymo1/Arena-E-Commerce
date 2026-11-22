@@ -158,6 +158,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
                 const SizedBox(height: 20),
                 AutofillGroup(
+                  key: const ValueKey<String>('register-autofill-group'),
                   child: Form(
                     key: _formKey,
                     autovalidateMode: _submittedOnce

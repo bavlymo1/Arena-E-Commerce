@@ -8,6 +8,7 @@ import 'package:e_commerce_project/features/customer_auth/presentation/screens/a
 import 'package:e_commerce_project/features/customer_auth/presentation/screens/login_screen.dart';
 import 'package:e_commerce_project/features/customer_auth/presentation/screens/register_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -978,6 +979,152 @@ void main() {
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.runAsync(cubit.close);
+      }
+    },
+  );
+
+  testWidgets(
+    'clearing stale error banners keeps AutofillGroup intact without calling TextInput.finishAutofillContext mid-typing',
+    (tester) async {
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final previousHandler = messenger.allMessagesHandler;
+      final recordedMethods = <String>[];
+      addTearDown(() => messenger.allMessagesHandler = previousHandler);
+      messenger.allMessagesHandler = (channel, handler, message) {
+        if (channel == SystemChannels.textInput.name && message != null) {
+          final call = SystemChannels.textInput.codec.decodeMethodCall(message);
+          recordedMethods.add(call.method);
+        }
+        return previousHandler != null
+            ? previousHandler(channel, handler, message)
+            : handler?.call(message);
+      };
+
+      // 1. LoginScreen preserves AutofillGroup when editing clears loginErrorMessage.
+      final loginRepo = _TestCustomerAuthRepository()
+        ..onLogin = (_, _) async => throw StateError('Invalid credentials');
+      addTearDown(loginRepo.dispose);
+      final loginCubit = CustomerAuthCubit(loginRepo);
+      try {
+        await tester.pumpWidget(
+          _wrapScreen(
+            cubit: loginCubit,
+            child: LoginScreen(onRegisterRequested: () {}),
+          ),
+        );
+        loginRepo.controller.add(null);
+        await tester.pumpAndSettle();
+
+        final initialLoginAutofill = tester.state<AutofillGroupState>(
+          find.byType(AutofillGroup),
+        );
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-email-field')),
+          'alex@example.test',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-password-field')),
+          'wrong-pass',
+        );
+        await tester.tap(
+          find.byKey(const ValueKey<String>('login-submit-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsOneWidget);
+
+        recordedMethods.clear();
+        tester.testTextInput.log.clear();
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-email-field')),
+          'alex2@example.test',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsNothing);
+        expect(
+          recordedMethods,
+          isNot(contains('TextInput.finishAutofillContext')),
+        );
+        expect(
+          tester.testTextInput.log.map((call) => call.method),
+          isNot(contains('TextInput.finishAutofillContext')),
+        );
+        expect(
+          tester.state<AutofillGroupState>(find.byType(AutofillGroup)),
+          same(initialLoginAutofill),
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(loginCubit.close);
+      }
+
+      // 2. RegisterScreen preserves AutofillGroup when editing clears registerErrorMessage.
+      final registerRepo = _TestCustomerAuthRepository()
+        ..onRegister = (_, _) async => throw StateError('Email already in use');
+      addTearDown(registerRepo.dispose);
+      final registerCubit = CustomerAuthCubit(registerRepo);
+      try {
+        await tester.pumpWidget(
+          _wrapScreen(
+            cubit: registerCubit,
+            child: RegisterScreen(onLoginRequested: () {}),
+          ),
+        );
+        registerRepo.controller.add(null);
+        await tester.pumpAndSettle();
+
+        final initialRegisterAutofill = tester.state<AutofillGroupState>(
+          find.byType(AutofillGroup),
+        );
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-email-field')),
+          'jordan@example.test',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-password-field')),
+          'pass-one',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-confirm-password-field')),
+          'pass-one',
+        );
+        await tester.ensureVisible(
+          find.byKey(const ValueKey<String>('register-submit-button')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey<String>('register-submit-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text(CustomerAuthCubit.registerErrorMessage),
+          findsOneWidget,
+        );
+
+        recordedMethods.clear();
+        tester.testTextInput.log.clear();
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-password-field')),
+          'pass-two',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.registerErrorMessage), findsNothing);
+        expect(
+          recordedMethods,
+          isNot(contains('TextInput.finishAutofillContext')),
+        );
+        expect(
+          tester.testTextInput.log.map((call) => call.method),
+          isNot(contains('TextInput.finishAutofillContext')),
+        );
+        expect(
+          tester.state<AutofillGroupState>(find.byType(AutofillGroup)),
+          same(initialRegisterAutofill),
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(registerCubit.close);
       }
     },
   );

@@ -142,6 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
                 const SizedBox(height: 20),
                 AutofillGroup(
+                  key: const ValueKey<String>('login-autofill-group'),
                   child: Form(
                     key: _formKey,
                     autovalidateMode: _submittedOnce
