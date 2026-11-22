@@ -147,7 +147,7 @@ class BookingResultScreen extends StatelessWidget {
                       ArenaNoticeBanner(
                         icon: Icons.warning_amber_rounded,
                         message:
-                            'Conflicting seats: ${state.conflicts.join(', ')}',
+                            'Conflicting seats: ${(state.conflicts.toList()..sort()).join(', ')}',
                         isError: true,
                         emphasizeText: true,
                         padding: const EdgeInsets.all(14),

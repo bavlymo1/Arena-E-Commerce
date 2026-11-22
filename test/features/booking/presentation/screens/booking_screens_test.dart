@@ -429,4 +429,244 @@ void main() {
       },
     );
   }
+
+  testWidgets('BookingResultScreen sorts conflicting seat numbers ascending', (
+    tester,
+  ) async {
+    final repo = _ControllableBookingRepository();
+    addTearDown(repo.dispose);
+    final unsortedConflicts = <int>{12, 3, 7};
+    repo.onConfirm = (req) async => BookingConflict(req, unsortedConflicts);
+
+    final selection = SeatSelectionCubit(
+      bookingRepository: repo,
+      customerUid: 'cust-1',
+      showId: 'show-1',
+      sessionId: '1900',
+      autoStart: false,
+    );
+    final booking = BookingCubit(
+      repository: repo,
+      customerUid: 'cust-1',
+      showId: 'show-1',
+      sessionId: '1900',
+      newBookingId: () => 'ref-sorted-conflicts',
+    );
+
+    try {
+      await booking.submit(<int>{12, 3, 7, 1});
+      await tester.pumpWidget(
+        _wrapBooking(
+          selectionCubit: selection,
+          bookingCubit: booking,
+          child: BookingResultScreen(
+            bookingId: 'ref-sorted-conflicts',
+            onDetails: () {},
+            onReviewMap: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Seats: 1, 3, 7, 12'), findsOneWidget);
+      expect(find.text('Conflicting seats: 3, 7, 12'), findsOneWidget);
+      expect(find.text('Conflicting seats: 12, 3, 7'), findsNothing);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(selection.close);
+      await tester.runAsync(booking.close);
+    }
+  });
+
+  testWidgets(
+    'SeatSelectionScreen guards onResult against duplicate or non-transition BookingState emissions',
+    (tester) async {
+      final repo = _ControllableBookingRepository();
+      addTearDown(repo.dispose);
+      var bookingCounter = 0;
+      var confirmResultIndex = 0;
+
+      final selection = SeatSelectionCubit(
+        bookingRepository: repo,
+        customerUid: 'cust-1',
+        showId: 'show-1',
+        sessionId: '1900',
+      );
+      final booking = BookingCubit(
+        repository: repo,
+        customerUid: 'cust-1',
+        showId: 'show-1',
+        sessionId: '1900',
+        newBookingId: () => 'ref-${++bookingCounter}',
+      );
+      repo.onConfirm = (req) async {
+        confirmResultIndex++;
+        if (confirmResultIndex == 1) {
+          return BookingConflict(req, const <int>{5});
+        }
+        return BookingConfirmed(req);
+      };
+      final results = <String>[];
+
+      try {
+        await tester.pumpWidget(
+          _wrapBooking(
+            selectionCubit: selection,
+            bookingCubit: booking,
+            child: SeatSelectionScreen(onResult: results.add, onDetails: () {}),
+          ),
+        );
+        repo.sessionController.add(
+          Session(
+            id: '1900',
+            time: SessionTime('19:00'),
+            bookedSeats: const <int>{21},
+          ),
+        );
+        repo.mySeatsController.add(const <int>{});
+        await tester.pumpAndSettle();
+
+        final consumer = tester
+            .widget<BlocConsumer<BookingCubit, BookingState>>(
+              find.byType(BlocConsumer<BookingCubit, BookingState>),
+            );
+        expect(consumer.listenWhen, isNotNull);
+        final req1 = BookingRequest(
+          bookingId: 'ref-1',
+          customerUid: 'cust-1',
+          showId: 'show-1',
+          sessionId: '1900',
+          seats: const <int>{5},
+        );
+        final req2 = BookingRequest(
+          bookingId: 'ref-2',
+          customerUid: 'cust-1',
+          showId: 'show-1',
+          sessionId: '1900',
+          seats: const <int>{6},
+        );
+        expect(
+          consumer.listenWhen!(
+            const BookingState(BookingPhase.ready),
+            BookingState(BookingPhase.submitting, request: req1),
+          ),
+          isFalse,
+        );
+        expect(
+          consumer.listenWhen!(
+            BookingState(BookingPhase.submitting, request: req1),
+            BookingState(BookingPhase.confirmed, request: req1),
+          ),
+          isTrue,
+        );
+        expect(
+          consumer.listenWhen!(
+            BookingState(BookingPhase.submitting, request: req1),
+            BookingState(
+              BookingPhase.conflict,
+              request: req1,
+              conflicts: const <int>{5},
+            ),
+          ),
+          isTrue,
+        );
+        expect(
+          consumer.listenWhen!(
+            BookingState(BookingPhase.recovering, request: req1),
+            BookingState(BookingPhase.confirmed, request: req1),
+          ),
+          isTrue,
+        );
+        expect(
+          consumer.listenWhen!(
+            const BookingState(BookingPhase.ready),
+            BookingState(BookingPhase.confirmed, request: req1),
+          ),
+          isTrue,
+        );
+        expect(
+          consumer.listenWhen!(
+            BookingState(BookingPhase.confirmed, request: req1),
+            BookingState(BookingPhase.confirmed, request: req1),
+          ),
+          isFalse,
+        );
+        expect(
+          consumer.listenWhen!(
+            BookingState(
+              BookingPhase.conflict,
+              request: req1,
+              conflicts: const <int>{5},
+            ),
+            BookingState(
+              BookingPhase.conflict,
+              request: req1,
+              conflicts: const <int>{5},
+            ),
+          ),
+          isFalse,
+        );
+        expect(
+          consumer.listenWhen!(
+            BookingState(BookingPhase.unconfirmed, request: req1),
+            BookingState(BookingPhase.unconfirmed, request: req1),
+          ),
+          isFalse,
+        );
+        expect(
+          consumer.listenWhen!(
+            BookingState(BookingPhase.conflict, request: req1),
+            const BookingState(BookingPhase.ready),
+          ),
+          isFalse,
+        );
+        expect(
+          consumer.listenWhen!(
+            BookingState(BookingPhase.confirmed, request: req1),
+            BookingState(BookingPhase.confirmed, request: req2),
+          ),
+          isTrue,
+        );
+
+        await tester.tap(find.byKey(const ValueKey<String>('seat-grid-5')));
+        await tester.pump();
+        await tester.tap(
+          find.byKey(const ValueKey<String>('seat-confirm-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(results, <String>['ref-1']);
+
+        // Resetting for a new attempt and submitting again fires once with ref-2.
+        booking.newAttempt();
+        selection.setSubmitting(false);
+        selection.clearSelection();
+        await tester.pumpAndSettle();
+        expect(booking.state.phase, BookingPhase.ready);
+        expect(selection.state.submitting, isFalse);
+        expect(selection.state.selectedSeats, isEmpty);
+        expect(results, <String>['ref-1']);
+
+        await tester.tap(find.byKey(const ValueKey<String>('seat-grid-6')));
+        await tester.pump();
+        expect(selection.state.selectedSeats, <int>{6});
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.byKey(const ValueKey<String>('seat-confirm-button')),
+              )
+              .onPressed,
+          isNotNull,
+        );
+        await tester.tap(
+          find.byKey(const ValueKey<String>('seat-confirm-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(results, <String>['ref-1', 'ref-2']);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(selection.close);
+        await tester.runAsync(booking.close);
+      }
+    },
+  );
 }

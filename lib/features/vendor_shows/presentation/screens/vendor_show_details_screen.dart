@@ -354,7 +354,7 @@ class VendorShowDetailsScreen extends StatelessWidget {
                                     session: session,
                                     selected: selectedSession?.id == session.id,
                                     onTap: state.isDeletingShow
-                                        ? () {}
+                                        ? null
                                         : () => cubit.selectSession(session.id),
                                   ),
                                 ),
@@ -458,7 +458,7 @@ class _VendorSessionOptionTile extends StatelessWidget {
 
   final Session session;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -479,6 +479,7 @@ class _VendorSessionOptionTile extends StatelessWidget {
     return Semantics(
       container: true,
       button: true,
+      enabled: onTap != null,
       selected: selected,
       label: semanticsText,
       onTap: onTap,

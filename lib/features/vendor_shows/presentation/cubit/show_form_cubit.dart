@@ -216,6 +216,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
       emit(
         state.copyWith(
           status: _editingStatus(),
+          clearPickingPosterSource: true,
           posterError: posterPickerUnavailableMessage,
           clearSubmitErrorMessage: true,
         ),
@@ -229,6 +230,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
     emit(
       state.copyWith(
         status: ShowFormStatus.pickingPoster,
+        pickingPosterSource: source,
         clearPosterError: true,
         clearSubmitErrorMessage: true,
       ),
@@ -240,7 +242,12 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
       _activeOperation = null;
 
       if (bytes == null) {
-        emit(state.copyWith(status: ShowFormStatus.editing));
+        emit(
+          state.copyWith(
+            status: ShowFormStatus.editing,
+            clearPickingPosterSource: true,
+          ),
+        );
         return;
       }
 
@@ -249,6 +256,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
         emit(
           state.copyWith(
             status: ShowFormStatus.editing,
+            clearPickingPosterSource: true,
             posterError: validationError,
           ),
         );
@@ -258,6 +266,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
       emit(
         state.copyWith(
           status: ShowFormStatus.editing,
+          clearPickingPosterSource: true,
           posterBytes: bytes,
           clearPosterError: true,
         ),
@@ -268,6 +277,7 @@ final class ShowFormCubit extends Cubit<ShowFormState> {
       emit(
         state.copyWith(
           status: ShowFormStatus.editing,
+          clearPickingPosterSource: true,
           posterError: _posterPickError(error),
         ),
       );

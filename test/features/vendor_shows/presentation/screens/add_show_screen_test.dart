@@ -515,4 +515,153 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'displays Selecting… only on the tapped poster source button while both remain disabled',
+    (tester) async {
+      final repo = FakeShowsRepository();
+      addTearDown(repo.dispose);
+      final cubit = ShowFormCubit(repo, vendorId: 'arena');
+      var pendingPick = Completer<Uint8List?>();
+
+      try {
+        await tester.pumpWidget(
+          _wrapScreen(
+            cubit: cubit,
+            child: AddShowScreen(
+              onPickPoster: (_) {
+                pendingPick = Completer<Uint8List?>();
+                return pendingPick.future;
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final galleryButtonFinder = find.byKey(
+          const ValueKey<String>('add-show-gallery-button'),
+        );
+        final cameraButtonFinder = find.byKey(
+          const ValueKey<String>('add-show-camera-button'),
+        );
+
+        // Tap Camera -> Camera button shows Selecting…, Gallery stays Gallery, both disabled.
+        await tester.ensureVisible(cameraButtonFinder);
+        await tester.tap(cameraButtonFinder);
+        await tester.pump();
+
+        expect(
+          find.descendant(
+            of: cameraButtonFinder,
+            matching: find.text('Selecting…'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: galleryButtonFinder,
+            matching: find.text('Gallery'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: galleryButtonFinder,
+            matching: find.text('Selecting…'),
+          ),
+          findsNothing,
+        );
+        expect(
+          tester.widget<OutlinedButton>(cameraButtonFinder).onPressed,
+          isNull,
+        );
+        expect(
+          tester.widget<OutlinedButton>(galleryButtonFinder).onPressed,
+          isNull,
+        );
+
+        pendingPick.complete(_validPng);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(
+            of: cameraButtonFinder,
+            matching: find.text('Camera'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: galleryButtonFinder,
+            matching: find.text('Gallery'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester.widget<OutlinedButton>(cameraButtonFinder).onPressed,
+          isNotNull,
+        );
+        expect(
+          tester.widget<OutlinedButton>(galleryButtonFinder).onPressed,
+          isNotNull,
+        );
+
+        // Tap Gallery -> Gallery button shows Selecting…, Camera stays Camera, both disabled.
+        await tester.ensureVisible(galleryButtonFinder);
+        await tester.tap(galleryButtonFinder);
+        await tester.pump();
+
+        expect(
+          find.descendant(
+            of: galleryButtonFinder,
+            matching: find.text('Selecting…'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: cameraButtonFinder,
+            matching: find.text('Camera'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: cameraButtonFinder,
+            matching: find.text('Selecting…'),
+          ),
+          findsNothing,
+        );
+        expect(
+          tester.widget<OutlinedButton>(cameraButtonFinder).onPressed,
+          isNull,
+        );
+        expect(
+          tester.widget<OutlinedButton>(galleryButtonFinder).onPressed,
+          isNull,
+        );
+
+        pendingPick.complete(null);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(
+            of: galleryButtonFinder,
+            matching: find.text('Gallery'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: cameraButtonFinder,
+            matching: find.text('Camera'),
+          ),
+          findsOneWidget,
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(cubit.close);
+      }
+    },
+  );
 }

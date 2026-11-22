@@ -356,7 +356,10 @@ class _AddShowScreenState extends State<AddShowScreen> {
                               ),
                               child: VendorButtonContent(
                                 icon: Icons.photo_library_outlined,
-                                label: state.isPickingPoster
+                                label:
+                                    state.isPickingPoster &&
+                                        state.pickingPosterSource ==
+                                            ShowPosterSource.gallery
                                     ? 'Selecting…'
                                     : 'Gallery',
                               ),
@@ -379,9 +382,14 @@ class _AddShowScreenState extends State<AddShowScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              child: const VendorButtonContent(
+                              child: VendorButtonContent(
                                 icon: Icons.photo_camera_outlined,
-                                label: 'Camera',
+                                label:
+                                    state.isPickingPoster &&
+                                        state.pickingPosterSource ==
+                                            ShowPosterSource.camera
+                                    ? 'Selecting…'
+                                    : 'Camera',
                               ),
                             ),
                           ],

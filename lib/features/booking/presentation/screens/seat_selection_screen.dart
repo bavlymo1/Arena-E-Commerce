@@ -39,9 +39,14 @@ class SeatSelectionScreen extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return BlocConsumer<BookingCubit, BookingState>(
+      listenWhen: (prev, curr) =>
+          !curr.busy &&
+          curr.request != null &&
+          (prev.busy || prev.request?.bookingId != curr.request?.bookingId),
       listener: (context, booking) {
-        if (!booking.busy && booking.request != null) {
-          onResult(booking.request!.bookingId);
+        final request = booking.request;
+        if (!booking.busy && request != null) {
+          onResult(request.bookingId);
         }
       },
       builder: (context, booking) =>

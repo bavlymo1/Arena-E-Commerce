@@ -439,4 +439,90 @@ void main() {
       expect(cubit.state.status, ShowFormStatus.submitting);
     },
   );
+
+  test('tracks pickingPosterSource per source and clears it across every terminal branch', () async {
+    final repo = FakeShowsRepository();
+    addTearDown(repo.dispose);
+    final cubit = ShowFormCubit(repo, vendorId: 'arena');
+    addTearDown(cubit.close);
+
+    expect(cubit.state.pickingPosterSource, isNull);
+
+    // Equatable props distinguish pickingPosterSource values and copyWith clears cleanly.
+    final cameraState = cubit.state.copyWith(
+      status: ShowFormStatus.pickingPoster,
+      pickingPosterSource: ShowPosterSource.camera,
+    );
+    final galleryState = cubit.state.copyWith(
+      status: ShowFormStatus.pickingPoster,
+      pickingPosterSource: ShowPosterSource.gallery,
+    );
+    expect(cameraState, isNot(equals(galleryState)));
+    expect(
+      cameraState.copyWith(status: ShowFormStatus.editing).pickingPosterSource,
+      isNull,
+    );
+    expect(
+      cameraState.copyWith(clearPickingPosterSource: true).pickingPosterSource,
+      isNull,
+    );
+
+    // Unavailable picker leaves pickingPosterSource null.
+    await cubit.pickPoster(ShowPosterSource.camera);
+    expect(cubit.state.isPickingPoster, isFalse);
+    expect(cubit.state.pickingPosterSource, isNull);
+
+    // Camera pick -> valid bytes clears pickingPosterSource; typing while picking preserves it.
+    final validGate = Completer<Uint8List?>();
+    final validFuture = cubit.pickPoster(
+      ShowPosterSource.camera,
+      picker: (_) => validGate.future,
+    );
+    expect(cubit.state.isPickingPoster, isTrue);
+    expect(cubit.state.pickingPosterSource, ShowPosterSource.camera);
+    cubit.updateTitle('Draft');
+    expect(cubit.state.pickingPosterSource, ShowPosterSource.camera);
+    validGate.complete(Uint8List.fromList(<int>[1, 2, 3]));
+    await validFuture;
+    expect(cubit.state.isPickingPoster, isFalse);
+    expect(cubit.state.pickingPosterSource, isNull);
+
+    // Gallery pick -> cancelled (null) clears pickingPosterSource.
+    final cancelGate = Completer<Uint8List?>();
+    final cancelFuture = cubit.pickPoster(
+      ShowPosterSource.gallery,
+      picker: (_) => cancelGate.future,
+    );
+    expect(cubit.state.pickingPosterSource, ShowPosterSource.gallery);
+    cancelGate.complete(null);
+    await cancelFuture;
+    expect(cubit.state.isPickingPoster, isFalse);
+    expect(cubit.state.pickingPosterSource, isNull);
+
+    // Camera pick -> validation error clears pickingPosterSource.
+    final invalidGate = Completer<Uint8List?>();
+    final invalidFuture = cubit.pickPoster(
+      ShowPosterSource.camera,
+      picker: (_) => invalidGate.future,
+    );
+    expect(cubit.state.pickingPosterSource, ShowPosterSource.camera);
+    invalidGate.complete(Uint8List(0));
+    await invalidFuture;
+    expect(cubit.state.isPickingPoster, isFalse);
+    expect(cubit.state.pickingPosterSource, isNull);
+    expect(cubit.state.posterError, ShowFormCubit.posterEmptyMessage);
+
+    // Gallery pick -> exception clears pickingPosterSource.
+    final errorGate = Completer<Uint8List?>();
+    final errorFuture = cubit.pickPoster(
+      ShowPosterSource.gallery,
+      picker: (_) => errorGate.future,
+    );
+    expect(cubit.state.pickingPosterSource, ShowPosterSource.gallery);
+    errorGate.completeError(const FormatException('bad image'));
+    await errorFuture;
+    expect(cubit.state.isPickingPoster, isFalse);
+    expect(cubit.state.pickingPosterSource, isNull);
+    expect(cubit.state.posterError, ShowFormCubit.posterFormatMessage);
+  });
 }

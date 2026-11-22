@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session.dart';
@@ -452,6 +453,91 @@ void main() {
 
         expect(backTapped, 1);
       } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(cubit.close);
+      }
+    },
+  );
+
+  testWidgets(
+    'disables session selection controls and semantics while show is deleting',
+    (tester) async {
+      final semanticsHandle = tester.ensureSemantics();
+      final deleteGate = Completer<void>();
+      final repo = _ControllableVendorDetailsRepository()
+        ..deleteShowHandler = (_) => deleteGate.future;
+      addTearDown(repo.dispose);
+      final cubit = VendorShowDetailsCubit(
+        repo,
+        vendorId: 'vendor-1',
+        showId: 'apex',
+      );
+
+      try {
+        repo.showController.add(_show(bookedCount: 3));
+        repo.sessionsController.add(<Session>[
+          _session('16:00', label: 'Matinee', bookedSeats: <int>[1, 2]),
+          _session('19:00', label: 'Evening', bookedSeats: <int>[10]),
+        ]);
+
+        await tester.pumpWidget(_buildApp(cubit, onBackToShows: () {}));
+        await tester.pumpAndSettle();
+
+        final eveningTileFinder = find.byKey(
+          const ValueKey<String>('vendor-session-option-1900'),
+        );
+        final eveningInkWellBefore = tester.widget<InkWell>(
+          find.descendant(
+            of: eveningTileFinder,
+            matching: find.byType(InkWell),
+          ),
+        );
+        expect(eveningInkWellBefore.onTap, isNotNull);
+        final semanticsBefore = tester
+            .getSemantics(eveningTileFinder)
+            .getSemanticsData();
+        expect(semanticsBefore.hasAction(SemanticsAction.tap), isTrue);
+        expect(semanticsBefore.flagsCollection.isEnabled, Tristate.isTrue);
+
+        // Start delete without completing it so state.isDeletingShow stays true.
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>('vendor-show-details-delete-button'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey<String>('delete-show-confirm-button')),
+        );
+        await tester.pump();
+        expect(cubit.state.isDeletingShow, isTrue);
+
+        await tester.ensureVisible(eveningTileFinder);
+        await tester.pump();
+
+        final eveningInkWellDeleting = tester.widget<InkWell>(
+          find.descendant(
+            of: eveningTileFinder,
+            matching: find.byType(InkWell),
+          ),
+        );
+        expect(eveningInkWellDeleting.onTap, isNull);
+
+        final semanticsDeleting = tester
+            .getSemantics(eveningTileFinder)
+            .getSemanticsData();
+        expect(semanticsDeleting.hasAction(SemanticsAction.tap), isFalse);
+        expect(semanticsDeleting.flagsCollection.isEnabled, Tristate.isFalse);
+
+        // Tapping the disabled session tile does not change selected session.
+        await tester.tap(eveningTileFinder);
+        await tester.pump();
+        expect(cubit.state.selectedSessionId, '1600');
+
+        deleteGate.complete();
+        await tester.pump();
+      } finally {
+        semanticsHandle.dispose();
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.runAsync(cubit.close);
       }

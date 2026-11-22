@@ -24,6 +24,7 @@ final class ShowFormState extends Equatable {
     Iterable<String> sessionTimes = const <String>[''],
     Uint8List? posterBytes,
     this.status = ShowFormStatus.editing,
+    this.pickingPosterSource,
     this.titleError,
     this.descriptionError,
     this.showDateError,
@@ -44,6 +45,7 @@ final class ShowFormState extends Equatable {
     required this.sessionTimes,
     required this.posterBytes,
     required this.status,
+    required this.pickingPosterSource,
     required this.titleError,
     required this.descriptionError,
     required this.showDateError,
@@ -65,6 +67,7 @@ final class ShowFormState extends Equatable {
   final List<String> sessionTimes;
   final Uint8List? posterBytes;
   final ShowFormStatus status;
+  final ShowPosterSource? pickingPosterSource;
   final String? titleError;
   final String? descriptionError;
   final String? showDateError;
@@ -89,6 +92,8 @@ final class ShowFormState extends Equatable {
     Uint8List? posterBytes,
     bool clearPosterBytes = false,
     ShowFormStatus? status,
+    ShowPosterSource? pickingPosterSource,
+    bool clearPickingPosterSource = false,
     String? titleError,
     bool clearTitleError = false,
     String? descriptionError,
@@ -108,6 +113,11 @@ final class ShowFormState extends Equatable {
         : (posterBytes != null
               ? Uint8List.fromList(posterBytes).asUnmodifiableView()
               : this.posterBytes);
+    final nextPickingPosterSource =
+        clearPickingPosterSource ||
+            (status != null && status != ShowFormStatus.pickingPoster)
+        ? null
+        : (pickingPosterSource ?? this.pickingPosterSource);
 
     return ShowFormState._(
       vendorId: vendorId,
@@ -119,6 +129,7 @@ final class ShowFormState extends Equatable {
           : List<String>.unmodifiable(sessionTimes),
       posterBytes: nextPoster,
       status: status ?? this.status,
+      pickingPosterSource: nextPickingPosterSource,
       titleError: clearTitleError ? null : (titleError ?? this.titleError),
       descriptionError: clearDescriptionError
           ? null
@@ -146,6 +157,7 @@ final class ShowFormState extends Equatable {
     sessionTimes,
     posterBytes,
     status,
+    pickingPosterSource,
     titleError,
     descriptionError,
     showDateError,
