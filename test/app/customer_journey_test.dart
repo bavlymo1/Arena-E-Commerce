@@ -1,6 +1,6 @@
+import 'package:e_commerce_project/app/customer/customer_demo_app.dart';
 import 'package:e_commerce_project/app/customer/customer_journey_app.dart';
 import 'package:e_commerce_project/app/customer/demo_customer_repository.dart';
-import 'package:e_commerce_project/app/di/customer_journey_registration.dart';
 import 'package:e_commerce_project/features/booking/presentation/cubit/booking_cubit.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_request.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_result.dart';

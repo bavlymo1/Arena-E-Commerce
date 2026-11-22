@@ -19,7 +19,6 @@ import '../../features/vendor_shows/presentation/cubit/show_form_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/show_form_state.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_show_details_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
-import '../customer/demo_customer_repository.dart';
 import '../startup/app_variant.dart';
 import 'shared_registration.dart';
 
@@ -172,33 +171,5 @@ GetIt createLiveVendorServices({
     posterPicker: posterPicker,
     recoverPoster: recoverPoster,
   );
-  return services;
-}
-
-GetIt createLocalVendorServices({
-  required FirebaseAuth auth,
-  required FirebaseFirestore firestore,
-  VendorAccessRepository? accessRepository,
-  WatermarkStore? watermarkStore,
-  LocalAlertPresenter? alertPresenter,
-  ShowPosterPicker? posterPicker,
-  ShowPosterRecovery? recoverPoster,
-}) => createLiveVendorServices(
-  auth: auth,
-  firestore: firestore,
-  accessRepository: accessRepository,
-  watermarkStore: watermarkStore,
-  alertPresenter: alertPresenter,
-  posterPicker: posterPicker,
-  recoverPoster: recoverPoster,
-);
-
-GetIt createDemoVendorServices() {
-  final services = GetIt.asNewInstance();
-  services.registerSingleton<ShowsRepository>(
-    DemoCustomerRepository(),
-    dispose: (repository) => repository.dispose(),
-  );
-  registerVendorJourney(services, vendorId: 'demo-vendor');
   return services;
 }

@@ -11,6 +11,7 @@ import '../../features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
 import '../../features/vendor_shows/presentation/screens/add_show_screen.dart';
 import '../../features/vendor_shows/presentation/screens/vendor_show_details_screen.dart';
 import '../../features/vendor_shows/presentation/screens/vendor_shows_screen.dart';
+import '../startup/arena_pass_app.dart';
 import '../theme/app_theme.dart';
 
 /// Shared vendor navigation graph; root owners manage DI container disposal.
@@ -143,20 +144,10 @@ class _VendorJourneyRouterState extends State<VendorJourneyRouter> {
       routerConfig: router,
       builder: bannerText == null
           ? null
-          : (context, child) => Column(
-              children: [
-                Material(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text(bannerText, textAlign: TextAlign.center),
-                    ),
-                  ),
-                ),
-                Expanded(child: child!),
-              ],
+          : (context, child) => wrapWithEnvironmentBanner(
+              context,
+              banner: bannerText,
+              child: child!,
             ),
     );
   }

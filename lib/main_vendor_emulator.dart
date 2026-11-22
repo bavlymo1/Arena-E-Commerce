@@ -51,5 +51,5 @@ Future<GetIt> createLocalVendorEmulatorServices() async {
     _firestorePort,
     automaticHostMapping: false,
   );
-  return createLocalVendorServices(auth: auth, firestore: firestore);
+  return createLiveVendorServices(auth: auth, firestore: firestore);
 }

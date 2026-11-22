@@ -10,6 +10,27 @@ import 'app_variant.dart';
 import 'startup_cubit.dart';
 import 'startup_screen.dart';
 
+/// Wraps an app navigator with a top environment banner when [banner] is non-null.
+Widget wrapWithEnvironmentBanner(
+  BuildContext context, {
+  required String banner,
+  required Widget child,
+}) => Column(
+  children: [
+    Material(
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Text(banner, textAlign: TextAlign.center),
+        ),
+      ),
+    ),
+    Expanded(child: child),
+  ],
+);
+
 /// Owns its isolated composition container and router for this app instance.
 class ArenaPassApp extends StatefulWidget {
   const ArenaPassApp({required this.services, super.key});

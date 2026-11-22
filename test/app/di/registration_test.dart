@@ -1,13 +1,16 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:e_commerce_project/app/customer/customer_app.dart';
+import 'package:e_commerce_project/app/customer/customer_demo_app.dart';
 import 'package:e_commerce_project/app/di/customer_registration.dart';
 import 'package:e_commerce_project/app/di/vendor_registration.dart';
 import 'package:e_commerce_project/app/startup/app_variant.dart';
 import 'package:e_commerce_project/app/startup/arena_pass_app.dart';
 import 'package:e_commerce_project/app/startup/startup_cubit.dart';
 import 'package:e_commerce_project/app/vendor/vendor_app.dart';
+import 'package:e_commerce_project/app/vendor/vendor_demo_app.dart';
 import 'package:e_commerce_project/app/vendor/vendor_enrolled_app.dart';
 import 'package:e_commerce_project/features/booking/domain/repositories/booking_repository.dart';
 import 'package:e_commerce_project/features/booking/presentation/cubit/booking_cubit.dart';
@@ -140,8 +143,8 @@ void main() {
     expect(services.isRegistered<AppVariant>(), isFalse);
   });
 
-  test('createLocalVendorServices registers singletons and parameterized vendor factories', () async {
-    final services = createLocalVendorServices(
+  test('createLiveVendorServices registers singletons and parameterized vendor factories', () async {
+    final services = createLiveVendorServices(
       auth: _FakeFirebaseAuth(),
       firestore: _FakeFirebaseFirestore(),
       accessRepository: _StubAccessRepository(),
@@ -293,7 +296,7 @@ void main() {
       await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
 
       // 3. Live Vendor app via createEnrolledVendorApp(banner: null) omits banner.
-      final liveVendorServices = createLocalVendorServices(
+      final liveVendorServices = createLiveVendorServices(
         auth: _FakeFirebaseAuth(),
         firestore: _FakeFirebaseFirestore(),
         accessRepository: _StubAccessRepository(
@@ -318,7 +321,7 @@ void main() {
       await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
 
       // 4. Default VendorEnrolledApp preserves LOCAL EMULATORS banner.
-      final emuVendorServices = createLocalVendorServices(
+      final emuVendorServices = createLiveVendorServices(
         auth: _FakeFirebaseAuth(),
         firestore: _FakeFirebaseFirestore(),
         accessRepository: _StubAccessRepository(
@@ -442,5 +445,80 @@ void main() {
     await first.close();
     await second.close();
     await services.reset();
+  });
+
+  test('createDemoCustomerServices and createDemoVendorServices register demo containers and reset cleanly', () async {
+    final customerServices = createDemoCustomerServices();
+    expect(customerServices.isRegistered<ShowsRepository>(), isTrue);
+    expect(customerServices.isRegistered<BookingRepository>(), isTrue);
+    final discoveryCubit = customerServices<DiscoveryCubit>();
+    final detailsCubit = customerServices<ShowDetailsCubit>(
+      param1: 'demo-show',
+    );
+    final seatCubit = customerServices<SeatSelectionCubit>(
+      param1: 'demo-show',
+      param2: '1900',
+    );
+    final bookingCubit = customerServices<BookingCubit>(
+      param1: 'demo-show',
+      param2: '1900',
+    );
+    await discoveryCubit.close();
+    await detailsCubit.close();
+    await seatCubit.close();
+    await bookingCubit.close();
+    await customerServices.reset();
+    expect(customerServices.isRegistered<ShowsRepository>(), isFalse);
+
+    final vendorServices = createDemoVendorServices();
+    expect(vendorServices.isRegistered<ShowsRepository>(), isTrue);
+    final showsCubit = vendorServices<VendorShowsCubit>();
+    final formCubit = vendorServices<ShowFormCubit>();
+    final vendorDetailsCubit = vendorServices<VendorShowDetailsCubit>(
+      param1: 'demo-show',
+    );
+    await showsCubit.close();
+    await formCubit.close();
+    await vendorDetailsCubit.close();
+    await vendorServices.reset();
+    expect(vendorServices.isRegistered<ShowsRepository>(), isFalse);
+  });
+
+  test('only explicit demo files import demo composition or fixtures', () {
+    const allowedDemoFiles = <String>{
+      'lib/main_customer_demo.dart',
+      'lib/main_vendor_demo.dart',
+      'lib/app/customer/customer_demo_app.dart',
+      'lib/app/vendor/vendor_demo_app.dart',
+      'lib/app/customer/demo_customer_repository.dart',
+    };
+    final nonDemoDartFiles =
+        Directory('lib')
+            .listSync(recursive: true)
+            .whereType<File>()
+            .map((file) => file.path.replaceAll('\\', '/'))
+            .where((path) => path.endsWith('.dart'))
+            .where((path) => !allowedDemoFiles.contains(path))
+            .toList()
+          ..sort();
+    expect(nonDemoDartFiles, isNotEmpty);
+    for (final relativePath in nonDemoDartFiles) {
+      final contents = File(relativePath).readAsStringSync();
+      expect(
+        contents,
+        isNot(contains('customer_demo_app.dart')),
+        reason: relativePath,
+      );
+      expect(
+        contents,
+        isNot(contains('vendor_demo_app.dart')),
+        reason: relativePath,
+      );
+      expect(
+        contents,
+        isNot(contains('demo_customer_repository.dart')),
+        reason: relativePath,
+      );
+    }
   });
 }

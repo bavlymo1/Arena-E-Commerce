@@ -10,6 +10,10 @@ import '../../features/customer_auth/presentation/cubit/customer_auth_state.dart
 import '../../features/customer_auth/presentation/screens/login_screen.dart';
 import '../../features/customer_auth/presentation/screens/register_screen.dart';
 import '../../features/customer_auth/presentation/screens/account_screen.dart';
+import '../../features/discovery/presentation/cubit/discovery_cubit.dart';
+import '../../features/discovery/presentation/cubit/show_details_cubit.dart';
+import '../../features/discovery/presentation/screens/discovery_screen.dart';
+import '../../features/discovery/presentation/screens/show_details_screen.dart';
 import '../../features/vendor_shows/domain/repositories/shows_repository.dart';
 import '../../features/booking/domain/repositories/booking_repository.dart';
 import '../../features/booking/presentation/cubit/booking_cubit.dart';
@@ -17,25 +21,26 @@ import '../../features/booking/presentation/cubit/seat_selection_cubit.dart';
 import '../../features/booking/presentation/screens/booking_result_screen.dart';
 import '../../features/booking/presentation/screens/seat_selection_screen.dart';
 import '../theme/app_theme.dart';
+import '../startup/arena_pass_app.dart';
 import '../startup/startup_screen.dart';
 import '../startup/startup_cubit.dart';
 import '../startup/app_variant.dart';
 
-/// Presentation builders let the separately owned discovery screens join the
-/// same route graph without a second implementation of those screens.
+/// Root route graph for authenticated and demo Customer journeys; optional
+/// builders allow route-fixture tests to override discovery/details screens.
 class CustomerJourneyApp extends StatefulWidget {
   const CustomerJourneyApp({
     required this.services,
-    required this.discoverBuilder,
-    required this.detailsBuilder,
+    this.discoverBuilder,
+    this.detailsBuilder,
     this.initialLocation = '/discover',
     this.auth,
     this.banner,
     super.key,
   });
   final GetIt services;
-  final Widget Function(BuildContext, ValueChanged<String>) discoverBuilder;
-  final Widget Function(BuildContext, String, ValueChanged<String>)
+  final Widget Function(BuildContext, ValueChanged<String>)? discoverBuilder;
+  final Widget Function(BuildContext, String, ValueChanged<String>)?
   detailsBuilder;
   final String initialLocation;
   final CustomerAuthCubit? auth;
@@ -129,29 +134,54 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
         path: '/discover',
         builder: (context, state) => KeyedSubtree(
           key: ValueKey(('discover', _sessionEpoch)),
-          child: widget.discoverBuilder(
-            context,
-            (showId) => context.push(details(showId)),
-          ),
+          child: widget.discoverBuilder != null
+              ? widget.discoverBuilder!(
+                  context,
+                  (showId) => context.push(details(showId)),
+                )
+              : BlocProvider(
+                  create: (_) => widget.services<DiscoveryCubit>(),
+                  child: DiscoveryScreen(
+                    onShowSelected: (showId) => context.push(details(showId)),
+                    onAccount: widget.auth == null
+                        ? null
+                        : () => context.push('/account'),
+                  ),
+                ),
         ),
       ),
       GoRoute(
         path: '/show/:showId',
         builder: (context, state) {
           final showId = state.pathParameters['showId']!;
+          void openSession(String sessionId) {
+            if (widget.services.isRegistered<BookingRepository>()) {
+              context.push(seats(showId, sessionId));
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Booking backend setup pending.')),
+              );
+            }
+          }
+
           return KeyedSubtree(
             key: ValueKey(('details', _sessionEpoch, showId)),
-            child: widget.detailsBuilder(context, showId, (sessionId) {
-              if (widget.services.isRegistered<BookingRepository>()) {
-                context.push(seats(showId, sessionId));
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Booking backend setup pending.'),
+            child: widget.detailsBuilder != null
+                ? widget.detailsBuilder!(context, showId, openSession)
+                : BlocProvider(
+                    create: (_) =>
+                        widget.services<ShowDetailsCubit>(param1: showId),
+                    child: PopScope(
+                      canPop: Navigator.canPop(context),
+                      onPopInvokedWithResult: (didPop, _) {
+                        if (!didPop) context.go('/discover');
+                      },
+                      child: ShowDetailsScreen(
+                        onSessionSelected: openSession,
+                        onBackToDiscover: () => context.go('/discover'),
+                      ),
+                    ),
                   ),
-                );
-              }
-            }),
           );
         },
       ),
@@ -236,20 +266,10 @@ class _CustomerJourneyAppState extends State<CustomerJourneyApp> {
       routerConfig: router,
       builder: !_hasShows || bannerText == null
           ? null
-          : (context, child) => Column(
-              children: [
-                Material(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text(bannerText, textAlign: TextAlign.center),
-                    ),
-                  ),
-                ),
-                Expanded(child: child!),
-              ],
+          : (context, child) => wrapWithEnvironmentBanner(
+              context,
+              banner: bannerText,
+              child: child!,
             ),
     );
   }

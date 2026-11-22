@@ -1,50 +1,35 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../features/customer_auth/presentation/cubit/customer_auth_cubit.dart';
-import '../../features/discovery/presentation/cubit/discovery_cubit.dart';
-import '../../features/discovery/presentation/cubit/show_details_cubit.dart';
-import '../../features/discovery/presentation/screens/discovery_screen.dart';
-import '../../features/discovery/presentation/screens/show_details_screen.dart';
-import '../di/customer_journey_registration.dart';
+import '../../features/booking/domain/repositories/booking_repository.dart';
+import '../../features/vendor_shows/domain/repositories/shows_repository.dart';
+import '../di/customer_registration.dart';
 import 'customer_journey_app.dart';
+import 'demo_customer_repository.dart';
 
 const String _defaultDemoBanner =
     'LOCAL DEMO · sample account and data · resets on restart';
 
+/// Creates an isolated demo GetIt container backed by [DemoCustomerRepository].
+GetIt createDemoCustomerServices() {
+  final services = GetIt.asNewInstance();
+  final demo = DemoCustomerRepository();
+  services.registerSingleton<ShowsRepository>(
+    demo,
+    dispose: (repository) => repository.dispose(),
+  );
+  services.registerSingleton<BookingRepository>(demo);
+  registerCustomerJourney(
+    services,
+    customerUid: DemoCustomerRepository.customerUid,
+  );
+  return services;
+}
+
 /// Explicit local fixtures; the normal Customer entry point stays unavailable.
 CustomerJourneyApp createCustomerDemoApp({
   GetIt? services,
-  CustomerAuthCubit? auth,
   String? banner = _defaultDemoBanner,
-}) {
-  final graph = services ?? createDemoCustomerServices();
-  return CustomerJourneyApp(
-    services: graph,
-    auth: auth,
-    banner: banner,
-    discoverBuilder: (context, onShow) => BlocProvider(
-      create: (_) => graph<DiscoveryCubit>(),
-      child: DiscoveryScreen(
-        onShowSelected: onShow,
-        onAccount: auth == null ? null : () => context.push('/account'),
-      ),
-    ),
-    detailsBuilder: (context, showId, onSession) => BlocProvider(
-      key: ValueKey(showId),
-      create: (_) => graph<ShowDetailsCubit>(param1: showId),
-      child: PopScope(
-        canPop: Navigator.canPop(context),
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) context.go('/discover');
-        },
-        child: ShowDetailsScreen(
-          onSessionSelected: onSession,
-          onBackToDiscover: () => context.go('/discover'),
-        ),
-      ),
-    ),
-  );
-}
+}) => CustomerJourneyApp(
+  services: services ?? createDemoCustomerServices(),
+  banner: banner,
+);

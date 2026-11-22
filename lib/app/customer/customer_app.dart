@@ -6,7 +6,7 @@ import '../../features/customer_auth/domain/repositories/customer_auth_repositor
 import '../../features/customer_auth/presentation/cubit/customer_auth_cubit.dart';
 import '../di/customer_registration.dart';
 import '../startup/arena_pass_app.dart';
-import 'customer_demo_app.dart';
+import 'customer_journey_app.dart';
 
 Widget createCustomerApp({
   GetIt? services,
@@ -19,7 +19,7 @@ Widget createCustomerApp({
   return BlocProvider(
     create: (_) => graph<CustomerAuthCubit>(),
     child: Builder(
-      builder: (context) => createCustomerDemoApp(
+      builder: (context) => CustomerJourneyApp(
         services: graph,
         auth: context.read<CustomerAuthCubit>(),
         banner: banner,

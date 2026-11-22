@@ -3,11 +3,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
+import '../../features/vendor_shows/domain/repositories/shows_repository.dart';
 import '../../features/vendor_shows/presentation/cubit/show_form_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_show_details_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
+import '../customer/demo_customer_repository.dart';
 import '../di/vendor_registration.dart';
 import 'vendor_journey_router.dart';
+
+/// Creates an isolated demo GetIt container backed by [DemoCustomerRepository].
+GetIt createDemoVendorServices() {
+  final services = GetIt.asNewInstance();
+  services.registerSingleton<ShowsRepository>(
+    DemoCustomerRepository(),
+    dispose: (repository) => repository.dispose(),
+  );
+  registerVendorJourney(services, vendorId: 'demo-vendor');
+  return services;
+}
 
 VendorDemoApp createVendorDemoApp({GetIt? services}) =>
     VendorDemoApp(services: services ?? createDemoVendorServices());
