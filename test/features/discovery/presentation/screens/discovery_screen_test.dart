@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:e_commerce_project/app/theme/app_theme.dart';
 import 'package:e_commerce_project/features/discovery/presentation/cubit/discovery_cubit.dart';
 import 'package:e_commerce_project/features/discovery/presentation/screens/discovery_screen.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
@@ -157,7 +158,7 @@ Widget _wrapScreen({
   return MediaQuery(
     data: MediaQueryData(size: size, textScaler: TextScaler.linear(textScale)),
     child: MaterialApp(
-      theme: theme ?? ThemeData.light(),
+      theme: theme ?? buildAppTheme(brightness: Brightness.light),
       home: BlocProvider<DiscoveryCubit>.value(
         value: cubit,
         child: DiscoveryScreen(onShowSelected: onShowSelected),
@@ -348,12 +349,7 @@ void main() {
             _wrapScreen(
               cubit: cubit,
               onShowSelected: (_) {},
-              theme: ThemeData(
-                colorScheme: ColorScheme.fromSeed(
-                  seedColor: const Color(0xffd52f65),
-                  brightness: brightness,
-                ),
-              ),
+              theme: buildAppTheme(brightness: brightness),
               size: const Size(300, 640),
               textScale: 2.0,
             ),

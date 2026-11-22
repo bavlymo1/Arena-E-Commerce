@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../cubit/customer_auth_cubit.dart';
 import '../cubit/customer_auth_state.dart';
 import '../widgets/customer_auth_widgets.dart';
@@ -120,14 +121,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 if (state.isChecking && !state.busy) ...<Widget>[
                   const SizedBox(height: 16),
-                  const CustomerAuthNoticeBanner(message: 'Checking session…'),
+                  const ArenaNoticeBanner(
+                    icon: Icons.info_outline,
+                    message: 'Checking session…',
+                    liveRegion: true,
+                    emphasizeText: true,
+                  ),
                 ],
                 if (state.errorMessage != null) ...<Widget>[
                   const SizedBox(height: 16),
-                  CustomerAuthNoticeBanner(
+                  ArenaNoticeBanner(
                     key: const ValueKey<String>('register-error-banner'),
+                    icon: Icons.error_outline,
                     message: state.errorMessage!,
                     isError: true,
+                    liveRegion: true,
+                    useTextAction: true,
+                    emphasizeText: true,
                     actionLabel: state.hasError ? 'Try again' : null,
                     actionKey: state.hasError
                         ? const ValueKey<String>('register-retry-button')
@@ -161,8 +171,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               CustomerAuthCubit.validateEmail(value ?? ''),
                           onFieldSubmitted: (_) =>
                               _passwordFocusNode.requestFocus(),
-                          decoration: customerAuthEmailDecoration(
-                            context,
+                          decoration: const InputDecoration(
                             labelText: 'Email',
                             hintText: 'you@example.com',
                           ),

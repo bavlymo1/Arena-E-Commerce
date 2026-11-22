@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../cubit/booking_cubit.dart';
 
 class BookingResultScreen extends StatelessWidget {
@@ -130,21 +131,27 @@ class BookingResultScreen extends StatelessWidget {
                   if (matches || pending) ...<Widget>[
                     if (state.message case final message?) ...<Widget>[
                       const SizedBox(height: 12),
-                      _ResultNoticeBanner(
+                      ArenaNoticeBanner(
                         icon: confirmed
                             ? Icons.check_circle_outline
                             : Icons.info_outline,
                         message: message,
                         isError: !confirmed && !unresolved,
+                        emphasizeText: true,
+                        padding: const EdgeInsets.all(14),
+                        iconSpacing: 10,
                       ),
                     ],
                     if (state.conflicts.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 12),
-                      _ResultNoticeBanner(
+                      ArenaNoticeBanner(
                         icon: Icons.warning_amber_rounded,
                         message:
                             'Conflicting seats: ${state.conflicts.join(', ')}',
                         isError: true,
+                        emphasizeText: true,
+                        padding: const EdgeInsets.all(14),
+                        iconSpacing: 10,
                       ),
                     ],
                   ],
@@ -152,9 +159,12 @@ class BookingResultScreen extends StatelessWidget {
                   if (state.phase == BookingPhase.submitting)
                     const Center(child: CircularProgressIndicator())
                   else if (unresolved) ...<Widget>[
-                    const _ResultNoticeBanner(
+                    const ArenaNoticeBanner(
                       icon: Icons.info_outline,
                       message: 'Keep this reference. Do not start another booking while its status is unknown.',
+                      emphasizeText: true,
+                      padding: EdgeInsets.all(14),
+                      iconSpacing: 10,
                     ),
                     const SizedBox(height: 16),
                     FilledButton(
@@ -198,55 +208,6 @@ class BookingResultScreen extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _ResultNoticeBanner extends StatelessWidget {
-  const _ResultNoticeBanner({
-    required this.icon,
-    required this.message,
-    this.isError = false,
-  });
-
-  final IconData icon;
-  final String message;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isError
-              ? colorScheme.error.withValues(alpha: 0.5)
-              : colorScheme.outlineVariant,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(
-            icon,
-            size: 18,
-            color: isError ? colorScheme.error : colorScheme.primary,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurface,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

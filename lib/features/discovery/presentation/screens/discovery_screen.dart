@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
+import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../../vendor_shows/domain/models/show.dart';
 import '../cubit/discovery_cubit.dart';
 import '../cubit/discovery_state.dart';
-import '../widgets/show_poster_banner.dart';
 
 class DiscoveryScreen extends StatefulWidget {
   const DiscoveryScreen({
@@ -55,14 +57,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             ),
         ],
         titleSpacing: 16,
-        title: Row(
+        title: const Row(
           children: <Widget>[
-            _ArenaBrandMark(
-              background: colorScheme.primary,
-              foreground: colorScheme.onPrimary,
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
+            ArenaBrandMark(),
+            SizedBox(width: 10),
+            Expanded(
               child: Text(
                 'ArenaPass',
                 maxLines: 1,
@@ -125,16 +124,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                             onPressed: cubit.clearSearch,
                             icon: const Icon(Icons.close),
                           ),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerLow,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: colorScheme.outlineVariant),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: colorScheme.outlineVariant),
-                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -160,7 +149,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     ),
                   )
                 else if (state.hasError)
-                  DiscoveryStatusPanel(
+                  ArenaStatusPanel(
                     icon: Icons.error_outline,
                     title: 'Unable to load',
                     message: state.errorMessage ?? 'Unable to load shows. Your existing choices are preserved.',
@@ -169,13 +158,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     isError: true,
                   )
                 else if (state.isEmpty)
-                  const DiscoveryStatusPanel(
+                  const ArenaStatusPanel(
                     icon: Icons.event_outlined,
                     title: 'No shows here yet',
                     message: 'New shows will appear here.',
                   )
                 else if (state.isNoMatch)
-                  DiscoveryStatusPanel(
+                  ArenaStatusPanel(
                     icon: Icons.search_off_outlined,
                     title: 'No matching shows',
                     message: 'Try another title.',
@@ -197,7 +186,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       child: _DiscoverShowCard(
                         show: show,
                         posterBytes: state.posters[show.id],
-                        posterLoading: state.loadingPosterIds.contains(show.id),
                         onTap: () => widget.onShowSelected(show.id),
                       ),
                     ),
@@ -211,46 +199,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   }
 }
 
-class _ArenaBrandMark extends StatelessWidget {
-  const _ArenaBrandMark({required this.background, required this.foreground});
-
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 28,
-      height: 30,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        'A',
-        style: TextStyle(
-          color: foreground,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          height: 1,
-        ),
-      ),
-    );
-  }
-}
-
 class _DiscoverShowCard extends StatelessWidget {
   const _DiscoverShowCard({
     required this.show,
     required this.posterBytes,
-    required this.posterLoading,
     required this.onTap,
   });
 
   final Show show;
   final Uint8List? posterBytes;
-  final bool posterLoading;
   final VoidCallback onTap;
 
   @override
@@ -278,12 +235,11 @@ class _DiscoverShowCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              ShowPosterBanner(
+              ArenaPosterBanner(
                 posterBytes: posterBytes,
                 title: show.title,
                 height: 142,
                 borderRadius: BorderRadius.zero,
-                isLoading: posterLoading,
               ),
               Padding(
                 padding: const EdgeInsets.all(16),

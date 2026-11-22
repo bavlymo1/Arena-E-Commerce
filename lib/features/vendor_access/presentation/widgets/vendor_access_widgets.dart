@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/arena_brand_mark.dart';
 import '../vendor_access_strings.dart';
 
 /// Shared ArenaPass Console scaffold used by vendor access gate screens.
@@ -16,14 +17,11 @@ class VendorAccessScaffold extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: Row(
+        title: const Row(
           children: <Widget>[
-            _VendorAccessBrandMark(
-              background: colorScheme.primary,
-              foreground: colorScheme.onPrimary,
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
+            ArenaBrandMark(),
+            SizedBox(width: 10),
+            Expanded(
               child: Text(
                 VendorAccessStrings.consoleTitle,
                 maxLines: 1,
@@ -84,40 +82,6 @@ class VendorAccessButtonContent extends StatelessWidget {
         const SizedBox(width: 8),
         Flexible(child: Text(label, textAlign: TextAlign.center)),
       ],
-    );
-  }
-}
-
-class _VendorAccessBrandMark extends StatelessWidget {
-  const _VendorAccessBrandMark({
-    required this.background,
-    required this.foreground,
-  });
-
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return ExcludeSemantics(
-      child: Container(
-        width: 28,
-        height: 30,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          'A',
-          style: TextStyle(
-            color: foreground,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            height: 1,
-          ),
-        ),
-      ),
     );
   }
 }

@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/seat_numbers.dart';
+import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/booking_event.dart';
 import '../cubit/vendor_notifications_cubit.dart';
 import '../cubit/vendor_notifications_state.dart';
@@ -122,7 +124,7 @@ class VendorUpdatesScreen extends StatelessWidget {
                     ),
                   )
                 else if (state.hasError && state.events.isEmpty)
-                  _UpdatesStatusPanel(
+                  ArenaStatusPanel(
                     key: const ValueKey<String>('vendor-updates-error-state'),
                     icon: Icons.error_outline,
                     title: 'Unable to load booking updates',
@@ -137,7 +139,7 @@ class VendorUpdatesScreen extends StatelessWidget {
                     isError: true,
                   )
                 else if (state.isEmpty)
-                  const _UpdatesStatusPanel(
+                  const ArenaStatusPanel(
                     key: ValueKey<String>('vendor-updates-empty-state'),
                     icon: Icons.notifications_none_outlined,
                     title: 'No updates yet',
@@ -147,14 +149,20 @@ class VendorUpdatesScreen extends StatelessWidget {
                   if (state.hasError)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
-                      child: _UpdatesInlineErrorBanner(
+                      child: ArenaNoticeBanner(
                         key: const ValueKey<String>(
                           'vendor-updates-inline-error',
                         ),
+                        icon: Icons.error_outline,
                         message:
                             state.errorMessage ??
                             'Unable to refresh booking updates.',
-                        onRetry: cubit.retry,
+                        isError: true,
+                        actionLabel: 'Try again',
+                        actionKey: const ValueKey<String>(
+                          'vendor-updates-inline-retry-button',
+                        ),
+                        onAction: cubit.retry,
                       ),
                     ),
                   for (final event in state.events)
@@ -322,141 +330,6 @@ class _BookingEventCard extends StatelessWidget {
               child: InkWell(onTap: onTap, child: body),
             )
           : Semantics(container: true, child: body),
-    );
-  }
-}
-
-class _UpdatesInlineErrorBanner extends StatelessWidget {
-  const _UpdatesInlineErrorBanner({
-    required this.message,
-    required this.onRetry,
-    super.key,
-  });
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.error.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Icon(Icons.error_outline, size: 18, color: colorScheme.error),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton(
-              key: const ValueKey<String>('vendor-updates-inline-retry-button'),
-              onPressed: onRetry,
-              child: const Text('Try again'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _UpdatesStatusPanel extends StatelessWidget {
-  const _UpdatesStatusPanel({
-    required this.icon,
-    required this.title,
-    required this.message,
-    this.actionLabel,
-    this.onAction,
-    this.actionKey,
-    this.isError = false,
-    super.key,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-  final Key? actionKey;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(
-              icon,
-              size: 26,
-              color: isError ? colorScheme.error : colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          if (actionLabel != null && onAction != null) ...<Widget>[
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: actionKey,
-                onPressed: onAction,
-                child: Text(actionLabel!),
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }

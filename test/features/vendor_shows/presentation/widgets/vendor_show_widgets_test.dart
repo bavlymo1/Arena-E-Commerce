@@ -1,82 +1,11 @@
-import 'dart:typed_data';
-
+import 'package:e_commerce_project/app/theme/app_theme.dart';
 import 'package:e_commerce_project/core/formatting/date_time_formatting.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/show.dart';
-import 'package:e_commerce_project/features/vendor_shows/presentation/widgets/vendor_show_poster_banner.dart';
+import 'package:e_commerce_project/features/vendor_shows/presentation/widgets/vendor_show_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-final Uint8List _validPng = Uint8List.fromList(<int>[
-  0x89,
-  0x50,
-  0x4E,
-  0x47,
-  0x0D,
-  0x0A,
-  0x1A,
-  0x0A,
-  0x00,
-  0x00,
-  0x00,
-  0x0D,
-  0x49,
-  0x48,
-  0x44,
-  0x52,
-  0x00,
-  0x00,
-  0x00,
-  0x01,
-  0x00,
-  0x00,
-  0x00,
-  0x01,
-  0x08,
-  0x06,
-  0x00,
-  0x00,
-  0x00,
-  0x1F,
-  0x15,
-  0xC4,
-  0x89,
-  0x00,
-  0x00,
-  0x00,
-  0x0A,
-  0x49,
-  0x44,
-  0x41,
-  0x54,
-  0x78,
-  0x9C,
-  0x63,
-  0x00,
-  0x01,
-  0x00,
-  0x00,
-  0x05,
-  0x00,
-  0x01,
-  0x0D,
-  0x0A,
-  0x2D,
-  0xB4,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x49,
-  0x45,
-  0x4E,
-  0x44,
-  0xAE,
-  0x42,
-  0x60,
-  0x82,
-]);
 
 void main() {
   test('formatting helpers format calendar date, 12h time, and totals', () {
@@ -125,33 +54,21 @@ void main() {
     );
   });
 
-  testWidgets(
-    'renders valid artwork image and falls back cleanly on null bytes',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: <Widget>[
-                VendorShowPosterBanner(
-                  title: 'Loaded Show',
-                  posterBytes: _validPng,
-                ),
-                const VendorShowPosterBanner(
-                  title: 'Fallback Show',
-                  posterBytes: null,
-                ),
-              ],
-            ),
+  testWidgets('VendorButtonContent renders icon and label without overflow', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: const Scaffold(
+          body: VendorButtonContent(
+            icon: Icons.add_outlined,
+            label: 'Add show',
           ),
         ),
-      );
-      await tester.pump();
-
-      expect(find.byType(Image), findsOneWidget);
-      expect(find.text('ARENA CONSOLE'), findsOneWidget);
-      expect(find.bySemanticsLabel('Loaded Show artwork'), findsOneWidget);
-      expect(find.bySemanticsLabel('Fallback Show artwork'), findsOneWidget);
-    },
-  );
+      ),
+    );
+    expect(find.byIcon(Icons.add_outlined), findsOneWidget);
+    expect(find.text('Add show'), findsOneWidget);
+  });
 }

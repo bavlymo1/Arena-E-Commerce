@@ -5,12 +5,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/widgets/seat_map_view.dart';
+import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
 import '../cubit/vendor_show_details_cubit.dart';
 import '../cubit/vendor_show_details_state.dart';
 import '../widgets/delete_show_dialog.dart';
-import '../widgets/vendor_show_poster_banner.dart';
+import '../widgets/vendor_show_widgets.dart';
 
 /// Displays vendor-owned show details, daily sessions, and a read-only seat map.
 class VendorShowDetailsScreen extends StatelessWidget {
@@ -89,7 +92,7 @@ class VendorShowDetailsScreen extends StatelessWidget {
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
                       children: <Widget>[
-                        VendorStatusPanel(
+                        ArenaStatusPanel(
                           key: const ValueKey<String>(
                             'vendor-show-details-error-state',
                           ),
@@ -111,7 +114,7 @@ class VendorShowDetailsScreen extends StatelessWidget {
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
                       children: <Widget>[
-                        VendorStatusPanel(
+                        ArenaStatusPanel(
                           key: const ValueKey<String>(
                             'vendor-show-details-unavailable-state',
                           ),
@@ -140,12 +143,12 @@ class VendorShowDetailsScreen extends StatelessWidget {
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                     children: <Widget>[
-                      VendorShowPosterBanner(
+                      ArenaPosterBanner(
                         posterBytes: state.posterBytes,
                         title: show.title,
                         height: 184,
                         borderRadius: BorderRadius.circular(16),
-                        isLoading: state.posterLoading,
+                        fallbackLabel: 'ARENA CONSOLE',
                       ),
                       const SizedBox(height: 16),
                       Wrap(
@@ -266,7 +269,7 @@ class VendorShowDetailsScreen extends StatelessWidget {
                               ),
                             ] else if (state.hasDeleteFailed) ...<Widget>[
                               const SizedBox(height: 12),
-                              VendorNoticeBanner(
+                              ArenaNoticeBanner(
                                 key: const ValueKey<String>(
                                   'vendor-show-details-delete-error',
                                 ),
@@ -336,7 +339,7 @@ class VendorShowDetailsScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             if (state.sessions.isEmpty)
-                              const VendorNoticeBanner(
+                              const ArenaNoticeBanner(
                                 key: ValueKey<String>(
                                   'vendor-show-details-empty-sessions',
                                 ),

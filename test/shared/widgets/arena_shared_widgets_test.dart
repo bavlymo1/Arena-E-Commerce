@@ -1,0 +1,292 @@
+import 'dart:typed_data';
+
+import 'package:e_commerce_project/app/theme/app_theme.dart';
+import 'package:e_commerce_project/shared/widgets/arena_brand_mark.dart';
+import 'package:e_commerce_project/shared/widgets/arena_notice_banner.dart';
+import 'package:e_commerce_project/shared/widgets/arena_poster_banner.dart';
+import 'package:e_commerce_project/shared/widgets/arena_status_panel.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+final Uint8List _validPng = Uint8List.fromList(<int>[
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0xF8,
+  0xCF,
+  0xC0,
+  0x50,
+  0x0F,
+  0x00,
+  0x04,
+  0x85,
+  0x01,
+  0x80,
+  0x84,
+  0xA9,
+  0x8C,
+  0x21,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
+]);
+
+void main() {
+  testWidgets(
+    'ArenaBrandMark renders prototype badge colors and excludes semantics',
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildAppTheme(brightness: Brightness.dark),
+            home: const Scaffold(body: Center(child: ArenaBrandMark())),
+          ),
+        );
+
+        final container = tester.widget<Container>(find.byType(Container));
+        final decoration = container.decoration! as BoxDecoration;
+        expect(decoration.color, const Color(0xFFFF668E));
+        expect(decoration.borderRadius, BorderRadius.circular(8));
+        expect(tester.getSize(find.byType(ArenaBrandMark)), const Size(28, 30));
+        expect(find.bySemanticsLabel('A'), findsNothing);
+      } finally {
+        handle.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'ArenaPosterBanner renders memory artwork and falls back on null or corrupt bytes',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: Column(
+              children: <Widget>[
+                ArenaPosterBanner(title: 'Loaded Show', posterBytes: _validPng),
+                const ArenaPosterBanner(
+                  title: 'Fallback Show',
+                  posterBytes: null,
+                  fallbackLabel: 'ARENA CONSOLE',
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final image = tester.widget<Image>(find.byType(Image));
+      expect(image.gaplessPlayback, isTrue);
+      expect((image.image as ResizeImage).width, 720);
+      expect(find.text('ARENA CONSOLE'), findsOneWidget);
+      expect(find.bySemanticsLabel('Loaded Show artwork'), findsOneWidget);
+      expect(find.bySemanticsLabel('Fallback Show artwork'), findsOneWidget);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: ArenaPosterBanner(
+              title: 'Corrupt Show',
+              posterBytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('LIVE AT ARENA CENTRAL'), findsOneWidget);
+      expect(find.bySemanticsLabel('Corrupt Show artwork'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'ArenaNoticeBanner supports TextButton/OutlinedButton, liveRegion, and 300px 2.0x scale',
+    (tester) async {
+      var textActionCalls = 0;
+      var outlinedActionCalls = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(brightness: Brightness.light),
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(300, 640),
+              textScaler: TextScaler.linear(2.0),
+            ),
+            child: Scaffold(
+              body: ListView(
+                children: <Widget>[
+                  ArenaNoticeBanner(
+                    icon: Icons.error_outline,
+                    message: 'Auth failed',
+                    isError: true,
+                    liveRegion: true,
+                    useTextAction: true,
+                    emphasizeText: true,
+                    actionLabel: 'Retry auth',
+                    actionKey: const ValueKey<String>('notice-text-action'),
+                    onAction: () => textActionCalls++,
+                  ),
+                  ArenaNoticeBanner(
+                    icon: Icons.info_outline,
+                    message: 'Sync notice',
+                    actionLabel: 'Retry sync',
+                    actionKey: const ValueKey<String>('notice-outlined-action'),
+                    onAction: () => outlinedActionCalls++,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(TextButton), findsOneWidget);
+      expect(find.byType(OutlinedButton), findsOneWidget);
+      expect(
+        tester
+            .widget<Semantics>(
+              find.descendant(
+                of: find.byType(ArenaNoticeBanner).first,
+                matching: find.byWidgetPredicate(
+                  (w) => w is Semantics && w.properties.liveRegion == true,
+                ),
+              ),
+            )
+            .properties
+            .liveRegion,
+        isTrue,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('notice-text-action')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('notice-outlined-action')),
+      );
+      expect(textActionCalls, 1);
+      expect(outlinedActionCalls, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'ArenaStatusPanel supports filled vs outlined actions and error icon tone',
+    (tester) async {
+      var primaryCalls = 0;
+      var outlinedCalls = 0;
+      final theme = buildAppTheme(brightness: Brightness.dark);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: Column(
+              children: <Widget>[
+                ArenaStatusPanel(
+                  icon: Icons.error_outline,
+                  title: 'Load failed',
+                  message: 'Try reloading.',
+                  actionLabel: 'Retry load',
+                  actionKey: const ValueKey<String>('status-filled'),
+                  onAction: () => primaryCalls++,
+                  isError: true,
+                ),
+                ArenaStatusPanel(
+                  icon: Icons.search_off_outlined,
+                  title: 'No match',
+                  message: 'Adjust query.',
+                  actionLabel: 'Clear',
+                  actionKey: const ValueKey<String>('status-outlined'),
+                  onAction: () => outlinedCalls++,
+                  useOutlinedAction: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(FilledButton), findsOneWidget);
+      expect(find.byType(OutlinedButton), findsOneWidget);
+      final errorIcon = tester.widget<Icon>(find.byIcon(Icons.error_outline));
+      expect(errorIcon.color, theme.colorScheme.error);
+
+      await tester.tap(find.byKey(const ValueKey<String>('status-filled')));
+      await tester.tap(find.byKey(const ValueKey<String>('status-outlined')));
+      expect(primaryCalls, 1);
+      expect(outlinedCalls, 1);
+    },
+  );
+
+  test('buildAppTheme configures shared prototype inputDecorationTheme in light and dark modes', () {
+    for (final brightness in Brightness.values) {
+      final theme = buildAppTheme(brightness: brightness);
+      final decoration = theme.inputDecorationTheme;
+      expect(decoration.filled, isTrue);
+      expect(decoration.fillColor, theme.colorScheme.surfaceContainerLow);
+      for (final border in <InputBorder?>[
+        decoration.border,
+        decoration.enabledBorder,
+      ]) {
+        expect(border, isA<OutlineInputBorder>());
+        final outline = border! as OutlineInputBorder;
+        expect(outline.borderRadius, BorderRadius.circular(12));
+        expect(outline.borderSide.color, theme.colorScheme.outlineVariant);
+      }
+    }
+  });
+}

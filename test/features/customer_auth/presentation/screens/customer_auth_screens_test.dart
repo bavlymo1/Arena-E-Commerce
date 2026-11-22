@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:e_commerce_project/app/theme/app_theme.dart';
 import 'package:e_commerce_project/features/customer_auth/domain/models/app_user.dart';
 import 'package:e_commerce_project/features/customer_auth/domain/repositories/customer_auth_repository.dart';
 import 'package:e_commerce_project/features/customer_auth/presentation/cubit/customer_auth_cubit.dart';
@@ -70,7 +71,7 @@ Widget _wrapScreen({
   return MediaQuery(
     data: MediaQueryData(size: size, textScaler: TextScaler.linear(textScale)),
     child: MaterialApp(
-      theme: theme ?? ThemeData.light(),
+      theme: theme ?? buildAppTheme(brightness: Brightness.light),
       home: BlocProvider<CustomerAuthCubit>.value(value: cubit, child: child),
     ),
   );
@@ -453,12 +454,7 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
 
-        final theme = ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xffd52f65),
-            brightness: brightness,
-          ),
-        );
+        final theme = buildAppTheme(brightness: brightness);
 
         for (final entry in <String, Widget>{
           'login': LoginScreen(onRegisterRequested: () {}),

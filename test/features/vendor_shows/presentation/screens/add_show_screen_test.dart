@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:e_commerce_project/app/theme/app_theme.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
@@ -136,7 +137,7 @@ Widget _wrapScreen({
   double textScale = 1.0,
 }) {
   return MaterialApp(
-    theme: theme ?? ThemeData.light(),
+    theme: theme ?? buildAppTheme(brightness: Brightness.light),
     builder: (context, appChild) => MediaQuery(
       data: MediaQuery.of(context)
           .copyWith(textScaler: TextScaler.linear(textScale)),
@@ -483,12 +484,7 @@ void main() {
           await tester.pumpWidget(
             _wrapScreen(
               cubit: cubit,
-              theme: ThemeData(
-                colorScheme: ColorScheme.fromSeed(
-                  seedColor: const Color(0xffd52f65),
-                  brightness: brightness,
-                ),
-              ),
+              theme: buildAppTheme(brightness: brightness),
               textScale: 2.0,
               child: AddShowScreen(onBackToShows: () {}),
             ),

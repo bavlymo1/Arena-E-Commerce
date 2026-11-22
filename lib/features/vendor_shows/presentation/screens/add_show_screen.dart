@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
+import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_poster_banner.dart';
 import '../cubit/show_form_cubit.dart';
 import '../cubit/show_form_state.dart';
-import '../widgets/vendor_show_poster_banner.dart';
+import '../widgets/vendor_show_widgets.dart';
 
 /// Vendor show creation form consuming [ShowFormCubit].
 class AddShowScreen extends StatefulWidget {
@@ -209,7 +211,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
                     textInputAction: TextInputAction.next,
                     onChanged: cubit.updateTitle,
                     decoration: _fieldDecoration(
-                      context,
                       labelText: 'Show title',
                       hintText: 'Apex Legends Invitational',
                       errorText: state.titleError,
@@ -226,7 +227,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
                     textInputAction: TextInputAction.newline,
                     onChanged: cubit.updateDescription,
                     decoration: _fieldDecoration(
-                      context,
                       labelText: 'Description',
                       hintText: 'Describe the event, lineup, and arena notes',
                       errorText: state.descriptionError,
@@ -241,7 +241,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
                     textInputAction: TextInputAction.next,
                     onChanged: cubit.updateShowDate,
                     decoration: _fieldDecoration(
-                      context,
                       labelText: 'Show date',
                       hintText: 'YYYY-MM-DD',
                       errorText: state.showDateError,
@@ -280,7 +279,7 @@ class _AddShowScreenState extends State<AddShowScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
                         if (state.hasPoster)
-                          VendorShowPosterBanner(
+                          ArenaPosterBanner(
                             key: const ValueKey<String>(
                               'add-show-poster-preview',
                             ),
@@ -290,6 +289,7 @@ class _AddShowScreenState extends State<AddShowScreen> {
                                 : state.title.trim(),
                             height: 160,
                             borderRadius: BorderRadius.circular(12),
+                            fallbackLabel: 'ARENA CONSOLE',
                           )
                         else
                           Container(
@@ -440,7 +440,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
                             onChanged: (value) =>
                                 cubit.updateSessionTime(i, value),
                             decoration: _fieldDecoration(
-                              context,
                               labelText: 'Session ${i + 1} time',
                               hintText: 'HH:mm',
                               suffixIcon: IconButton(
@@ -504,22 +503,19 @@ class _AddShowScreenState extends State<AddShowScreen> {
                   ),
                   if (state.submitErrorMessage != null) ...<Widget>[
                     const SizedBox(height: 20),
-                    Semantics(
-                      liveRegion: true,
-                      container: true,
-                      child: VendorNoticeBanner(
-                        key: const ValueKey<String>(
-                          'add-show-submit-error-banner',
-                        ),
-                        icon: Icons.error_outline,
-                        message: state.submitErrorMessage!,
-                        isError: true,
-                        actionLabel: 'Try again',
-                        actionKey: const ValueKey<String>(
-                          'add-show-retry-submit-button',
-                        ),
-                        onAction: state.isBusy ? null : submit,
+                    ArenaNoticeBanner(
+                      key: const ValueKey<String>(
+                        'add-show-submit-error-banner',
                       ),
+                      icon: Icons.error_outline,
+                      message: state.submitErrorMessage!,
+                      isError: true,
+                      liveRegion: true,
+                      actionLabel: 'Try again',
+                      actionKey: const ValueKey<String>(
+                        'add-show-retry-submit-button',
+                      ),
+                      onAction: state.isBusy ? null : submit,
                     ),
                   ],
                   const SizedBox(height: 24),
@@ -560,30 +556,18 @@ class _AddShowScreenState extends State<AddShowScreen> {
     );
   }
 
-  InputDecoration _fieldDecoration(
-    BuildContext context, {
+  static InputDecoration _fieldDecoration({
     required String labelText,
     required String hintText,
     String? errorText,
     Widget? suffixIcon,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     return InputDecoration(
       labelText: labelText,
       hintText: hintText,
       errorText: errorText,
       errorMaxLines: 2,
       suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: colorScheme.surfaceContainerLow,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: colorScheme.outlineVariant),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: colorScheme.outlineVariant),
-      ),
     );
   }
 }

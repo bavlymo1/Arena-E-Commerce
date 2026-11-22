@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
+import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/show.dart';
 import '../cubit/vendor_shows_cubit.dart';
 import '../cubit/vendor_shows_state.dart';
 import '../widgets/delete_show_dialog.dart';
-import '../widgets/vendor_show_poster_banner.dart';
+import '../widgets/vendor_show_widgets.dart';
 
 /// Displays the vendor-owned list of active and deleting shows.
 class VendorShowsScreen extends StatelessWidget {
@@ -46,14 +50,11 @@ class VendorShowsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: Row(
+        title: const Row(
           children: <Widget>[
-            _VendorBrandMark(
-              background: colorScheme.primary,
-              foreground: colorScheme.onPrimary,
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
+            ArenaBrandMark(),
+            SizedBox(width: 10),
+            Expanded(
               child: Text(
                 'ArenaPass Console',
                 maxLines: 1,
@@ -159,7 +160,7 @@ class VendorShowsScreen extends StatelessWidget {
                       ),
                     )
                   else if (state.hasError && state.shows.isEmpty)
-                    VendorStatusPanel(
+                    ArenaStatusPanel(
                       key: const ValueKey<String>('vendor-shows-error-state'),
                       icon: Icons.error_outline,
                       title: 'Unable to load shows',
@@ -172,7 +173,7 @@ class VendorShowsScreen extends StatelessWidget {
                       isError: true,
                     )
                   else if (state.isEmpty)
-                    VendorStatusPanel(
+                    ArenaStatusPanel(
                       key: const ValueKey<String>('vendor-shows-empty-state'),
                       icon: Icons.event_note_outlined,
                       title: 'No shows here yet',
@@ -189,7 +190,7 @@ class VendorShowsScreen extends StatelessWidget {
                     if (state.hasError)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
-                        child: VendorNoticeBanner(
+                        child: ArenaNoticeBanner(
                           key: const ValueKey<String>(
                             'vendor-shows-inline-error',
                           ),
@@ -215,7 +216,7 @@ class VendorShowsScreen extends StatelessWidget {
                         case final resumeError?)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
-                        child: VendorNoticeBanner(
+                        child: ArenaNoticeBanner(
                           key: const ValueKey<String>(
                             'vendor-shows-resume-error-banner',
                           ),
@@ -235,9 +236,6 @@ class VendorShowsScreen extends StatelessWidget {
                         child: _VendorShowCard(
                           show: show,
                           posterBytes: state.posters[show.id],
-                          posterLoading: state.loadingPosterIds.contains(
-                            show.id,
-                          ),
                           isDeleting:
                               state.isDeletingShow(show.id) ||
                               (show.status == ShowStatus.deleting &&
@@ -271,40 +269,10 @@ class VendorShowsScreen extends StatelessWidget {
   }
 }
 
-class _VendorBrandMark extends StatelessWidget {
-  const _VendorBrandMark({required this.background, required this.foreground});
-
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 28,
-      height: 30,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        'A',
-        style: TextStyle(
-          color: foreground,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          height: 1,
-        ),
-      ),
-    );
-  }
-}
-
 class _VendorShowCard extends StatelessWidget {
   const _VendorShowCard({
     required this.show,
     required this.posterBytes,
-    required this.posterLoading,
     required this.isDeleting,
     required this.deleteErrorMessage,
     required this.onOpenDetails,
@@ -314,7 +282,6 @@ class _VendorShowCard extends StatelessWidget {
 
   final Show show;
   final Uint8List? posterBytes;
-  final bool posterLoading;
   final bool isDeleting;
   final String? deleteErrorMessage;
   final VoidCallback? onOpenDetails;
@@ -333,12 +300,12 @@ class _VendorShowCard extends StatelessWidget {
     final Widget summaryBody = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        VendorShowPosterBanner(
+        ArenaPosterBanner(
           posterBytes: posterBytes,
           title: show.title,
           height: 142,
           borderRadius: BorderRadius.zero,
-          isLoading: posterLoading,
+          fallbackLabel: 'ARENA CONSOLE',
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -447,7 +414,7 @@ class _VendorShowCard extends StatelessWidget {
           else if (showDeletingStatus)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: VendorNoticeBanner(
+              child: ArenaNoticeBanner(
                 key: ValueKey<String>('vendor-show-deleting-notice-${show.id}'),
                 icon: Icons.warning_amber_rounded,
                 message: deleteErrorMessage == null
@@ -465,7 +432,7 @@ class _VendorShowCard extends StatelessWidget {
             if (deleteErrorMessage case final error?)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: VendorNoticeBanner(
+                child: ArenaNoticeBanner(
                   key: ValueKey<String>('vendor-show-delete-error-${show.id}'),
                   icon: Icons.error_outline,
                   message: error,

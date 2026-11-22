@@ -2,10 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
+import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../../vendor_shows/domain/models/session.dart';
 import '../cubit/show_details_cubit.dart';
 import '../cubit/show_details_state.dart';
-import '../widgets/show_poster_banner.dart';
+
+/// Returns a singular/plural remaining-seat count label bounded to capacity.
+String formatRemainingSeatsLabel(Session session) {
+  final remaining = session.remainingSeats;
+  return remaining == 1 ? '1 seat left' : '$remaining seats left';
+}
 
 class ShowDetailsScreen extends StatelessWidget {
   const ShowDetailsScreen({
@@ -62,7 +70,7 @@ class ShowDetailsScreen extends StatelessWidget {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
                 children: <Widget>[
-                  DiscoveryStatusPanel(
+                  ArenaStatusPanel(
                     icon: Icons.error_outline,
                     title: 'Unable to load',
                     message: state.errorMessage ?? 'Unable to load show details. Your existing choices are preserved.',
@@ -78,7 +86,7 @@ class ShowDetailsScreen extends StatelessWidget {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
                 children: <Widget>[
-                  DiscoveryStatusPanel(
+                  ArenaStatusPanel(
                     icon: Icons.event_busy_outlined,
                     title: 'Show unavailable',
                     message:
@@ -97,12 +105,11 @@ class ShowDetailsScreen extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               children: <Widget>[
-                ShowPosterBanner(
+                ArenaPosterBanner(
                   posterBytes: state.posterBytes,
                   title: show.title,
                   height: 176,
                   borderRadius: BorderRadius.circular(16),
-                  isLoading: state.posterLoading,
                 ),
                 const SizedBox(height: 16),
                 Wrap(
@@ -179,13 +186,13 @@ class ShowDetailsScreen extends StatelessWidget {
                 if (state.isAllSessionsSoldOut)
                   const Padding(
                     padding: EdgeInsets.only(bottom: 12),
-                    child: DiscoveryNoticeBanner(
+                    child: ArenaNoticeBanner(
                       icon: Icons.info_outline,
                       message: 'Sold out. All seats booked.',
                     ),
                   ),
                 if (state.sessions.isEmpty)
-                  const DiscoveryNoticeBanner(
+                  const ArenaNoticeBanner(
                     icon: Icons.schedule_outlined,
                     message: 'No sessions available for this show.',
                   )

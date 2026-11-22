@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:e_commerce_project/core/formatting/date_time_formatting.dart';
 import 'package:e_commerce_project/features/discovery/presentation/cubit/show_details_cubit.dart';
 import 'package:e_commerce_project/features/discovery/presentation/screens/show_details_screen.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
@@ -392,4 +393,50 @@ void main() {
       },
     );
   }
+
+  test(
+    'formatting helpers format dates, 12-hour times, and remaining seats',
+    () {
+      expect(formatShowDateLabel('2026-11-18'), 'Nov 18, 2026');
+      expect(formatShowDateLabel('2026-02-30'), '2026-02-30');
+      expect(formatShowDateLabel('invalid'), 'invalid');
+
+      expect(formatTime12Hour('00:30'), '12:30 AM');
+      expect(formatTime12Hour('12:00'), '12:00 PM');
+      expect(formatTime12Hour('14:00'), '2:00 PM');
+      expect(formatTime12Hour('19:00'), '7:00 PM');
+      expect(formatTime12Hour('99:00'), '99:00');
+
+      expect(
+        formatRemainingSeatsLabel(
+          Session(
+            id: '1900',
+            time: SessionTime('19:00'),
+            bookedSeats: List<int>.generate(46, (i) => i + 1),
+          ),
+        ),
+        '1 seat left',
+      );
+      expect(
+        formatRemainingSeatsLabel(
+          Session(
+            id: '1900',
+            time: SessionTime('19:00'),
+            bookedSeats: List<int>.generate(47, (i) => i + 1),
+          ),
+        ),
+        '0 seats left',
+      );
+      expect(
+        formatRemainingSeatsLabel(
+          Session(
+            id: '1900',
+            time: SessionTime('19:00'),
+            bookedSeats: const <int>[14, 21],
+          ),
+        ),
+        '45 seats left',
+      );
+    },
+  );
 }
