@@ -4,14 +4,12 @@ import 'package:flutter/material.dart';
 class ArenaBusyButtonLabel extends StatelessWidget {
   const ArenaBusyButtonLabel({
     required this.label,
-    this.strokeColor,
     this.mainAxisAlignment = MainAxisAlignment.start,
     this.textAlign,
     super.key,
   });
 
   final String label;
-  final Color? strokeColor;
   final MainAxisAlignment mainAxisAlignment;
   final TextAlign? textAlign;
 
@@ -26,8 +24,7 @@ class ArenaBusyButtonLabel extends StatelessWidget {
           height: 18,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color:
-                strokeColor ?? Theme.of(context).colorScheme.onSurfaceVariant,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(width: 8),

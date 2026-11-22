@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-    'ArenaBusyButtonLabel renders 18px spinner, label, default and custom stroke color',
+    'ArenaBusyButtonLabel renders 18px spinner, label, and alignment options',
     (tester) async {
       final theme = buildAppTheme(brightness: Brightness.light);
 
@@ -23,7 +23,6 @@ void main() {
                   onPressed: null,
                   child: ArenaBusyButtonLabel(
                     label: 'Retrying…',
-                    strokeColor: Colors.teal,
                     mainAxisAlignment: MainAxisAlignment.center,
                     textAlign: TextAlign.center,
                   ),
@@ -46,7 +45,7 @@ void main() {
       expect(spinners[0].strokeWidth, 2);
       expect(spinners[0].color, theme.colorScheme.onSurfaceVariant);
       expect(spinners[1].strokeWidth, 2);
-      expect(spinners[1].color, Colors.teal);
+      expect(spinners[1].color, theme.colorScheme.onSurfaceVariant);
 
       final spinnerBoxes = tester
           .widgetList<SizedBox>(

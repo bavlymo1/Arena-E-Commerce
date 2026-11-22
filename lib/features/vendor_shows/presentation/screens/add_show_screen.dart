@@ -218,7 +218,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
                   AddShowPosterSection(
                     title: state.title,
                     posterBytes: state.posterBytes,
-                    hasPoster: state.hasPoster,
                     posterError: state.posterError,
                     isBusy: state.isBusy,
                     isPickingPoster: state.isPickingPoster,
@@ -239,7 +238,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
                   const SizedBox(height: 24),
                   AddShowSessionsSection(
                     sessionControllers: _sessionControllers,
-                    sessionCount: state.sessionTimes.length,
                     isBusy: state.isBusy,
                     canAddSession: state.canAddSession,
                     sessionsError: state.sessionsError,

@@ -116,7 +116,6 @@ class AddShowPosterSection extends StatelessWidget {
   const AddShowPosterSection({
     required this.title,
     required this.posterBytes,
-    required this.hasPoster,
     required this.posterError,
     required this.isBusy,
     required this.isPickingPoster,
@@ -128,7 +127,6 @@ class AddShowPosterSection extends StatelessWidget {
 
   final String title;
   final Uint8List? posterBytes;
-  final bool hasPoster;
   final String? posterError;
   final bool isBusy;
   final bool isPickingPoster;
@@ -140,6 +138,7 @@ class AddShowPosterSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final hasPoster = posterBytes != null && posterBytes!.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -273,7 +272,6 @@ class AddShowPosterSection extends StatelessWidget {
 class AddShowSessionsSection extends StatelessWidget {
   const AddShowSessionsSection({
     required this.sessionControllers,
-    required this.sessionCount,
     required this.isBusy,
     required this.canAddSession,
     required this.sessionsError,
@@ -285,7 +283,6 @@ class AddShowSessionsSection extends StatelessWidget {
   });
 
   final List<TextEditingController> sessionControllers;
-  final int sessionCount;
   final bool isBusy;
   final bool canAddSession;
   final String? sessionsError;
@@ -298,6 +295,7 @@ class AddShowSessionsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final sessionCount = sessionControllers.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
