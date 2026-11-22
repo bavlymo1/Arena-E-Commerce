@@ -16,14 +16,18 @@ import '../../../../support/fake_booking_repository.dart';
 final class _StreamingBookingRepository implements BookingRepository {
   _StreamingBookingRepository({
     Future<void> Function()? onSessionCancel,
+    Future<void> Function()? onMySeatsCancel,
     this.throwOnOwnWatch = false,
   }) : sessionController = StreamController<Session?>(
          onCancel: onSessionCancel,
+       ),
+       mySeatsController = StreamController<Set<int>>.broadcast(
+         onCancel: onMySeatsCancel,
        );
 
-  final StreamController<Session?> sessionController;
-  final mySeatsController = StreamController<Set<int>>.broadcast();
-  final bool throwOnOwnWatch;
+  StreamController<Session?> sessionController;
+  StreamController<Set<int>> mySeatsController;
+  bool throwOnOwnWatch;
   (String, String)? watchedSessionArgs;
   (String, String, String)? watchedMySeatsArgs;
   int watchSessionCalls = 0;
@@ -59,8 +63,8 @@ final class _StreamingBookingRepository implements BookingRepository {
   );
 
   Future<void> dispose() async {
-    await sessionController.close();
-    await mySeatsController.close();
+    unawaited(sessionController.close());
+    unawaited(mySeatsController.close());
   }
 }
 
@@ -407,6 +411,72 @@ void main() {
       expect(cubit.state.status, SeatSelectionStatus.loading);
     },
   );
+
+  test('close completes without throwing and cancels sibling when a stream cancel fails', () async {
+    var mySeatsCancelled = false;
+    final repo = _StreamingBookingRepository(
+      onSessionCancel: () =>
+          Future<void>.error(StateError('session cancel failed')),
+      onMySeatsCancel: () async {
+        mySeatsCancelled = true;
+      },
+    );
+    addTearDown(repo.dispose);
+    final cubit = SeatSelectionCubit(
+      bookingRepository: repo,
+      customerUid: 'cust-1',
+      showId: 'show-1',
+      sessionId: '1900',
+    );
+    await pumpEventQueue();
+
+    await expectLater(cubit.close(), completes);
+    expect(cubit.isClosed, isTrue);
+    expect(mySeatsCancelled, isTrue);
+    expect(repo.sessionController.hasListener, isFalse);
+    expect(repo.mySeatsController.hasListener, isFalse);
+  });
+
+  test('retry and start recover cleanly without poisoning _cancellation when prior cancel or sibling attach fails', () async {
+    var sessionCancels = 0;
+    final repo = _StreamingBookingRepository(
+      onSessionCancel: () {
+        sessionCancels++;
+        if (sessionCancels == 1) {
+          return Future<void>.error(StateError('session cancel failed'));
+        }
+        return Future<void>.value();
+      },
+      throwOnOwnWatch: true,
+    );
+    addTearDown(repo.dispose);
+    final cubit = SeatSelectionCubit(
+      bookingRepository: repo,
+      customerUid: 'cust-1',
+      showId: 'show-1',
+      sessionId: '1900',
+      autoStart: false,
+    );
+    addTearDown(cubit.close);
+
+    await expectLater(cubit.start(), completes);
+    expect(cubit.state.status, SeatSelectionStatus.error);
+    expect(repo.sessionController.hasListener, isFalse);
+
+    repo.throwOnOwnWatch = false;
+    final oldSession = repo.sessionController;
+    repo.sessionController = StreamController<Session?>();
+
+    await expectLater(cubit.retry(), completes);
+    await oldSession.close();
+
+    repo.sessionController.add(_session());
+    repo.mySeatsController.add(const <int>{});
+    await pumpEventQueue();
+    expect(cubit.state.status, SeatSelectionStatus.ready);
+
+    await expectLater(cubit.close(), completes);
+  });
 }
 
 final class _RetryableBookingRepository implements BookingRepository {

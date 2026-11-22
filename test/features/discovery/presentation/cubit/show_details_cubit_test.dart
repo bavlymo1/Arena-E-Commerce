@@ -505,4 +505,63 @@ void main() {
       expect(cubit.state.posterBytes, isNull);
     },
   );
+
+  test('close completes without throwing and cancels sibling when stream cancel fails', () async {
+    var sessionsCancelled = false;
+    final repo = _StreamingShowDetailsRepository(
+      onShowCancel: () => Future<void>.error(StateError('show cancel failed')),
+      onSessionsCancel: () async {
+        sessionsCancelled = true;
+      },
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = ShowDetailsCubit(repo, showId: 'show-1');
+    await pumpEventQueue();
+
+    await expectLater(cubit.close(), completes);
+    expect(cubit.isClosed, isTrue);
+    expect(sessionsCancelled, isTrue);
+    expect(repo.showController.hasListener, isFalse);
+    expect(repo.sessionsController.hasListener, isFalse);
+  });
+
+  test('retry recovers cleanly without poisoning _cancellation when prior cancel or sibling attach fails', () async {
+    var showCancels = 0;
+    final repo = _StreamingShowDetailsRepository(
+      onShowCancel: () {
+        showCancels++;
+        if (showCancels == 1) {
+          return Future<void>.error(StateError('show cancel failed'));
+        }
+        return Future<void>.value();
+      },
+      throwOnWatchSessions: true,
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = ShowDetailsCubit(repo, showId: 'show-1', autoStart: false);
+    addTearDown(cubit.close);
+
+    await expectLater(cubit.start(), completes);
+    expect(cubit.state.status, ShowDetailsStatus.error);
+    expect(repo.showController.hasListener, isFalse);
+
+    repo.throwOnWatchSessions = false;
+    final oldShow = repo.showController;
+    final oldSessions = repo.sessionsController;
+    repo.showController = StreamController<Show?>();
+    repo.sessionsController = StreamController<List<Session>>();
+
+    await expectLater(cubit.retry(), completes);
+    unawaited(oldShow.close());
+    unawaited(oldSessions.close());
+
+    repo.showController.add(_show());
+    repo.sessionsController.add(<Session>[_session('19:00')]);
+    await pumpEventQueue();
+
+    expect(cubit.state.status, ShowDetailsStatus.ready);
+    await expectLater(cubit.close(), completes);
+  });
 }

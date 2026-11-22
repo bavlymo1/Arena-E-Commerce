@@ -426,4 +426,123 @@ void main() {
       isA<FormatException>(),
     );
   });
+
+  test('watchEvents cancels cleanly while vendor check is pending without Zone errors or Firestore listener leakage', () async {
+    final uncaught = <Object>[];
+    final errors1 = <Object>[];
+    Object? cancel1Error;
+    final recorder1 = _QueryRecorder();
+    addTearDown(recorder1.dispose);
+
+    final errors2 = <Object>[];
+    final recorder2 = _QueryRecorder();
+    addTearDown(recorder2.dispose);
+
+    final emitted3 = <List<BookingEvent>>[];
+    Object? cancel3Error;
+    final recorder3 = _QueryRecorder();
+    addTearDown(recorder3.dispose);
+
+    final done = Completer<void>();
+    runZonedGuarded(() async {
+      try {
+        // 1. Cancelled before VendorNotEnrolled resolves (would throw StateError).
+        final gate1 = Completer<VendorAccess>();
+        final repo1 = FirestoreBookingEventsRepository(
+          _FakeFirestore(recorder1),
+          _FakeVendorAccessRepository(() => gate1.future),
+        );
+        final sub1 = repo1
+            .watchEvents('vendor-a')
+            .listen((_) {}, onError: errors1.add);
+        await pumpEventQueue();
+        final cancel1 = sub1.cancel();
+        gate1.complete(VendorNotEnrolled(uid: 'anon-1'));
+        try {
+          await cancel1;
+        } catch (error) {
+          cancel1Error = error;
+        }
+        await pumpEventQueue();
+
+        // 2. Unawaited cancel before VendorAccess check fails with error.
+        final gate2 = Completer<VendorAccess>();
+        final repo2 = FirestoreBookingEventsRepository(
+          _FakeFirestore(recorder2),
+          _FakeVendorAccessRepository(() => gate2.future),
+        );
+        final sub2 = repo2
+            .watchEvents('vendor-a')
+            .listen((_) {}, onError: errors2.add);
+        await pumpEventQueue();
+        unawaited(sub2.cancel());
+        gate2.completeError(StateError('auth check failed'));
+        await pumpEventQueue();
+
+        // 3. Cancelled before VendorAllowed resolves -> must not subscribe to Firestore.
+        final gate3 = Completer<VendorAccess>();
+        final repo3 = FirestoreBookingEventsRepository(
+          _FakeFirestore(recorder3),
+          _FakeVendorAccessRepository(() => gate3.future),
+        );
+        final sub3 = repo3.watchEvents('vendor-a').listen(emitted3.add);
+        await pumpEventQueue();
+        final cancel3 = sub3.cancel();
+        gate3.complete(VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'));
+        try {
+          await cancel3;
+        } catch (error) {
+          cancel3Error = error;
+        }
+        await pumpEventQueue();
+      } finally {
+        if (!done.isCompleted) done.complete();
+      }
+    }, (error, _) => uncaught.add(error));
+    await done.future;
+
+    expect(uncaught, isEmpty);
+    expect(cancel1Error, isNull);
+    expect(errors1, isEmpty);
+    expect(recorder1.subscribed, isFalse);
+    expect(recorder1.requestedCollections, isEmpty);
+
+    expect(errors2, isEmpty);
+    expect(recorder2.subscribed, isFalse);
+    expect(recorder2.requestedCollections, isEmpty);
+
+    expect(cancel3Error, isNull);
+    expect(emitted3, isEmpty);
+    expect(recorder3.subscribed, isFalse);
+    expect(recorder3.requestedCollections, isEmpty);
+    expect(recorder3.controller.hasListener, isFalse);
+
+    // 4. Active subscription tears down cleanly and ignores subsequent snapshots.
+    final recorder4 = _QueryRecorder();
+    addTearDown(recorder4.dispose);
+    final repo4 = FirestoreBookingEventsRepository(
+      _FakeFirestore(recorder4),
+      _FakeVendorAccessRepository(
+        () async => VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+      ),
+    );
+    final emitted4 = <List<BookingEvent>>[];
+    final sub4 = repo4.watchEvents('vendor-a').listen(emitted4.add);
+    await pumpEventQueue();
+    expect(recorder4.controller.hasListener, isTrue);
+
+    await sub4.cancel();
+    expect(recorder4.controller.hasListener, isFalse);
+
+    recorder4.controller.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot(
+          'b-late',
+          _validEventData(bookingId: 'b-late'),
+        ),
+      ]),
+    );
+    await pumpEventQueue();
+    expect(emitted4, isEmpty);
+  });
 }

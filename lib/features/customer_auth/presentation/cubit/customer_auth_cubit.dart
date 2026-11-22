@@ -212,7 +212,7 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
       );
     } catch (_) {
       _onStreamError(generation);
-      await _cancelSubscription().catchError((Object _) {});
+      await _cancelSubscription();
     } finally {
       if (generation == _listenGeneration) {
         _openingSubscription = false;
@@ -251,9 +251,10 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
   Future<void> _cancelSubscription() {
     final subscription = _authSubscription;
     _authSubscription = null;
+    if (subscription == null) return _cancellation;
     return _cancellation = Future.wait<void>(<Future<void>>[
       _cancellation,
-      if (subscription != null) subscription.cancel(),
+      Future<void>.sync(subscription.cancel).catchError((Object _) {}),
     ]).then((_) {});
   }
 

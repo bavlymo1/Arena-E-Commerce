@@ -460,4 +460,72 @@ void main() {
     await cubit.deleteShow();
     expect(repo.deletedShowIds, <String>['show-1', 'show-1']);
   });
+
+  test('close completes without throwing and cancels sibling when stream cancel fails', () async {
+    var sessionsCancelled = false;
+    final repo = _StreamingVendorDetailsRepository(
+      onShowCancel: () => Future<void>.error(StateError('show cancel failed')),
+      onSessionsCancel: () async {
+        sessionsCancelled = true;
+      },
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = VendorShowDetailsCubit(
+      repo,
+      vendorId: 'vendor-1',
+      showId: 'show-1',
+    );
+    await pumpEventQueue();
+
+    await expectLater(cubit.close(), completes);
+    expect(cubit.isClosed, isTrue);
+    expect(sessionsCancelled, isTrue);
+    expect(repo.showController.hasListener, isFalse);
+    expect(repo.sessionsController.hasListener, isFalse);
+  });
+
+  test('retry and close recover cleanly without poisoning _cancellation when prior cancel fails', () async {
+    var showCancels = 0;
+    final repo = _StreamingVendorDetailsRepository(
+      onShowCancel: () {
+        showCancels++;
+        if (showCancels == 1) {
+          return Future<void>.error(StateError('show cancel failed'));
+        }
+        return Future<void>.value();
+      },
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = VendorShowDetailsCubit(
+      repo,
+      vendorId: 'vendor-1',
+      showId: 'show-1',
+    );
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    repo.showController.addError(StateError('stream error'));
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorShowDetailsStatus.error);
+
+    final oldShow = repo.showController;
+    final oldSessions = repo.sessionsController;
+    repo.showController = StreamController<Show?>();
+    repo.sessionsController = StreamController<List<Session>>();
+
+    await expectLater(cubit.retry(), completes);
+    await oldShow.close();
+    await oldSessions.close();
+
+    expect(repo.watchShowCalls, 2);
+    expect(repo.watchSessionsCalls, 2);
+    repo.showController.add(_show());
+    repo.sessionsController.add(<Session>[_session('19:00')]);
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorShowDetailsStatus.ready);
+
+    await expectLater(cubit.close(), completes);
+  });
 }

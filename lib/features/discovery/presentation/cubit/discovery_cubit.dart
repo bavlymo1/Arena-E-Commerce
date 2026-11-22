@@ -91,7 +91,7 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
           );
     } catch (_) {
       _onStreamError(generation);
-      await _cancelSubscription().catchError((Object _) {});
+      await _cancelSubscription();
     } finally {
       if (generation == _listenGeneration) _openingSubscription = false;
     }
@@ -220,9 +220,10 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
   Future<void> _cancelSubscription() {
     final subscription = _showsSubscription;
     _showsSubscription = null;
+    if (subscription == null) return _cancellation;
     return _cancellation = Future.wait<void>(<Future<void>>[
       _cancellation,
-      if (subscription != null) subscription.cancel(),
+      Future<void>.sync(subscription.cancel).catchError((Object _) {}),
     ]).then((_) {});
   }
 

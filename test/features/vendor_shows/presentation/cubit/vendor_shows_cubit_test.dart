@@ -401,4 +401,56 @@ void main() {
     expect(failingCubit.state.isResumingDeletes, isFalse);
     expect(failingCubit.state.resumeDeleteErrorMessage, isNull);
   });
+
+  test(
+    'close completes cleanly even when vendor shows stream cancel fails',
+    () async {
+      final repo = _StreamingVendorShowsRepository(
+        onCancel: () => Future<void>.error(StateError('cancel failed')),
+      );
+      addTearDown(repo.dispose);
+
+      final cubit = VendorShowsCubit(repo, vendorId: 'vendor-1');
+      await pumpEventQueue();
+
+      await expectLater(cubit.close(), completes);
+      expect(cubit.isClosed, isTrue);
+    },
+  );
+
+  test('retry and close recover cleanly without poisoning _cancellation when prior cancel fails', () async {
+    var cancels = 0;
+    final repo = _StreamingVendorShowsRepository(
+      onCancel: () {
+        cancels++;
+        if (cancels == 1) {
+          return Future<void>.error(StateError('cancel failed'));
+        }
+        return Future<void>.value();
+      },
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = VendorShowsCubit(repo, vendorId: 'vendor-1');
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    repo.controller.addError(StateError('stream error'));
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorShowsStatus.error);
+
+    final oldController = repo.controller;
+    repo.controller = StreamController<List<Show>>();
+
+    await expectLater(cubit.retry(), completes);
+    await oldController.close();
+
+    expect(repo.watchVendorShowsCalls, 2);
+    repo.controller.add(<Show>[_show(id: 'recovered-1')]);
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorShowsStatus.ready);
+    expect(cubit.state.shows.single.id, 'recovered-1');
+
+    await expectLater(cubit.close(), completes);
+  });
 }

@@ -131,7 +131,7 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
           );
     } catch (_) {
       _onStreamError(generation, showFailed: true, sessionsFailed: true);
-      await _cancelSubscriptions().catchError((Object _) {});
+      await _cancelSubscriptions();
     } finally {
       if (generation == _listenGeneration) _openingSubscriptions = false;
     }
@@ -281,10 +281,13 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
     final sessionsSub = _sessionsSubscription;
     _showSubscription = null;
     _sessionsSubscription = null;
+    if (showSub == null && sessionsSub == null) return _cancellation;
     return _cancellation = Future.wait<void>(<Future<void>>[
       _cancellation,
-      if (showSub != null) showSub.cancel(),
-      if (sessionsSub != null) sessionsSub.cancel(),
+      if (showSub != null)
+        Future<void>.sync(showSub.cancel).catchError((Object _) {}),
+      if (sessionsSub != null)
+        Future<void>.sync(sessionsSub.cancel).catchError((Object _) {}),
     ]).then((_) {});
   }
 

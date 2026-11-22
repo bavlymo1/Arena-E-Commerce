@@ -1065,4 +1065,55 @@ void main() {
       'save(${t1.millisecondsSinceEpoch},b1)',
     ]);
   });
+
+  test(
+    'close completes cleanly even when events stream cancel fails',
+    () async {
+      final repo = _StreamingBookingEventsRepository(
+        onCancel: () => Future<void>.error(StateError('cancel failed')),
+      );
+      addTearDown(repo.dispose);
+
+      final cubit = VendorNotificationsCubit(repo, vendorId: 'vendor-a');
+      await pumpEventQueue();
+
+      await expectLater(cubit.close(), completes);
+      expect(cubit.isClosed, isTrue);
+    },
+  );
+
+  test('retry and close recover cleanly without poisoning _cancellation when prior cancel fails', () async {
+    var cancels = 0;
+    final repo = _StreamingBookingEventsRepository(
+      onCancel: () {
+        cancels++;
+        if (cancels == 1) {
+          return Future<void>.error(StateError('cancel failed'));
+        }
+        return Future<void>.value();
+      },
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = VendorNotificationsCubit(repo, vendorId: 'vendor-a');
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    repo.controller.addError(StateError('network drop'));
+    await pumpEventQueue();
+    expect(cubit.state.hasError, isTrue);
+
+    final oldController = repo.controller;
+    repo.controller = StreamController<List<BookingEvent>>();
+
+    await expectLater(cubit.retry(), completes);
+    await oldController.close();
+
+    expect(repo.watchCalls, 2);
+    repo.controller.add(const <BookingEvent>[]);
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorNotificationsStatus.ready);
+
+    await expectLater(cubit.close(), completes);
+  });
 }

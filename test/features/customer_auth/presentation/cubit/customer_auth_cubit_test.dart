@@ -434,4 +434,54 @@ void main() {
     await inFlightAtClose;
     expect(cubit.state.errorMessage, isNull);
   });
+
+  test('close completes cleanly even when auth stream cancel fails', () async {
+    final repo = _ScriptedCustomerAuthRepository(
+      onCancel: () => Future<void>.error(StateError('cancel failed')),
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = CustomerAuthCubit(repo);
+    await pumpEventQueue();
+
+    await expectLater(cubit.close(), completes);
+    expect(cubit.isClosed, isTrue);
+  });
+
+  test('retry and close recover cleanly without poisoning _cancellation when prior cancel fails', () async {
+    var cancels = 0;
+    final repo = _ScriptedCustomerAuthRepository(
+      onCancel: () {
+        cancels++;
+        if (cancels == 1) {
+          return Future<void>.error(StateError('cancel failed'));
+        }
+        return Future<void>.value();
+      },
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = CustomerAuthCubit(repo);
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    repo.controller.addError(StateError('Stream dropped'));
+    await pumpEventQueue();
+    expect(cubit.state.status, CustomerAuthStatus.error);
+
+    final oldController = repo.controller;
+    repo.controller = StreamController<AppUser?>();
+
+    await expectLater(cubit.retry(), completes);
+    await oldController.close();
+
+    expect(repo.authChangesCalls, 2);
+    final user = AppUser(uid: 'cust-1', email: 'alex@example.test');
+    repo.controller.add(user);
+    await pumpEventQueue();
+    expect(cubit.state.status, CustomerAuthStatus.signedIn);
+    expect(cubit.state.user, user);
+
+    await expectLater(cubit.close(), completes);
+  });
 }

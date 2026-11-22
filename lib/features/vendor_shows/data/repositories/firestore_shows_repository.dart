@@ -137,15 +137,76 @@ final class FirestoreShowsRepository implements ShowsRepository {
   }
 
   @override
-  Stream<List<Show>> watchVendorShows(String vendorId) async* {
-    await _requireVendor(vendorId);
-    yield* _shows
-        .where('vendorId', isEqualTo: vendorId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs.map(_decodeShow).toList(growable: false),
-        );
+  Stream<List<Show>> watchVendorShows(String vendorId) {
+    var cancelled = false;
+    StreamSubscription<List<Show>>? subscription;
+    late final StreamController<List<Show>> controller;
+
+    Future<void> start() async {
+      try {
+        await _requireVendor(vendorId);
+        if (cancelled || controller.isClosed) return;
+        final sub = _shows
+            .where('vendorId', isEqualTo: vendorId)
+            .orderBy('createdAt', descending: true)
+            .snapshots()
+            .map(
+              (snapshot) =>
+                  snapshot.docs.map(_decodeShow).toList(growable: false),
+            )
+            .listen(
+              (shows) {
+                if (!cancelled && !controller.isClosed) {
+                  controller.add(shows);
+                }
+              },
+              onError: (Object error, StackTrace stackTrace) {
+                if (!cancelled && !controller.isClosed) {
+                  controller.addError(error, stackTrace);
+                }
+              },
+              onDone: () {
+                subscription = null;
+                if (!cancelled && !controller.isClosed) {
+                  unawaited(controller.close());
+                }
+              },
+            );
+        if (cancelled || controller.isClosed) {
+          await Future<void>.sync(sub.cancel).catchError((Object _) {});
+          return;
+        }
+        subscription = sub;
+        if (controller.isPaused) {
+          sub.pause();
+        }
+      } catch (error, stackTrace) {
+        if (!cancelled && !controller.isClosed) {
+          controller.addError(error, stackTrace);
+          await controller.close();
+        }
+      }
+    }
+
+    controller = StreamController<List<Show>>(
+      onListen: () {
+        unawaited(start());
+      },
+      onPause: () => subscription?.pause(),
+      onResume: () => subscription?.resume(),
+      onCancel: () async {
+        cancelled = true;
+        final active = subscription;
+        subscription = null;
+        if (active != null) {
+          await Future<void>.sync(active.cancel).catchError((Object _) {});
+        }
+        if (!controller.isClosed) {
+          await controller.close();
+        }
+      },
+    );
+    return controller.stream;
   }
 
   @override

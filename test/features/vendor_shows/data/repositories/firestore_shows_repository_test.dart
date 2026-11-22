@@ -15,12 +15,14 @@ import 'package:flutter_test/flutter_test.dart';
 // ignore_for_file: subtype_of_sealed_class
 
 final class _FakeVendorAccessRepository implements VendorAccessRepository {
-  _FakeVendorAccessRepository(this.access);
+  _FakeVendorAccessRepository(this.access, {this.onCheck});
 
   final VendorAccess access;
+  final Future<VendorAccess> Function()? onCheck;
 
   @override
-  Future<VendorAccess> check() async => access;
+  Future<VendorAccess> check() =>
+      onCheck != null ? onCheck!() : Future<VendorAccess>.value(access);
 }
 
 class _ShowStore {
@@ -987,5 +989,139 @@ void main() {
     await repo.deleteShow('show-resumed');
     expect(store.updates, isEmpty);
     expect(store.deletedPaths, <String>['shows/show-resumed']);
+  });
+
+  test('watchVendorShows cancels cleanly while vendor check is pending without Zone errors or Firestore listener leakage', () async {
+    final uncaught = <Object>[];
+    final errors1 = <Object>[];
+    Object? cancel1Error;
+    final store1 = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store1.dispose);
+
+    final errors2 = <Object>[];
+    final store2 = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store2.dispose);
+
+    final emitted3 = <List<Show>>[];
+    Object? cancel3Error;
+    final store3 = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store3.dispose);
+
+    final done = Completer<void>();
+    runZonedGuarded(() async {
+      try {
+        // 1. Cancelled before VendorNotEnrolled resolves (would throw StateError).
+        final gate1 = Completer<VendorAccess>();
+        final repo1 = FirestoreShowsRepository(
+          _FakeFirestore(store1),
+          vendorAccess: _FakeVendorAccessRepository(
+            VendorNotEnrolled(uid: 'anon-1'),
+            onCheck: () => gate1.future,
+          ),
+        );
+        final sub1 = repo1
+            .watchVendorShows('vendor-a')
+            .listen((_) {}, onError: errors1.add);
+        await pumpEventQueue();
+        final cancel1 = sub1.cancel();
+        gate1.complete(VendorNotEnrolled(uid: 'anon-1'));
+        try {
+          await cancel1;
+        } catch (error) {
+          cancel1Error = error;
+        }
+        await pumpEventQueue();
+
+        // 2. Unawaited cancel before VendorAccess check fails with error.
+        final gate2 = Completer<VendorAccess>();
+        final repo2 = FirestoreShowsRepository(
+          _FakeFirestore(store2),
+          vendorAccess: _FakeVendorAccessRepository(
+            VendorNotEnrolled(uid: 'anon-1'),
+            onCheck: () => gate2.future,
+          ),
+        );
+        final sub2 = repo2
+            .watchVendorShows('vendor-a')
+            .listen((_) {}, onError: errors2.add);
+        await pumpEventQueue();
+        unawaited(sub2.cancel());
+        gate2.completeError(StateError('auth check failed'));
+        await pumpEventQueue();
+
+        // 3. Cancelled before VendorAllowed resolves -> must not subscribe to Firestore.
+        final gate3 = Completer<VendorAccess>();
+        final repo3 = FirestoreShowsRepository(
+          _FakeFirestore(store3),
+          vendorAccess: _FakeVendorAccessRepository(
+            VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+            onCheck: () => gate3.future,
+          ),
+        );
+        final sub3 = repo3.watchVendorShows('vendor-a').listen(emitted3.add);
+        await pumpEventQueue();
+        final cancel3 = sub3.cancel();
+        gate3.complete(VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'));
+        try {
+          await cancel3;
+        } catch (error) {
+          cancel3Error = error;
+        }
+        await pumpEventQueue();
+      } finally {
+        if (!done.isCompleted) done.complete();
+      }
+    }, (error, _) => uncaught.add(error));
+    await done.future;
+
+    expect(uncaught, isEmpty);
+    expect(cancel1Error, isNull);
+    expect(errors1, isEmpty);
+    expect(store1.whereCalls, isEmpty);
+    expect(store1.snapshotCalls, isEmpty);
+
+    expect(errors2, isEmpty);
+    expect(store2.whereCalls, isEmpty);
+    expect(store2.snapshotCalls, isEmpty);
+
+    expect(cancel3Error, isNull);
+    expect(emitted3, isEmpty);
+    expect(store3.whereCalls, isEmpty);
+    expect(store3.snapshotCalls, isEmpty);
+    expect(store3.showsQueryStreamController.hasListener, isFalse);
+
+    // 4. Active subscription tears down cleanly and ignores subsequent snapshots.
+    final store4 = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store4.dispose);
+    final repo4 = FirestoreShowsRepository(
+      _FakeFirestore(store4),
+      vendorAccess: _FakeVendorAccessRepository(
+        VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+      ),
+    );
+    final emitted4 = <List<Show>>[];
+    final sub4 = repo4.watchVendorShows('vendor-a').listen(emitted4.add);
+    await pumpEventQueue();
+    expect(store4.showsQueryStreamController.hasListener, isTrue);
+
+    await sub4.cancel();
+    expect(store4.showsQueryStreamController.hasListener, isFalse);
+
+    store4.showsQueryStreamController.add(
+      _FakeQuerySnapshot(<QueryDocumentSnapshot<Map<String, dynamic>>>[
+        _FakeQueryDocumentSnapshot('show-late', <String, dynamic>{
+          'vendorId': 'vendor-a',
+          'title': 'Late Show',
+          'description': 'Desc',
+          'showDate': '2026-12-22',
+          'imageId': 'show-late',
+          'status': 'active',
+          'bookedCount': 0,
+          'lastBookingId': '',
+        }),
+      ]),
+    );
+    await pumpEventQueue();
+    expect(emitted4, isEmpty);
   });
 }

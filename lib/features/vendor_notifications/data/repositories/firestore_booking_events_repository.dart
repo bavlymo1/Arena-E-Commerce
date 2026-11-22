@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../vendor_access/domain/models/vendor_access.dart';
@@ -29,21 +31,81 @@ final class FirestoreBookingEventsRepository
     return _watchEvents(vendorId);
   }
 
-  Stream<List<BookingEvent>> _watchEvents(String vendorId) async* {
-    await _requireVendor(vendorId);
-    final query = _firestore
-        .collection('bookingEvents')
-        .where('vendorId', isEqualTo: vendorId)
-        .orderBy('createdAt', descending: true);
-    final limit = _limit;
-    yield* (limit == null ? query : query.limit(limit))
-        .snapshots(includeMetadataChanges: true)
-        .where(
-          (snapshot) =>
-              !snapshot.metadata.hasPendingWrites &&
-              !snapshot.metadata.isFromCache,
-        )
-        .map((snapshot) => _decodeSnapshot(snapshot, vendorId));
+  Stream<List<BookingEvent>> _watchEvents(String vendorId) {
+    var cancelled = false;
+    StreamSubscription<List<BookingEvent>>? subscription;
+    late final StreamController<List<BookingEvent>> controller;
+
+    Future<void> start() async {
+      try {
+        await _requireVendor(vendorId);
+        if (cancelled || controller.isClosed) return;
+        final query = _firestore
+            .collection('bookingEvents')
+            .where('vendorId', isEqualTo: vendorId)
+            .orderBy('createdAt', descending: true);
+        final limit = _limit;
+        final sub = (limit == null ? query : query.limit(limit))
+            .snapshots(includeMetadataChanges: true)
+            .where(
+              (snapshot) =>
+                  !snapshot.metadata.hasPendingWrites &&
+                  !snapshot.metadata.isFromCache,
+            )
+            .map((snapshot) => _decodeSnapshot(snapshot, vendorId))
+            .listen(
+              (events) {
+                if (!cancelled && !controller.isClosed) {
+                  controller.add(events);
+                }
+              },
+              onError: (Object error, StackTrace stackTrace) {
+                if (!cancelled && !controller.isClosed) {
+                  controller.addError(error, stackTrace);
+                }
+              },
+              onDone: () {
+                subscription = null;
+                if (!cancelled && !controller.isClosed) {
+                  unawaited(controller.close());
+                }
+              },
+            );
+        if (cancelled || controller.isClosed) {
+          await Future<void>.sync(sub.cancel).catchError((Object _) {});
+          return;
+        }
+        subscription = sub;
+        if (controller.isPaused) {
+          sub.pause();
+        }
+      } catch (error, stackTrace) {
+        if (!cancelled && !controller.isClosed) {
+          controller.addError(error, stackTrace);
+          await controller.close();
+        }
+      }
+    }
+
+    controller = StreamController<List<BookingEvent>>(
+      onListen: () {
+        unawaited(start());
+      },
+      onPause: () => subscription?.pause(),
+      onResume: () => subscription?.resume(),
+      onCancel: () async {
+        cancelled = true;
+        final active = subscription;
+        subscription = null;
+        if (active != null) {
+          await Future<void>.sync(active.cancel).catchError((Object _) {});
+        }
+        if (!controller.isClosed) {
+          await controller.close();
+        }
+      },
+    );
+    return controller.stream;
   }
 
   Future<void> _requireVendor(String vendorId) async {

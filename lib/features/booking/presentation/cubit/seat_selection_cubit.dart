@@ -80,9 +80,7 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
           );
     } catch (_) {
       _onStreamError(generation, sessionFailed: true, ownSeatsFailed: true);
-      await _cancelSubscriptions().catchError((Object _) {
-        _onStreamError(generation);
-      });
+      await _cancelSubscriptions();
     }
   }
 
@@ -253,10 +251,13 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
     final mySeatsSub = _mySeatsSubscription;
     _sessionSubscription = null;
     _mySeatsSubscription = null;
-    return _cancellation = Future.wait<void>([
+    if (sessionSub == null && mySeatsSub == null) return _cancellation;
+    return _cancellation = Future.wait<void>(<Future<void>>[
       _cancellation,
-      if (sessionSub != null) sessionSub.cancel(),
-      if (mySeatsSub != null) mySeatsSub.cancel(),
+      if (sessionSub != null)
+        Future<void>.sync(sessionSub.cancel).catchError((Object _) {}),
+      if (mySeatsSub != null)
+        Future<void>.sync(mySeatsSub.cancel).catchError((Object _) {}),
     ]).then((_) {});
   }
 

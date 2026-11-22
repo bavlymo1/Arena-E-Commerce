@@ -442,4 +442,56 @@ void main() {
     expect(cubit.state.filteredShows.map((s) => s.id).toList(), <String>['s1']);
     expect(cubit.state.posters.containsKey('s2'), isFalse);
   });
+
+  test(
+    'close completes cleanly even when active shows stream cancel fails',
+    () async {
+      final repo = _StreamingShowsRepository(
+        onCancel: () => Future<void>.error(StateError('cancel failed')),
+      );
+      addTearDown(repo.dispose);
+
+      final cubit = DiscoveryCubit(repo);
+      await pumpEventQueue();
+
+      await expectLater(cubit.close(), completes);
+      expect(cubit.isClosed, isTrue);
+    },
+  );
+
+  test('retry and close recover cleanly without poisoning _cancellation when prior cancel fails', () async {
+    var cancels = 0;
+    final repo = _StreamingShowsRepository(
+      onCancel: () {
+        cancels++;
+        if (cancels == 1) {
+          return Future<void>.error(StateError('cancel failed'));
+        }
+        return Future<void>.value();
+      },
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = DiscoveryCubit(repo);
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    repo.controller.addError(StateError('Feed interrupted'));
+    await pumpEventQueue();
+    expect(cubit.state.status, DiscoveryStatus.error);
+
+    final oldController = repo.controller;
+    repo.controller = StreamController<List<Show>>();
+
+    await expectLater(cubit.retry(), completes);
+    await oldController.close();
+
+    expect(repo.watchCalls, 2);
+    repo.controller.add(<Show>[_show(id: 's1', title: 'Recovered Show')]);
+    await pumpEventQueue();
+    expect(cubit.state.status, DiscoveryStatus.ready);
+    expect(cubit.state.shows.single.id, 's1');
+
+    await expectLater(cubit.close(), completes);
+  });
 }
