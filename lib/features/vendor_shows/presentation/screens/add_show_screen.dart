@@ -4,11 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
-import '../../../../shared/widgets/arena_notice_banner.dart';
-import '../../../../shared/widgets/arena_poster_banner.dart';
 import '../cubit/show_form_cubit.dart';
 import '../cubit/show_form_state.dart';
-import '../widgets/vendor_show_widgets.dart';
+import '../widgets/add_show_form_sections.dart';
 
 /// Vendor show creation form consuming [ShowFormCubit].
 class AddShowScreen extends StatefulWidget {
@@ -203,356 +201,59 @@ class _AddShowScreenState extends State<AddShowScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  TextField(
-                    key: const ValueKey<String>('add-show-title-field'),
-                    controller: _titleController,
+                  AddShowDetailsFields(
+                    titleController: _titleController,
+                    descriptionController: _descriptionController,
+                    dateController: _dateController,
                     enabled: !state.isSubmitting,
-                    maxLength: ShowFormState.maxTitleLength,
-                    textInputAction: TextInputAction.next,
-                    onChanged: cubit.updateTitle,
-                    decoration: _fieldDecoration(
-                      labelText: 'Show title',
-                      hintText: 'Apex Legends Invitational',
-                      errorText: state.titleError,
-                    ),
+                    titleError: state.titleError,
+                    descriptionError: state.descriptionError,
+                    showDateError: state.showDateError,
+                    onTitleChanged: cubit.updateTitle,
+                    onDescriptionChanged: cubit.updateDescription,
+                    onDateChanged: cubit.updateShowDate,
+                    onPickDate: () => unawaited(_chooseDate(context, cubit)),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    key: const ValueKey<String>('add-show-description-field'),
-                    controller: _descriptionController,
-                    enabled: !state.isSubmitting,
-                    maxLength: ShowFormState.maxDescriptionLength,
-                    minLines: 3,
-                    maxLines: 5,
-                    textInputAction: TextInputAction.newline,
-                    onChanged: cubit.updateDescription,
-                    decoration: _fieldDecoration(
-                      labelText: 'Description',
-                      hintText: 'Describe the event, lineup, and arena notes',
-                      errorText: state.descriptionError,
+                  const SizedBox(height: 24),
+                  AddShowPosterSection(
+                    title: state.title,
+                    posterBytes: state.posterBytes,
+                    hasPoster: state.hasPoster,
+                    posterError: state.posterError,
+                    isBusy: state.isBusy,
+                    isPickingPoster: state.isPickingPoster,
+                    pickingPosterSource: state.pickingPosterSource,
+                    onPickGallery: () => unawaited(
+                      cubit.pickPoster(
+                        ShowPosterSource.gallery,
+                        picker: widget.onPickPoster,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    key: const ValueKey<String>('add-show-date-field'),
-                    controller: _dateController,
-                    enabled: !state.isSubmitting,
-                    keyboardType: TextInputType.datetime,
-                    textInputAction: TextInputAction.next,
-                    onChanged: cubit.updateShowDate,
-                    decoration: _fieldDecoration(
-                      labelText: 'Show date',
-                      hintText: 'YYYY-MM-DD',
-                      errorText: state.showDateError,
-                      suffixIcon: IconButton(
-                        key: const ValueKey<String>(
-                          'add-show-date-picker-button',
-                        ),
-                        tooltip: 'Choose show date',
-                        onPressed: state.isSubmitting
-                            ? null
-                            : () => unawaited(_chooseDate(context, cubit)),
-                        icon: const Icon(Icons.calendar_today_outlined),
+                    onPickCamera: () => unawaited(
+                      cubit.pickPoster(
+                        ShowPosterSource.camera,
+                        picker: widget.onPickPoster,
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'Show artwork',
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  AddShowSessionsSection(
+                    sessionControllers: _sessionControllers,
+                    sessionCount: state.sessionTimes.length,
+                    isBusy: state.isBusy,
+                    canAddSession: state.canAddSession,
+                    sessionsError: state.sessionsError,
+                    onSessionChanged: cubit.updateSessionTime,
+                    onPickSessionTime: (i) =>
+                        unawaited(_chooseSessionTime(context, cubit, i)),
+                    onRemoveSession: cubit.removeSessionSlot,
+                    onAddSession: cubit.addSessionSlot,
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: state.posterError != null
-                            ? colorScheme.error.withValues(alpha: 0.7)
-                            : colorScheme.outlineVariant,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        if (state.hasPoster)
-                          ArenaPosterBanner(
-                            key: const ValueKey<String>(
-                              'add-show-poster-preview',
-                            ),
-                            posterBytes: state.posterBytes,
-                            title: state.title.trim().isEmpty
-                                ? 'Show artwork'
-                                : state.title.trim(),
-                            height: 160,
-                            borderRadius: BorderRadius.circular(12),
-                            fallbackLabel: 'ARENA CONSOLE',
-                          )
-                        else
-                          Container(
-                            key: const ValueKey<String>(
-                              'add-show-poster-placeholder',
-                            ),
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                Icon(
-                                  Icons.image_outlined,
-                                  size: 28,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'No artwork selected',
-                                  textAlign: TextAlign.center,
-                                  style: textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Choose a gallery image or take a photo (max 200 KB).',
-                                  textAlign: TextAlign.center,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: <Widget>[
-                            OutlinedButton(
-                              key: const ValueKey<String>(
-                                'add-show-gallery-button',
-                              ),
-                              onPressed: state.isBusy
-                                  ? null
-                                  : () => unawaited(
-                                      cubit.pickPoster(
-                                        ShowPosterSource.gallery,
-                                        picker: widget.onPickPoster,
-                                      ),
-                                    ),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(120, 48),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: VendorButtonContent(
-                                icon: Icons.photo_library_outlined,
-                                label:
-                                    state.isPickingPoster &&
-                                        state.pickingPosterSource ==
-                                            ShowPosterSource.gallery
-                                    ? 'Selecting…'
-                                    : 'Gallery',
-                              ),
-                            ),
-                            OutlinedButton(
-                              key: const ValueKey<String>(
-                                'add-show-camera-button',
-                              ),
-                              onPressed: state.isBusy
-                                  ? null
-                                  : () => unawaited(
-                                      cubit.pickPoster(
-                                        ShowPosterSource.camera,
-                                        picker: widget.onPickPoster,
-                                      ),
-                                    ),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(120, 48),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: VendorButtonContent(
-                                icon: Icons.photo_camera_outlined,
-                                label:
-                                    state.isPickingPoster &&
-                                        state.pickingPosterSource ==
-                                            ShowPosterSource.camera
-                                    ? 'Selecting…'
-                                    : 'Camera',
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (state.posterError != null) ...<Widget>[
-                          const SizedBox(height: 12),
-                          Text(
-                            state.posterError!,
-                            key: const ValueKey<String>(
-                              'add-show-poster-error',
-                            ),
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.error,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Sessions',
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '47 seats per session · ${state.sessionTimes.length} of ${ShowFormState.maxSessions} slots',
-                    key: const ValueKey<String>('add-show-sessions-counter'),
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontFeatures: const <FontFeature>[
-                        FontFeature.tabularFigures(),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  for (
-                    var i = 0;
-                    i < state.sessionTimes.length;
-                    i++
-                  ) ...<Widget>[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Expanded(
-                          child: TextField(
-                            key: ValueKey<String>('add-show-session-time-$i'),
-                            controller: _sessionControllers[i],
-                            enabled: !state.isBusy,
-                            keyboardType: TextInputType.datetime,
-                            textInputAction: i == state.sessionTimes.length - 1
-                                ? TextInputAction.done
-                                : TextInputAction.next,
-                            onChanged: (value) =>
-                                cubit.updateSessionTime(i, value),
-                            decoration: _fieldDecoration(
-                              labelText: 'Session ${i + 1} time',
-                              hintText: 'HH:mm',
-                              suffixIcon: IconButton(
-                                key: ValueKey<String>(
-                                  'add-show-session-picker-$i',
-                                ),
-                                tooltip: 'Choose session ${i + 1} time',
-                                onPressed: state.isBusy
-                                    ? null
-                                    : () => unawaited(
-                                        _chooseSessionTime(context, cubit, i),
-                                      ),
-                                icon: const Icon(Icons.access_time_outlined),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: IconButton(
-                            key: ValueKey<String>('add-show-remove-session-$i'),
-                            tooltip: 'Remove session ${i + 1}',
-                            onPressed: state.isBusy
-                                ? null
-                                : () => cubit.removeSessionSlot(i),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (state.sessionsError != null) ...<Widget>[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        state.sessionsError!,
-                        key: const ValueKey<String>('add-show-sessions-error'),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ],
-                  OutlinedButton(
-                    key: const ValueKey<String>('add-show-add-session-button'),
-                    onPressed: state.canAddSession
-                        ? cubit.addSessionSlot
-                        : null,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const VendorButtonContent(
-                      icon: Icons.add,
-                      label: 'Add session',
-                    ),
-                  ),
-                  if (state.submitErrorMessage != null) ...<Widget>[
-                    const SizedBox(height: 20),
-                    ArenaNoticeBanner(
-                      key: const ValueKey<String>(
-                        'add-show-submit-error-banner',
-                      ),
-                      icon: Icons.error_outline,
-                      message: state.submitErrorMessage!,
-                      isError: true,
-                      liveRegion: true,
-                      actionLabel: 'Try again',
-                      actionKey: const ValueKey<String>(
-                        'add-show-retry-submit-button',
-                      ),
-                      onAction: state.isBusy ? null : submit,
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    key: const ValueKey<String>('add-show-submit-button'),
-                    onPressed: state.isBusy ? null : submit,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: state.isSubmitting
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Flexible(child: Text('Saving show…')),
-                            ],
-                          )
-                        : const Text('Save show'),
+                  AddShowSubmitFooter(
+                    isBusy: state.isBusy,
+                    isSubmitting: state.isSubmitting,
+                    submitErrorMessage: state.submitErrorMessage,
+                    onSubmit: submit,
                   ),
                 ],
               ),
@@ -561,21 +262,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
         );
         return PopScope(canPop: !state.isSubmitting, child: page);
       },
-    );
-  }
-
-  static InputDecoration _fieldDecoration({
-    required String labelText,
-    required String hintText,
-    String? errorText,
-    Widget? suffixIcon,
-  }) {
-    return InputDecoration(
-      labelText: labelText,
-      hintText: hintText,
-      errorText: errorText,
-      errorMaxLines: 2,
-      suffixIcon: suffixIcon,
     );
   }
 }

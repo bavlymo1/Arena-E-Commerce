@@ -71,4 +71,50 @@ void main() {
     expect(find.byIcon(Icons.add_outlined), findsOneWidget);
     expect(find.text('Add show'), findsOneWidget);
   });
+
+  testWidgets(
+    'VendorShowStatusBadge renders active and deleting pill colors in light and dark themes',
+    (tester) async {
+      for (final brightness in Brightness.values) {
+        final theme = buildAppTheme(brightness: brightness);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: const Scaffold(
+              body: Row(
+                children: <Widget>[
+                  VendorShowStatusBadge(isDeleting: false),
+                  VendorShowStatusBadge(isDeleting: true),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final activeText = tester.widget<Text>(find.text('Active'));
+        final deletingText = tester.widget<Text>(find.text('Finishing delete'));
+        expect(activeText.style?.color, theme.colorScheme.onSecondaryContainer);
+        expect(deletingText.style?.color, theme.colorScheme.onErrorContainer);
+
+        final containers = tester
+            .widgetList<Container>(
+              find.descendant(
+                of: find.byType(VendorShowStatusBadge),
+                matching: find.byType(Container),
+              ),
+            )
+            .toList();
+        expect(containers, hasLength(2));
+        expect(
+          (containers[0].decoration! as BoxDecoration).color,
+          theme.colorScheme.secondaryContainer,
+        );
+        expect(
+          (containers[1].decoration! as BoxDecoration).color,
+          theme.colorScheme.errorContainer,
+        );
+      }
+    },
+  );
 }

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/seat_numbers.dart';
+import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/booking_event.dart';
@@ -109,19 +110,10 @@ class VendorUpdatesScreen extends StatelessWidget {
                 ],
                 const SizedBox(height: 20),
                 if (state.isLoading && state.events.isEmpty)
-                  const Center(
+                  const ArenaLoadingView(
                     key: ValueKey<String>('vendor-updates-loading'),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Loading booking updates…'),
-                        ],
-                      ),
-                    ),
+                    label: 'Loading booking updates…',
+                    padding: EdgeInsets.symmetric(vertical: 48),
                   )
                 else if (state.hasError && state.events.isEmpty)
                   ArenaStatusPanel(

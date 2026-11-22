@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
+import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
@@ -51,19 +52,7 @@ class ShowDetailsScreen extends StatelessWidget {
             final cubit = context.read<ShowDetailsCubit>();
 
             if (state.isLoading) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Loading…'),
-                    ],
-                  ),
-                ),
-              );
+              return const ArenaLoadingView(label: 'Loading…');
             }
 
             if (state.hasError) {

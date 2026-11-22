@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../../vendor_shows/domain/models/show.dart';
@@ -135,18 +136,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 ),
                 const SizedBox(height: 20),
                 if (state.isLoading)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Loading…'),
-                        ],
-                      ),
-                    ),
+                  const ArenaLoadingView(
+                    label: 'Loading…',
+                    padding: EdgeInsets.symmetric(vertical: 48),
                   )
                 else if (state.hasError)
                   ArenaStatusPanel(

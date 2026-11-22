@@ -1,13 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
-import '../../../../shared/widgets/arena_poster_banner.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/show.dart';
 import '../cubit/vendor_shows_cubit.dart';
@@ -145,19 +143,10 @@ class VendorShowsScreen extends StatelessWidget {
                   ],
                   const SizedBox(height: 20),
                   if (state.isLoading && state.shows.isEmpty)
-                    const Center(
+                    const ArenaLoadingView(
                       key: ValueKey<String>('vendor-shows-loading'),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 48),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('Loading shows…'),
-                          ],
-                        ),
-                      ),
+                      label: 'Loading shows…',
+                      padding: EdgeInsets.symmetric(vertical: 48),
                     )
                   else if (state.hasError && state.shows.isEmpty)
                     ArenaStatusPanel(
@@ -233,7 +222,7 @@ class VendorShowsScreen extends StatelessWidget {
                     for (final show in state.shows)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
-                        child: _VendorShowCard(
+                        child: VendorShowCard(
                           show: show,
                           posterBytes: state.posters[show.id],
                           isDeleting:
@@ -263,236 +252,6 @@ class VendorShowsScreen extends StatelessWidget {
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-class _VendorShowCard extends StatelessWidget {
-  const _VendorShowCard({
-    required this.show,
-    required this.posterBytes,
-    required this.isDeleting,
-    required this.deleteErrorMessage,
-    required this.onOpenDetails,
-    required this.onDeleteShow,
-    required this.onRetryDelete,
-  });
-
-  final Show show;
-  final Uint8List? posterBytes;
-  final bool isDeleting;
-  final String? deleteErrorMessage;
-  final VoidCallback? onOpenDetails;
-  final VoidCallback? onDeleteShow;
-  final VoidCallback? onRetryDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final showDeletingStatus = show.status == ShowStatus.deleting;
-    final badgeDeleting = showDeletingStatus || isDeleting;
-    final dateLabel = formatShowDateLabel(show.showDate);
-    final bookedSummary = formatVendorShowBookedSummary(show);
-
-    final Widget summaryBody = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        ArenaPosterBanner(
-          posterBytes: posterBytes,
-          title: show.title,
-          height: 142,
-          borderRadius: BorderRadius.zero,
-          fallbackLabel: 'ARENA CONSOLE',
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  Text(
-                    dateLabel,
-                    style: textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontFeatures: const <FontFeature>[
-                        FontFeature.tabularFigures(),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    show.showDate,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontFeatures: const <FontFeature>[
-                        FontFeature.tabularFigures(),
-                      ],
-                    ),
-                  ),
-                  _ShowStatusBadge(isDeleting: badgeDeleting),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                show.title,
-                style: textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (show.description.trim().isNotEmpty) ...<Widget>[
-                const SizedBox(height: 4),
-                Text(
-                  show.description.trim(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 10),
-              Text(
-                bookedSummary,
-                key: ValueKey<String>('vendor-show-booked-${show.id}'),
-                style: textTheme.labelLarge?.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: const <FontFeature>[
-                    FontFeature.tabularFigures(),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    final Widget interactiveSummary = onOpenDetails != null
-        ? Semantics(
-            container: true,
-            button: true,
-            label: '${show.title}, $dateLabel, $bookedSummary',
-            onTap: onOpenDetails,
-            excludeSemantics: true,
-            child: InkWell(onTap: onOpenDetails, child: summaryBody),
-          )
-        : summaryBody;
-
-    return Material(
-      key: ValueKey<String>('vendor-show-card-${show.id}'),
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: badgeDeleting
-              ? colorScheme.error.withValues(alpha: 0.45)
-              : colorScheme.outlineVariant,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          interactiveSummary,
-          if (isDeleting)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: VendorDeletingProgressBanner(
-                key: ValueKey<String>(
-                  'vendor-show-deleting-progress-${show.id}',
-                ),
-                message: 'Finishing delete…',
-              ),
-            )
-          else if (showDeletingStatus)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: ArenaNoticeBanner(
-                key: ValueKey<String>('vendor-show-deleting-notice-${show.id}'),
-                icon: Icons.warning_amber_rounded,
-                message: deleteErrorMessage == null
-                    ? 'Deletion interrupted. Bookings closed.'
-                    : 'Deletion interrupted. Bookings closed. $deleteErrorMessage',
-                isError: true,
-                actionLabel: onDeleteShow != null ? 'Resume delete' : null,
-                actionKey: onDeleteShow != null
-                    ? ValueKey<String>('vendor-show-delete-${show.id}')
-                    : null,
-                onAction: onDeleteShow,
-              ),
-            )
-          else ...<Widget>[
-            if (deleteErrorMessage case final error?)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: ArenaNoticeBanner(
-                  key: ValueKey<String>('vendor-show-delete-error-${show.id}'),
-                  icon: Icons.error_outline,
-                  message: error,
-                  isError: true,
-                  actionLabel: onRetryDelete != null ? 'Retry delete' : null,
-                  actionKey: onRetryDelete != null
-                      ? ValueKey<String>('vendor-show-retry-delete-${show.id}')
-                      : null,
-                  onAction: onRetryDelete,
-                ),
-              ),
-            if (onDeleteShow != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton(
-                    key: ValueKey<String>('vendor-show-delete-${show.id}'),
-                    onPressed: onDeleteShow,
-                    child: const VendorButtonContent(
-                      icon: Icons.delete_outline,
-                      label: 'Delete',
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ShowStatusBadge extends StatelessWidget {
-  const _ShowStatusBadge({required this.isDeleting});
-
-  final bool isDeleting;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final background = isDeleting
-        ? colorScheme.errorContainer
-        : colorScheme.secondaryContainer;
-    final foreground = isDeleting
-        ? colorScheme.onErrorContainer
-        : colorScheme.onSecondaryContainer;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        isDeleting ? 'Finishing delete' : 'Active',
-        style: textTheme.labelSmall?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );

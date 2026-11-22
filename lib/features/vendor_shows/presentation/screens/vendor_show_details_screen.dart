@@ -3,17 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../core/formatting/date_time_formatting.dart';
-import '../../../../shared/seating/widgets/seat_map_view.dart';
-import '../../../../shared/widgets/arena_notice_banner.dart';
-import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
-import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
 import '../cubit/vendor_show_details_cubit.dart';
 import '../cubit/vendor_show_details_state.dart';
 import '../widgets/delete_show_dialog.dart';
-import '../widgets/vendor_show_widgets.dart';
+import '../widgets/vendor_show_details_sections.dart';
 
 /// Displays vendor-owned show details, daily sessions, and a read-only seat map.
 class VendorShowDetailsScreen extends StatelessWidget {
@@ -38,8 +34,6 @@ class VendorShowDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final canGoBack = onBackToShows != null || Navigator.canPop(context);
     void handleBack() =>
         onBackToShows != null ? onBackToShows!() : Navigator.maybePop(context);
@@ -72,19 +66,9 @@ class VendorShowDetailsScreen extends StatelessWidget {
               child: Builder(
                 builder: (context) {
                   if (state.isLoading) {
-                    return const Center(
+                    return const ArenaLoadingView(
                       key: ValueKey<String>('vendor-show-details-loading'),
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('Loading show details…'),
-                          ],
-                        ),
-                      ),
+                      label: 'Loading show details…',
                     );
                   }
 
@@ -134,7 +118,6 @@ class VendorShowDetailsScreen extends StatelessWidget {
                   }
 
                   final show = state.show!;
-                  final dateLabel = formatShowDateLabel(show.showDate);
                   final selectedSession = state.selectedSession;
                   final isDeletingBadge =
                       show.status == ShowStatus.deleting ||
@@ -143,290 +126,38 @@ class VendorShowDetailsScreen extends StatelessWidget {
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                     children: <Widget>[
-                      ArenaPosterBanner(
+                      VendorShowDetailsHeader(
+                        show: show,
                         posterBytes: state.posterBytes,
-                        title: show.title,
-                        height: 184,
-                        borderRadius: BorderRadius.circular(16),
-                        fallbackLabel: 'ARENA CONSOLE',
+                        isDeletingBadge: isDeletingBadge,
                       ),
                       const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: <Widget>[
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 15,
-                            color: colorScheme.primary,
-                          ),
-                          Text(
-                            dateLabel,
-                            key: const ValueKey<String>(
-                              'vendor-show-details-date',
-                            ),
-                            style: textTheme.labelLarge?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontFeatures: const <FontFeature>[
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            show.showDate,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontFeatures: const <FontFeature>[
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isDeletingBadge
-                                  ? colorScheme.errorContainer
-                                  : colorScheme.secondaryContainer,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              isDeletingBadge ? 'Finishing delete' : 'Active',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: isDeletingBadge
-                                    ? colorScheme.onErrorContainer
-                                    : colorScheme.onSecondaryContainer,
-                                fontWeight: FontWeight.w600,
+                      VendorShowSummaryCard(
+                        show: show,
+                        isDeletingShow: state.isDeletingShow,
+                        hasDeleteFailed: state.hasDeleteFailed,
+                        deleteErrorMessage: state.deleteErrorMessage,
+                        onDelete: onDeleteShow != null
+                            ? () => onDeleteShow!(show.id)
+                            : () => unawaited(
+                                _confirmAndDelete(context, cubit, show),
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        show.title,
-                        style: textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (show.description.trim().isNotEmpty) ...<Widget>[
-                        const SizedBox(height: 8),
-                        Text(
-                          show.description.trim(),
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: colorScheme.outlineVariant),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 4,
-                              alignment: WrapAlignment.spaceBetween,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: <Widget>[
-                                Text(
-                                  'Show total',
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                Text(
-                                  formatVendorShowBookedSummary(show),
-                                  key: const ValueKey<String>(
-                                    'vendor-show-details-total-booked',
-                                  ),
-                                  style: textTheme.titleSmall?.copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                    fontFeatures: const <FontFeature>[
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (state.isDeletingShow) ...<Widget>[
-                              const SizedBox(height: 12),
-                              const VendorDeletingProgressBanner(
-                                key: ValueKey<String>(
-                                  'vendor-show-details-deleting-progress',
-                                ),
-                                message: 'Deleting show and removing bookings…',
-                              ),
-                            ] else if (state.hasDeleteFailed) ...<Widget>[
-                              const SizedBox(height: 12),
-                              ArenaNoticeBanner(
-                                key: const ValueKey<String>(
-                                  'vendor-show-details-delete-error',
-                                ),
-                                icon: Icons.error_outline,
-                                message:
-                                    state.deleteErrorMessage ??
-                                    'Unable to delete show. Try again.',
-                                isError: true,
-                                actionLabel: 'Retry delete',
-                                actionKey: const ValueKey<String>(
-                                  'vendor-show-details-delete-retry-button',
-                                ),
-                                onAction: onDeleteShow != null
-                                    ? () => onDeleteShow!(show.id)
-                                    : () => unawaited(cubit.deleteShow()),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
-                            OutlinedButton(
-                              key: const ValueKey<String>(
-                                'vendor-show-details-delete-button',
-                              ),
-                              onPressed: state.isDeletingShow
-                                  ? null
-                                  : onDeleteShow != null
-                                  ? () => onDeleteShow!(show.id)
-                                  : () => unawaited(
-                                      _confirmAndDelete(context, cubit, show),
-                                    ),
-                              child: VendorButtonContent(
-                                icon: Icons.delete_outline,
-                                label: state.isDeletingShow
-                                    ? 'Deleting…'
-                                    : 'Delete show',
-                              ),
-                            ),
-                          ],
-                        ),
+                        onRetryDelete: onDeleteShow != null
+                            ? () => onDeleteShow!(show.id)
+                            : () => unawaited(cubit.deleteShow()),
                       ),
                       const SizedBox(height: 24),
-                      Container(
-                        key: const ValueKey<String>(
-                          'vendor-show-details-sessions-section',
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 4,
-                              alignment: WrapAlignment.spaceBetween,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: <Widget>[
-                                Text(
-                                  'Daily sessions',
-                                  style: textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  'Select a session to inspect seats',
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            if (state.sessions.isEmpty)
-                              const ArenaNoticeBanner(
-                                key: ValueKey<String>(
-                                  'vendor-show-details-empty-sessions',
-                                ),
-                                icon: Icons.schedule_outlined,
-                                message: 'No sessions are available for this show right now.',
-                              )
-                            else
-                              for (final session in state.sessions)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
-                                  child: _VendorSessionOptionTile(
-                                    session: session,
-                                    selected: selectedSession?.id == session.id,
-                                    onTap: state.isDeletingShow
-                                        ? null
-                                        : () => cubit.selectSession(session.id),
-                                  ),
-                                ),
-                          ],
-                        ),
+                      VendorShowSessionsSection(
+                        sessions: state.sessions,
+                        selectedSessionId: selectedSession?.id,
+                        isDeletingShow: state.isDeletingShow,
+                        onSelectSession: cubit.selectSession,
                       ),
                       if (selectedSession != null) ...<Widget>[
                         const SizedBox(height: 18),
-                        Container(
-                          key: const ValueKey<String>(
-                            'vendor-show-details-seat-map-section',
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: <Widget>[
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 6,
-                                alignment: WrapAlignment.spaceBetween,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: <Widget>[
-                                  Text(
-                                    'Session seat map',
-                                    style: textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          colorScheme.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      'Read-only live view',
-                                      style: textTheme.labelSmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _selectedSessionSubtitle(selectedSession),
-                                key: const ValueKey<String>(
-                                  'vendor-show-details-selected-session-subtitle',
-                                ),
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontFeatures: const <FontFeature>[
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              SeatMapView(
-                                key: const ValueKey<String>(
-                                  'vendor-session-seat-map',
-                                ),
-                                bookedSeats: selectedSession.bookedSeats,
-                                vendorMode: true,
-                                loadState: SeatMapLoadState.ready,
-                                onRetry: cubit.retry,
-                              ),
-                            ],
-                          ),
+                        VendorSessionSeatMapSection(
+                          selectedSession: selectedSession,
+                          onRetry: cubit.retry,
                         ),
                       ],
                     ],
@@ -437,142 +168,6 @@ class VendorShowDetailsScreen extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  static String _selectedSessionSubtitle(Session session) {
-    final label = session.label?.trim();
-    final timeLabel = formatTime12Hour(session.time.value);
-    return label != null && label.isNotEmpty
-        ? '${session.time.value} · $timeLabel · $label'
-        : '${session.time.value} · $timeLabel';
-  }
-}
-
-class _VendorSessionOptionTile extends StatelessWidget {
-  const _VendorSessionOptionTile({
-    required this.session,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final Session session;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final time24 = session.time.value;
-    final time12 = formatTime12Hour(time24);
-    final label = session.label?.trim();
-    final hasLabel = label != null && label.isNotEmpty;
-    final bookedLabel = formatVendorSessionBookedSummary(session);
-    final semanticsText = <String>[
-      '$time24 ($time12)',
-      if (hasLabel) label,
-      bookedLabel,
-      if (selected) 'Selected',
-    ].join(', ');
-
-    return Semantics(
-      container: true,
-      button: true,
-      enabled: onTap != null,
-      selected: selected,
-      label: semanticsText,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: Material(
-        key: ValueKey<String>('vendor-session-option-${session.id}'),
-        color: selected
-            ? colorScheme.primaryContainer.withValues(alpha: 0.35)
-            : colorScheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(
-            color: selected ? colorScheme.primary : colorScheme.outlineVariant,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: <Widget>[
-                          Text(
-                            time24,
-                            style: textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontFeatures: const <FontFeature>[
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            time12,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontFeatures: const <FontFeature>[
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (hasLabel) ...<Widget>[
-                        const SizedBox(height: 2),
-                        Text(
-                          label,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-                      Text(
-                        bookedLabel,
-                        key: ValueKey<String>(
-                          'vendor-session-booked-${session.id}',
-                        ),
-                        style: textTheme.labelMedium?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                          fontFeatures: const <FontFeature>[
-                            FontFeature.tabularFigures(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  selected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  size: 20,
-                  color: selected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

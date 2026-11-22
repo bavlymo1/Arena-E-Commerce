@@ -26,7 +26,6 @@ final class VendorNotificationsState extends Equatable {
   final String? errorMessage;
 
   bool get isLoading => status == VendorNotificationsStatus.loading;
-  bool get isReady => status == VendorNotificationsStatus.ready;
   bool get hasError => status == VendorNotificationsStatus.error;
   bool get isEmpty =>
       status == VendorNotificationsStatus.ready && events.isEmpty;

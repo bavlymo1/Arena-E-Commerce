@@ -38,7 +38,6 @@ final class VendorShowsState extends Equatable {
   final String? resumeDeleteErrorMessage;
 
   bool get isLoading => status == VendorShowsStatus.loading;
-  bool get isReady => status == VendorShowsStatus.ready;
   bool get hasError => status == VendorShowsStatus.error;
   bool get isEmpty => status == VendorShowsStatus.ready && shows.isEmpty;
   bool isDeletingShow(String showId) => deletingShowIds.contains(showId);

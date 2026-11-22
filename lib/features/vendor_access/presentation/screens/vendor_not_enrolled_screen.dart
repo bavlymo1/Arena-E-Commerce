@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../shared/widgets/arena_busy_button_label.dart';
 import '../vendor_access_strings.dart';
 import '../widgets/vendor_access_widgets.dart';
 
@@ -107,21 +108,16 @@ class VendorNotEnrolledScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: VendorAccessButtonContent(
-            icon: isChecking
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  )
-                : const Icon(Icons.refresh, size: 18),
-            label: isChecking
-                ? VendorAccessStrings.retrying
-                : VendorAccessStrings.retry,
-          ),
+          child: isChecking
+              ? const ArenaBusyButtonLabel(
+                  label: VendorAccessStrings.retrying,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  textAlign: TextAlign.center,
+                )
+              : const VendorAccessButtonContent(
+                  icon: Icon(Icons.refresh, size: 18),
+                  label: VendorAccessStrings.retry,
+                ),
         ),
       ],
     );

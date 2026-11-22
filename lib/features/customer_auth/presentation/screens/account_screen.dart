@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_busy_button_label.dart';
+import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../cubit/customer_auth_cubit.dart';
 import '../cubit/customer_auth_state.dart';
@@ -66,18 +68,9 @@ class AccountScreen extends StatelessWidget {
                 ),
                 if (state.isChecking && user == null) ...<Widget>[
                   const SizedBox(height: 20),
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Checking session…'),
-                        ],
-                      ),
-                    ),
+                  const ArenaLoadingView(
+                    label: 'Checking session…',
+                    padding: EdgeInsets.symmetric(vertical: 24),
                   ),
                 ],
                 if (state.errorMessage != null) ...<Widget>[
@@ -177,21 +170,7 @@ class AccountScreen extends StatelessWidget {
                     ),
                   ),
                   child: state.busy
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Flexible(child: Text('Signing out…')),
-                          ],
-                        )
+                      ? const ArenaBusyButtonLabel(label: 'Signing out…')
                       : const Text('Log out'),
                 ),
               ],

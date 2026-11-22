@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_busy_button_label.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../cubit/customer_auth_cubit.dart';
 import '../cubit/customer_auth_state.dart';
@@ -207,21 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           child: state.busy
-                              ? Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: <Widget>[
-                                    SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Flexible(child: Text('Signing in…')),
-                                  ],
-                                )
+                              ? const ArenaBusyButtonLabel(label: 'Signing in…')
                               : const Text('Sign in'),
                         ),
                         const SizedBox(height: 12),

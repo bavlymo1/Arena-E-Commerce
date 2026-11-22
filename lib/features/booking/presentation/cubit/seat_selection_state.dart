@@ -59,8 +59,6 @@ final class SeatSelectionState extends Equatable {
 
   int get totalBookedCount => bookedSeats.union(myConfirmedSeats).length;
 
-  int get availableCount => seatCapacity - totalBookedCount;
-
   bool get isSoldOut =>
       status == SeatSelectionStatus.ready && totalBookedCount >= seatCapacity;
 

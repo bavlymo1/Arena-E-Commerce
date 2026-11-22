@@ -80,7 +80,6 @@ final class ShowFormState extends Equatable {
   bool get isSubmitting => status == ShowFormStatus.submitting;
   bool get isBusy => isPickingPoster || isSubmitting;
   bool get isSubmitted => status == ShowFormStatus.submitted;
-  bool get hasFailure => status == ShowFormStatus.failure;
   bool get hasPoster => posterBytes != null && posterBytes!.isNotEmpty;
   bool get canAddSession => sessionTimes.length < maxSessions && !isBusy;
 
