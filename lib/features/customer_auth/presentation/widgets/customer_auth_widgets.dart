@@ -16,6 +16,7 @@ class CustomerPasswordFormField extends StatelessWidget {
     required this.validator,
     this.showLabel = 'Show password',
     this.hideLabel = 'Hide password',
+    this.onChanged,
     this.onFieldSubmitted,
     super.key,
   });
@@ -33,6 +34,7 @@ class CustomerPasswordFormField extends StatelessWidget {
   final FormFieldValidator<String> validator;
   final String showLabel;
   final String hideLabel;
+  final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onFieldSubmitted;
 
   @override
@@ -51,6 +53,7 @@ class CustomerPasswordFormField extends StatelessWidget {
       textInputAction: textInputAction,
       autofillHints: autofillHints,
       validator: validator,
+      onChanged: onChanged,
       onFieldSubmitted: onFieldSubmitted,
       decoration: InputDecoration(
         labelText: labelText,

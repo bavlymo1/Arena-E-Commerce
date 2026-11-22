@@ -126,6 +126,17 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
     );
   }
 
+  /// Clears transient auth or validation errors while keeping stream errors.
+  void clearError() {
+    if (isClosed ||
+        state.busy ||
+        state.hasError ||
+        state.errorMessage == null) {
+      return;
+    }
+    emit(state.copyWith(clearErrorMessage: true));
+  }
+
   Future<void> _runAuthOperation(
     Future<void> Function() action, {
     required String failureMessage,

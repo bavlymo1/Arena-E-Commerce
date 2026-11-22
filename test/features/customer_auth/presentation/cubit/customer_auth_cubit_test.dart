@@ -484,4 +484,92 @@ void main() {
 
     await expectLater(cubit.close(), completes);
   });
+
+  test('clearError clears transient operation and validation errors while ignoring busy, null, and stream errors', () async {
+    final repo = _ScriptedCustomerAuthRepository()
+      ..loginHandler = ((_, _) async => throw StateError('Invalid credentials'))
+      ..registerHandler = ((_, _) async =>
+          throw StateError('Email already registered'))
+      ..logoutHandler = (() async => throw StateError('Logout error'));
+    addTearDown(repo.dispose);
+
+    final cubit = CustomerAuthCubit(repo);
+    addTearDown(cubit.close);
+    final emitted = <CustomerAuthState>[];
+    final sub = cubit.stream.listen(emitted.add);
+    addTearDown(sub.cancel);
+
+    await pumpEventQueue();
+    repo.controller.add(null);
+    await pumpEventQueue();
+
+    // No-op when errorMessage is null.
+    final countBeforeNull = emitted.length;
+    cubit.clearError();
+    await pumpEventQueue();
+    expect(emitted, hasLength(countBeforeNull));
+    expect(cubit.state.errorMessage, isNull);
+
+    // Clears validation error.
+    await cubit.login('not-an-email', 'secret');
+    expect(cubit.state.errorMessage, CustomerAuthCubit.emailInvalidMessage);
+    cubit.clearError();
+    expect(cubit.state.errorMessage, isNull);
+    expect(cubit.state.status, CustomerAuthStatus.signedOut);
+
+    // Clears login operation error.
+    await cubit.login('alex@example.test', 'secret');
+    expect(cubit.state.errorMessage, CustomerAuthCubit.loginErrorMessage);
+    cubit.clearError();
+    expect(cubit.state.errorMessage, isNull);
+    expect(cubit.state.status, CustomerAuthStatus.signedOut);
+
+    // Clears register operation error.
+    await cubit.register('alex@example.test', 'secret');
+    expect(cubit.state.errorMessage, CustomerAuthCubit.registerErrorMessage);
+    cubit.clearError();
+    expect(cubit.state.errorMessage, isNull);
+    expect(cubit.state.status, CustomerAuthStatus.signedOut);
+
+    // Clears logout operation error while signed in.
+    repo.controller.add(AppUser(uid: 'cust-1', email: 'alex@example.test'));
+    await pumpEventQueue();
+    await cubit.logout();
+    expect(cubit.state.errorMessage, CustomerAuthCubit.logoutErrorMessage);
+    cubit.clearError();
+    expect(cubit.state.errorMessage, isNull);
+    expect(cubit.state.status, CustomerAuthStatus.signedIn);
+
+    // No-op while busy.
+    repo.controller.add(null);
+    await pumpEventQueue();
+    final busyGate = Completer<void>();
+    repo.loginHandler = (_, _) => busyGate.future;
+    final busyLogin = cubit.login('alex@example.test', 'secret');
+    await pumpEventQueue();
+    expect(cubit.state.busy, isTrue);
+    final countWhileBusy = emitted.length;
+    cubit.clearError();
+    await pumpEventQueue();
+    expect(emitted, hasLength(countWhileBusy));
+    expect(cubit.state.busy, isTrue);
+    busyGate.complete();
+    await busyLogin;
+
+    // Leaves CustomerAuthStatus.error (streamErrorMessage) untouched.
+    repo.controller.addError(StateError('Stream dropped'));
+    await pumpEventQueue();
+    expect(cubit.state.hasError, isTrue);
+    expect(cubit.state.errorMessage, CustomerAuthCubit.streamErrorMessage);
+    final countOnStreamError = emitted.length;
+    cubit.clearError();
+    await pumpEventQueue();
+    expect(emitted, hasLength(countOnStreamError));
+    expect(cubit.state.hasError, isTrue);
+    expect(cubit.state.errorMessage, CustomerAuthCubit.streamErrorMessage);
+
+    // Safe no-op after close.
+    await cubit.close();
+    expect(() => cubit.clearError(), returnsNormally);
+  });
 }

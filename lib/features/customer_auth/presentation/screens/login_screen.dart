@@ -51,7 +51,10 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_submittedOnce) {
       setState(() => _submittedOnce = true);
     }
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      cubit.clearError();
+      return;
+    }
     FocusScope.of(context).unfocus();
     unawaited(cubit.login(_emailController.text, _passwordController.text));
   }
@@ -159,6 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           enableSuggestions: false,
                           validator: (value) =>
                               CustomerAuthCubit.validateEmail(value ?? ''),
+                          onChanged: (_) => cubit.clearError(),
                           onFieldSubmitted: (_) =>
                               _passwordFocusNode.requestFocus(),
                           decoration: const InputDecoration(
@@ -186,6 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           autofillHints: const <String>[AutofillHints.password],
                           validator: (value) =>
                               CustomerAuthCubit.validatePassword(value ?? ''),
+                          onChanged: (_) => cubit.clearError(),
                           onFieldSubmitted: (_) => _submit(cubit, state),
                         ),
                         const SizedBox(height: 24),
@@ -225,7 +230,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           onPressed: state.busy
                               ? null
-                              : widget.onRegisterRequested,
+                              : () {
+                                  cubit.clearError();
+                                  widget.onRegisterRequested();
+                                },
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size.fromHeight(48),
                             shape: RoundedRectangleBorder(

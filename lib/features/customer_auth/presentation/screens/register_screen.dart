@@ -64,7 +64,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_submittedOnce) {
       setState(() => _submittedOnce = true);
     }
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      cubit.clearError();
+      return;
+    }
     FocusScope.of(context).unfocus();
     unawaited(cubit.register(_emailController.text, _passwordController.text));
   }
@@ -78,13 +81,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       builder: (context, state) {
         final cubit = context.read<CustomerAuthCubit>();
         final inputsEnabled = !state.busy;
+        final handleBackToLogin = state.busy
+            ? null
+            : () {
+                cubit.clearError();
+                widget.onLoginRequested();
+              };
 
         return Scaffold(
           appBar: AppBar(
             leading: IconButton(
               key: const ValueKey<String>('register-appbar-back-button'),
               tooltip: 'Back to sign in',
-              onPressed: state.busy ? null : widget.onLoginRequested,
+              onPressed: handleBackToLogin,
               icon: const Icon(Icons.arrow_back),
             ),
             title: const Text(
@@ -169,6 +178,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           enableSuggestions: false,
                           validator: (value) =>
                               CustomerAuthCubit.validateEmail(value ?? ''),
+                          onChanged: (_) => cubit.clearError(),
                           onFieldSubmitted: (_) =>
                               _passwordFocusNode.requestFocus(),
                           decoration: const InputDecoration(
@@ -198,6 +208,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ],
                           validator: (value) =>
                               CustomerAuthCubit.validatePassword(value ?? ''),
+                          onChanged: (_) => cubit.clearError(),
                           onFieldSubmitted: (_) =>
                               _confirmPasswordFocusNode.requestFocus(),
                         ),
@@ -225,6 +236,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           showLabel: 'Show confirm password',
                           hideLabel: 'Hide confirm password',
                           validator: _validateConfirmPassword,
+                          onChanged: (_) => cubit.clearError(),
                           onFieldSubmitted: (_) => _submit(cubit, state),
                         ),
                         const SizedBox(height: 24),
@@ -264,9 +276,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           key: const ValueKey<String>(
                             'register-back-to-login-button',
                           ),
-                          onPressed: state.busy
-                              ? null
-                              : widget.onLoginRequested,
+                          onPressed: handleBackToLogin,
                           style: TextButton.styleFrom(
                             minimumSize: const Size.fromHeight(48),
                             shape: RoundedRectangleBorder(

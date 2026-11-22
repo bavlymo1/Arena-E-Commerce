@@ -661,4 +661,324 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'LoginScreen clears stale login error on edit, invalid resubmit, or register navigation, but keeps stream error',
+    (tester) async {
+      final repo = _TestCustomerAuthRepository()
+        ..onLogin = (_, _) async => throw StateError('Invalid credentials');
+      addTearDown(repo.dispose);
+      final cubit = CustomerAuthCubit(repo);
+      var registerRequested = 0;
+      String? errorAtRegisterCallback = 'unset';
+
+      try {
+        await tester.pumpWidget(
+          _wrapScreen(
+            cubit: cubit,
+            child: LoginScreen(
+              onRegisterRequested: () {
+                errorAtRegisterCallback = cubit.state.errorMessage;
+                registerRequested++;
+              },
+            ),
+          ),
+        );
+        repo.controller.add(null);
+        await tester.pumpAndSettle();
+
+        // Stale operation error clears when validation fails on resubmit.
+        await cubit.login('alex@example.test', 'wrong-pass');
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsOneWidget);
+
+        await tester.tap(
+          find.byKey(const ValueKey<String>('login-submit-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsNothing);
+        expect(
+          find.text(CustomerAuthCubit.emailRequiredMessage),
+          findsOneWidget,
+        );
+
+        // Editing email clears loginErrorMessage.
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-email-field')),
+          'alex@example.test',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-password-field')),
+          'wrong-pass',
+        );
+        await tester.tap(
+          find.byKey(const ValueKey<String>('login-submit-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsOneWidget);
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-email-field')),
+          'alex2@example.test',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('login-error-banner')),
+          findsNothing,
+        );
+
+        // Editing password clears loginErrorMessage.
+        await tester.tap(
+          find.byKey(const ValueKey<String>('login-submit-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsOneWidget);
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-password-field')),
+          'wrong-pass-2',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('login-error-banner')),
+          findsNothing,
+        );
+
+        // Tapping Create account clears loginErrorMessage before calling onRegisterRequested.
+        await tester.tap(
+          find.byKey(const ValueKey<String>('login-submit-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsOneWidget);
+
+        await tester.tap(
+          find.byKey(const ValueKey<String>('login-create-account-button')),
+        );
+        await tester.pump();
+        expect(registerRequested, 1);
+        expect(errorAtRegisterCallback, isNull);
+        expect(find.text(CustomerAuthCubit.loginErrorMessage), findsNothing);
+
+        // Editing does NOT clear streamErrorMessage (Try again).
+        repo.controller.addError(StateError('Connection dropped'));
+        await tester.pumpAndSettle();
+        expect(find.text(CustomerAuthCubit.streamErrorMessage), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey<String>('login-retry-button')),
+          findsOneWidget,
+        );
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-email-field')),
+          'alex3@example.test',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.streamErrorMessage), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey<String>('login-retry-button')),
+          findsOneWidget,
+        );
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('login-password-field')),
+          'wrong-pass-3',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.streamErrorMessage), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey<String>('login-retry-button')),
+          findsOneWidget,
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(cubit.close);
+      }
+    },
+  );
+
+  testWidgets(
+    'RegisterScreen clears stale register error on edit, invalid resubmit, or back navigation, but keeps stream error',
+    (tester) async {
+      final repo = _TestCustomerAuthRepository()
+        ..onRegister = (_, _) async => throw StateError('Email already in use');
+      addTearDown(repo.dispose);
+      final cubit = CustomerAuthCubit(repo);
+      var loginRequested = 0;
+      String? errorAtLoginCallback = 'unset';
+
+      try {
+        await tester.pumpWidget(
+          _wrapScreen(
+            cubit: cubit,
+            child: RegisterScreen(
+              onLoginRequested: () {
+                errorAtLoginCallback = cubit.state.errorMessage;
+                loginRequested++;
+              },
+            ),
+          ),
+        );
+        repo.controller.add(null);
+        await tester.pumpAndSettle();
+
+        // Stale operation error clears when validation fails on resubmit.
+        await cubit.register('jordan@example.test', 'pass-one');
+        await tester.pump();
+        expect(
+          find.text(CustomerAuthCubit.registerErrorMessage),
+          findsOneWidget,
+        );
+
+        await tester.ensureVisible(
+          find.byKey(const ValueKey<String>('register-submit-button')),
+        );
+        await tester.tap(
+          find.byKey(const ValueKey<String>('register-submit-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(CustomerAuthCubit.registerErrorMessage), findsNothing);
+        expect(
+          find.text(CustomerAuthCubit.emailRequiredMessage),
+          findsOneWidget,
+        );
+
+        Future<void> failRegistration() async {
+          await tester.ensureVisible(
+            find.byKey(const ValueKey<String>('register-submit-button')),
+          );
+          await tester.tap(
+            find.byKey(const ValueKey<String>('register-submit-button')),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.text(CustomerAuthCubit.registerErrorMessage),
+            findsOneWidget,
+          );
+        }
+
+        // Editing email clears registerErrorMessage.
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-email-field')),
+          'jordan@example.test',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-password-field')),
+          'pass-one',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-confirm-password-field')),
+          'pass-one',
+        );
+        await failRegistration();
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-email-field')),
+          'jordan2@example.test',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.registerErrorMessage), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('register-error-banner')),
+          findsNothing,
+        );
+
+        // Editing password clears registerErrorMessage.
+        await failRegistration();
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-password-field')),
+          'pass-two',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.registerErrorMessage), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('register-error-banner')),
+          findsNothing,
+        );
+
+        // Editing confirm password clears registerErrorMessage.
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-confirm-password-field')),
+          'pass-two',
+        );
+        await failRegistration();
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-confirm-password-field')),
+          'pass-three',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.registerErrorMessage), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('register-error-banner')),
+          findsNothing,
+        );
+
+        // Back to sign in clears registerErrorMessage before calling onLoginRequested.
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-confirm-password-field')),
+          'pass-two',
+        );
+        await failRegistration();
+        await tester.ensureVisible(
+          find.byKey(const ValueKey<String>('register-back-to-login-button')),
+        );
+        await tester.tap(
+          find.byKey(const ValueKey<String>('register-back-to-login-button')),
+        );
+        await tester.pump();
+        expect(loginRequested, 1);
+        expect(errorAtLoginCallback, isNull);
+        expect(find.text(CustomerAuthCubit.registerErrorMessage), findsNothing);
+
+        // AppBar back clears registerErrorMessage before calling onLoginRequested.
+        errorAtLoginCallback = 'unset';
+        await failRegistration();
+        await tester.tap(
+          find.byKey(const ValueKey<String>('register-appbar-back-button')),
+        );
+        await tester.pump();
+        expect(loginRequested, 2);
+        expect(errorAtLoginCallback, isNull);
+        expect(find.text(CustomerAuthCubit.registerErrorMessage), findsNothing);
+
+        // Editing does NOT clear streamErrorMessage (Try again).
+        repo.controller.addError(StateError('Connection dropped'));
+        await tester.pumpAndSettle();
+        expect(find.text(CustomerAuthCubit.streamErrorMessage), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey<String>('register-retry-button')),
+          findsOneWidget,
+        );
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-email-field')),
+          'jordan3@example.test',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.streamErrorMessage), findsOneWidget);
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-password-field')),
+          'pass-three',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.streamErrorMessage), findsOneWidget);
+
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('register-confirm-password-field')),
+          'pass-three',
+        );
+        await tester.pump();
+        expect(find.text(CustomerAuthCubit.streamErrorMessage), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey<String>('register-retry-button')),
+          findsOneWidget,
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(cubit.close);
+      }
+    },
+  );
 }
