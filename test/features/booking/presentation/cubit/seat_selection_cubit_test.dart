@@ -582,6 +582,239 @@ void main() {
     expect(cubit2.state.status, SeatSelectionStatus.ready);
     expect(cubit2.isClosed, isTrue);
   });
+
+  test('SeatSelectionState compares session by value while keeping bookedSeats equality', () {
+    final t1 = DateTime.utc(2026, 11, 20, 10, 0);
+    SeatSelectionState buildState({
+      Session? session,
+      Iterable<int> bookedSeats = const [1, 2],
+    }) => SeatSelectionState(
+      customerUid: 'cust-1',
+      showId: 'show-1',
+      sessionId: '1900',
+      status: SeatSelectionStatus.ready,
+      session: session,
+      bookedSeats: bookedSeats,
+    );
+
+    final s1 = Session(
+      id: '1900',
+      time: SessionTime('19:00'),
+      label: 'Evening',
+      bookedSeats: const [1, 2],
+      lastBookingId: 'b-1',
+      updatedAt: t1,
+    );
+    final s2 = Session(
+      id: '1900',
+      time: SessionTime('19:00'),
+      label: 'Evening',
+      bookedSeats: const [2, 1],
+      lastBookingId: 'b-1',
+      updatedAt: t1,
+    );
+    expect(buildState(session: s1), buildState(session: s2));
+    expect(buildState(session: s1).hashCode, buildState(session: s2).hashCode);
+
+    expect(
+      buildState(session: s1),
+      isNot(
+        buildState(
+          session: Session(
+            id: '1900',
+            time: SessionTime('19:00'),
+            label: 'Matinee',
+            bookedSeats: const [1, 2],
+            lastBookingId: 'b-1',
+            updatedAt: t1,
+          ),
+        ),
+      ),
+    );
+    expect(
+      buildState(session: s1),
+      isNot(
+        buildState(
+          session: Session(
+            id: '1900',
+            time: SessionTime('19:00'),
+            label: 'Evening',
+            bookedSeats: const [1, 2],
+            lastBookingId: 'b-2',
+            updatedAt: t1,
+          ),
+        ),
+      ),
+    );
+    expect(
+      buildState(session: s1),
+      isNot(
+        buildState(
+          session: Session(
+            id: '1900',
+            time: SessionTime('19:00'),
+            label: 'Evening',
+            bookedSeats: const [1, 2],
+            lastBookingId: 'b-1',
+            updatedAt: t1.add(const Duration(seconds: 1)),
+          ),
+        ),
+      ),
+    );
+    expect(
+      buildState(session: s1, bookedSeats: const [1, 2]),
+      isNot(
+        buildState(
+          session: Session(
+            id: '1900',
+            time: SessionTime('19:00'),
+            label: 'Evening',
+            bookedSeats: const [1, 3],
+            lastBookingId: 'b-1',
+            updatedAt: t1,
+          ),
+          bookedSeats: const [1, 2],
+        ),
+      ),
+    );
+    expect(
+      buildState(session: null, bookedSeats: const [1]),
+      isNot(buildState(session: null, bookedSeats: const [2])),
+    );
+  });
+
+  test('deduplicates identical Session snapshots, emits on session field updates, and transitions through loading on retry', () async {
+    final repo = _StreamingBookingRepository();
+    addTearDown(repo.dispose);
+    final cubit = SeatSelectionCubit(
+      bookingRepository: repo,
+      customerUid: 'cust-1',
+      showId: 'show-1',
+      sessionId: '1900',
+    );
+    addTearDown(cubit.close);
+
+    final emitted = <SeatSelectionState>[];
+    final sub = cubit.stream.listen(emitted.add);
+    addTearDown(sub.cancel);
+
+    final t1 = DateTime.utc(2026, 11, 20, 10, 0);
+    final t2 = DateTime.utc(2026, 11, 20, 10, 5);
+    await pumpEventQueue();
+    emitted.clear();
+
+    repo.sessionController.add(
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Evening',
+        bookedSeats: const [5],
+        lastBookingId: 'b-1',
+        updatedAt: t1,
+      ),
+    );
+    repo.mySeatsController.add(const <int>{});
+    await pumpEventQueue();
+    expect(emitted, hasLength(1));
+
+    // Identical Session snapshot (with reordered bookedSeats) deduplicates.
+    repo.sessionController.add(
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Evening',
+        bookedSeats: const [5],
+        lastBookingId: 'b-1',
+        updatedAt: t1,
+      ),
+    );
+    await pumpEventQueue();
+    expect(emitted, hasLength(1));
+
+    // Changes to label, lastBookingId, updatedAt, and bookedSeats each emit.
+    repo.sessionController.add(
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Late',
+        bookedSeats: const [5],
+        lastBookingId: 'b-1',
+        updatedAt: t1,
+      ),
+    );
+    await pumpEventQueue();
+    expect(emitted, hasLength(2));
+    expect(emitted.last.session?.label, 'Late');
+
+    repo.sessionController.add(
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Late',
+        bookedSeats: const [5],
+        lastBookingId: 'b-2',
+        updatedAt: t1,
+      ),
+    );
+    await pumpEventQueue();
+    expect(emitted, hasLength(3));
+    expect(emitted.last.session?.lastBookingId, 'b-2');
+
+    repo.sessionController.add(
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Late',
+        bookedSeats: const [5],
+        lastBookingId: 'b-2',
+        updatedAt: t2,
+      ),
+    );
+    await pumpEventQueue();
+    expect(emitted, hasLength(4));
+    expect(emitted.last.session?.updatedAt, t2);
+
+    repo.sessionController.add(
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Late',
+        bookedSeats: const [5, 6],
+        lastBookingId: 'b-2',
+        updatedAt: t2,
+      ),
+    );
+    await pumpEventQueue();
+    expect(emitted, hasLength(5));
+    expect(emitted.last.bookedSeats, const <int>{5, 6});
+
+    // Stream error -> retry() transitions through loading -> ready even for same data.
+    repo.sessionController.addError(StateError('drop'));
+    await pumpEventQueue();
+    expect(emitted.last.status, SeatSelectionStatus.error);
+
+    final oldSession = repo.sessionController;
+    repo.sessionController = StreamController<Session?>();
+    unawaited(oldSession.close());
+
+    final retryCountStart = emitted.length;
+    await cubit.retry();
+    expect(emitted[retryCountStart].status, SeatSelectionStatus.loading);
+
+    repo.sessionController.add(
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Late',
+        bookedSeats: const [5, 6],
+        lastBookingId: 'b-2',
+        updatedAt: t2,
+      ),
+    );
+    repo.mySeatsController.add(const <int>{});
+    await pumpEventQueue();
+    expect(emitted.last.status, SeatSelectionStatus.ready);
+  });
 }
 
 final class _SyncCancelThrowStream<T> extends Stream<T> {

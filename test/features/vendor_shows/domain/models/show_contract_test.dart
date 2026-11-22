@@ -214,4 +214,120 @@ void main() {
     expect(hasJpegHeader(Uint8List.fromList([0xff, 0xd8])), isFalse);
     expect(hasJpegHeader(Uint8List.fromList([0x89, 0x50, 0x4e])), isFalse);
   });
+
+  test(
+    'Show compares by value, preserves raw DateTimes, and checks every field',
+    () {
+      final createdAt = DateTime.utc(2026, 11, 15, 10);
+      final updatedAt = DateTime.utc(2026, 11, 16, 12);
+      Show build({
+        String id = 'show-a',
+        String vendorId = 'arena',
+        String title = 'Apex Finals',
+        String description = 'Championship night',
+        String showDate = '2026-11-20',
+        ShowStatus status = ShowStatus.active,
+        int bookedCount = 3,
+        String lastBookingId = 'book-1',
+        DateTime? created,
+        bool setCreated = false,
+        DateTime? updated,
+        bool setUpdated = false,
+      }) => Show(
+        id: id,
+        vendorId: vendorId,
+        title: title,
+        description: description,
+        showDate: showDate,
+        imageId: id,
+        status: status,
+        bookedCount: bookedCount,
+        lastBookingId: lastBookingId,
+        createdAt: setCreated ? created : createdAt,
+        updatedAt: setUpdated ? updated : updatedAt,
+      );
+
+      final baseline = build();
+      final identicalCopy = build();
+      expect(baseline, identicalCopy);
+      expect(baseline.hashCode, identicalCopy.hashCode);
+
+      expect(baseline, isNot(build(id: 'show-b')));
+      expect(baseline, isNot(build(vendorId: 'arena-2')));
+      expect(baseline, isNot(build(title: 'Other Title')));
+      expect(baseline, isNot(build(description: 'Other description')));
+      expect(baseline, isNot(build(showDate: '2026-11-21')));
+      expect(baseline, isNot(build(status: ShowStatus.deleting)));
+      expect(baseline, isNot(build(bookedCount: 4)));
+      expect(baseline, isNot(build(lastBookingId: 'book-2')));
+      expect(
+        baseline,
+        isNot(
+          build(
+            setCreated: true,
+            created: createdAt.add(const Duration(seconds: 1)),
+          ),
+        ),
+      );
+      expect(
+        baseline,
+        isNot(build(setCreated: true, created: createdAt.toLocal())),
+      );
+      expect(baseline, isNot(build(setCreated: true, created: null)));
+      expect(
+        baseline,
+        isNot(
+          build(
+            setUpdated: true,
+            updated: updatedAt.add(const Duration(seconds: 1)),
+          ),
+        ),
+      );
+      expect(
+        baseline,
+        isNot(build(setUpdated: true, updated: updatedAt.toLocal())),
+      );
+      expect(baseline, isNot(build(setUpdated: true, updated: null)));
+    },
+  );
+
+  test('Session compares by value with order-independent bookedSeats and checks every field', () {
+    final updatedAt = DateTime.utc(2026, 11, 16, 12);
+    Session build({
+      String time = '19:00',
+      String? label = 'Evening',
+      bool clearLabel = false,
+      Iterable<int> bookedSeats = const [1, 47],
+      String lastBookingId = 'book-1',
+      DateTime? updated,
+      bool clearUpdated = false,
+    }) {
+      final parsed = SessionTime(time);
+      return Session(
+        id: parsed.id,
+        time: parsed,
+        label: clearLabel ? null : label,
+        bookedSeats: bookedSeats,
+        lastBookingId: lastBookingId,
+        updatedAt: clearUpdated ? null : (updated ?? updatedAt),
+      );
+    }
+
+    final baseline = build(bookedSeats: const [1, 47]);
+    final reorderedSeats = build(bookedSeats: const [47, 1]);
+    expect(baseline, reorderedSeats);
+    expect(baseline.hashCode, reorderedSeats.hashCode);
+
+    expect(baseline, isNot(build(time: '21:00')));
+    expect(baseline, isNot(build(label: 'Late')));
+    expect(baseline, isNot(build(clearLabel: true)));
+    expect(baseline, isNot(build(bookedSeats: const [1, 46])));
+    expect(baseline, isNot(build(lastBookingId: 'book-2')));
+    expect(
+      baseline,
+      isNot(build(updated: updatedAt.add(const Duration(seconds: 1)))),
+    );
+    expect(baseline, isNot(build(updated: updatedAt.toLocal())));
+    expect(baseline, isNot(build(clearUpdated: true)));
+  });
 }

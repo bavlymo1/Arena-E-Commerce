@@ -1,7 +1,9 @@
+import 'package:equatable/equatable.dart';
+
 import '../../../../shared/seating/seat_numbers.dart';
 import 'session_time.dart';
 
-final class Session {
+final class Session extends Equatable {
   Session({
     required this.id,
     required this.time,
@@ -24,4 +26,14 @@ final class Session {
   int get capacity => seatCapacity;
   int get remainingSeats => (capacity - bookedSeats.length).clamp(0, capacity);
   bool get isSoldOut => remainingSeats == 0;
+
+  @override
+  List<Object?> get props => <Object?>[
+    id,
+    time,
+    label,
+    bookedSeats,
+    lastBookingId,
+    updatedAt,
+  ];
 }

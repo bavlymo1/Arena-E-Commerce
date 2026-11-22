@@ -1,6 +1,8 @@
+import 'package:equatable/equatable.dart';
+
 import '../../../../shared/seating/seat_numbers.dart';
 
-final class BookingRequest {
+final class BookingRequest extends Equatable {
   BookingRequest({
     required this.bookingId,
     required this.customerUid,
@@ -24,4 +26,13 @@ final class BookingRequest {
   final String showId;
   final String sessionId;
   final Set<int> seats;
+
+  @override
+  List<Object?> get props => <Object?>[
+    bookingId,
+    customerUid,
+    showId,
+    sessionId,
+    seats,
+  ];
 }

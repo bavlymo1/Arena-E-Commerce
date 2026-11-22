@@ -1,8 +1,10 @@
+import 'package:equatable/equatable.dart';
+
 import '../../../../shared/seating/seat_numbers.dart';
 import '../../../vendor_shows/domain/models/new_show.dart';
 import '../../../vendor_shows/domain/models/session_time.dart';
 
-final class BookingEvent {
+final class BookingEvent extends Equatable {
   BookingEvent({
     required this.bookingId,
     required this.vendorId,
@@ -55,4 +57,18 @@ final class BookingEvent {
     final byTime = a.createdAt.compareTo(b.createdAt);
     return byTime != 0 ? byTime : a.bookingId.compareTo(b.bookingId);
   }
+
+  @override
+  List<Object?> get props => <Object?>[
+    bookingId,
+    vendorId,
+    showId,
+    sessionId,
+    seats,
+    showTitle,
+    slotTime,
+    slotTotal,
+    showTotal,
+    createdAt,
+  ];
 }

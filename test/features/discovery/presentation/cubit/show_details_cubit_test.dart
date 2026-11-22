@@ -627,4 +627,115 @@ void main() {
 
     expect(cubit.state.status, ShowDetailsStatus.ready);
   });
+
+  test('deduplicates identical Show and Session snapshots while emitting field updates and loading on retry', () async {
+    final repo = _StreamingShowDetailsRepository();
+    addTearDown(repo.dispose);
+    final cubit = ShowDetailsCubit(repo, showId: 'show-1');
+    addTearDown(cubit.close);
+
+    final emitted = <ShowDetailsState>[];
+    final sub = cubit.stream.listen(emitted.add);
+    addTearDown(sub.cancel);
+
+    final t1 = DateTime.utc(2026, 11, 18, 10);
+    await pumpEventQueue();
+    emitted.clear();
+
+    Show buildShow({int bookedCount = 2, String lastBookingId = ''}) => Show(
+      id: 'show-1',
+      vendorId: 'arena',
+      title: 'Apex Legends Invitational',
+      description: 'Championship matches at Arena Central.',
+      showDate: '2026-11-18',
+      imageId: 'show-1',
+      status: ShowStatus.active,
+      bookedCount: bookedCount,
+      lastBookingId: lastBookingId,
+      createdAt: DateTime.utc(2026, 11, 17),
+      updatedAt: t1,
+    );
+
+    repo.showController.add(buildShow());
+    repo.sessionsController.add([
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Evening',
+        bookedSeats: const [1, 2],
+        lastBookingId: 'b-1',
+        updatedAt: t1,
+      ),
+    ]);
+    await pumpEventQueue();
+    final readyCount = emitted.length;
+    expect(emitted.last.status, ShowDetailsStatus.ready);
+
+    // Value-equal Show and Session snapshots deduplicate without extra emit.
+    repo.showController.add(buildShow());
+    repo.sessionsController.add([
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Evening',
+        bookedSeats: const [2, 1],
+        lastBookingId: 'b-1',
+        updatedAt: t1,
+      ),
+    ]);
+    await pumpEventQueue();
+    expect(emitted, hasLength(readyCount));
+
+    // Updates to Show.bookedCount / lastBookingId and Session.label / bookedSeats emit.
+    repo.showController.add(buildShow(bookedCount: 3, lastBookingId: 'b-2'));
+    await pumpEventQueue();
+    expect(emitted, hasLength(readyCount + 1));
+    expect(emitted.last.show?.bookedCount, 3);
+    expect(emitted.last.show?.lastBookingId, 'b-2');
+
+    repo.sessionsController.add([
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Main',
+        bookedSeats: const [1, 2, 3],
+        lastBookingId: 'b-2',
+        updatedAt: t1.add(const Duration(minutes: 1)),
+      ),
+    ]);
+    await pumpEventQueue();
+    expect(emitted, hasLength(readyCount + 2));
+    expect(emitted.last.sessions.single.label, 'Main');
+    expect(emitted.last.sessions.single.bookedSeats, const <int>{1, 2, 3});
+
+    // Error followed by retry transitions through loading -> ready even with same values.
+    repo.showController.addError(StateError('stream drop'));
+    await pumpEventQueue();
+    expect(emitted.last.status, ShowDetailsStatus.error);
+
+    final oldShow = repo.showController;
+    final oldSessions = repo.sessionsController;
+    repo.showController = StreamController<Show?>();
+    repo.sessionsController = StreamController<List<Session>>();
+    unawaited(oldShow.close());
+    unawaited(oldSessions.close());
+
+    final beforeRetry = emitted.length;
+    await cubit.retry();
+    expect(emitted[beforeRetry].status, ShowDetailsStatus.loading);
+
+    repo.showController.add(buildShow(bookedCount: 3, lastBookingId: 'b-2'));
+    repo.sessionsController.add([
+      Session(
+        id: '1900',
+        time: SessionTime('19:00'),
+        label: 'Main',
+        bookedSeats: const [1, 2, 3],
+        lastBookingId: 'b-2',
+        updatedAt: t1.add(const Duration(minutes: 1)),
+      ),
+    ]);
+    await pumpEventQueue();
+    expect(emitted.last.status, ShowDetailsStatus.ready);
+  });
 }

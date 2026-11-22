@@ -68,4 +68,52 @@ void main() {
     final oldestFirst = [c, b, a]..sort(BookingEvent.compareOldestFirst);
     expect(oldestFirst.map((e) => e.bookingId), ['b-a', 'b-b', 'b-c']);
   });
+
+  test('BookingEvent compares by value with order-independent seats and checks every field', () {
+    final createdAt = DateTime.utc(2026, 11, 20, 10, 0);
+    BookingEvent build({
+      String bookingId = 'ref-1',
+      String vendorId = 'arena',
+      String showId = 'show-a',
+      String slot = '19:00',
+      Iterable<int> seats = const [1, 47],
+      String showTitle = 'Show',
+      int slotTotal = 2,
+      int showTotal = 49,
+      DateTime? created,
+    }) {
+      final slotTime = SessionTime(slot);
+      return BookingEvent(
+        bookingId: bookingId,
+        vendorId: vendorId,
+        showId: showId,
+        sessionId: slotTime.id,
+        seats: seats,
+        showTitle: showTitle,
+        slotTime: slotTime,
+        slotTotal: slotTotal,
+        showTotal: showTotal,
+        createdAt: created ?? createdAt,
+      );
+    }
+
+    final baseline = build(seats: const [1, 47]);
+    final reordered = build(seats: const [47, 1]);
+    expect(baseline, reordered);
+    expect(baseline.hashCode, reordered.hashCode);
+
+    expect(baseline, isNot(build(bookingId: 'ref-2')));
+    expect(baseline, isNot(build(vendorId: 'arena-2')));
+    expect(baseline, isNot(build(showId: 'show-b')));
+    expect(baseline, isNot(build(slot: '14:00')));
+    expect(baseline, isNot(build(seats: const [1, 46])));
+    expect(baseline, isNot(build(showTitle: 'Other Show')));
+    expect(baseline, isNot(build(slotTotal: 3)));
+    expect(baseline, isNot(build(showTotal: 50)));
+    expect(
+      baseline,
+      isNot(build(created: createdAt.add(const Duration(seconds: 1)))),
+    );
+    expect(baseline, isNot(build(created: createdAt.toLocal())));
+  });
 }

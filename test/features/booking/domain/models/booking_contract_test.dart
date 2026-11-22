@@ -137,4 +137,31 @@ void main() {
     expect(() => value.conflictSeats.clear(), throwsUnsupportedError);
     expect(() => BookingConflict(request(), [2]), throwsArgumentError);
   });
+
+  test('BookingRequest compares by value with order-independent seats and checks every field', () {
+    BookingRequest build({
+      String bookingId = 'stable-reference',
+      String customerUid = 'customer-a',
+      String showId = 'show-a',
+      String sessionId = '1900',
+      Iterable<int> seats = const [1, 47],
+    }) => BookingRequest(
+      bookingId: bookingId,
+      customerUid: customerUid,
+      showId: showId,
+      sessionId: sessionId,
+      seats: seats,
+    );
+
+    final baseline = build(seats: const [1, 47]);
+    final reordered = build(seats: const [47, 1]);
+    expect(baseline, reordered);
+    expect(baseline.hashCode, reordered.hashCode);
+
+    expect(baseline, isNot(build(bookingId: 'other-reference')));
+    expect(baseline, isNot(build(customerUid: 'customer-b')));
+    expect(baseline, isNot(build(showId: 'show-b')));
+    expect(baseline, isNot(build(sessionId: '2100')));
+    expect(baseline, isNot(build(seats: const [1, 46])));
+  });
 }

@@ -1,9 +1,11 @@
+import 'package:equatable/equatable.dart';
+
 import 'new_show.dart';
 import 'session_time.dart';
 
 enum ShowStatus { active, deleting }
 
-final class Show {
+final class Show extends Equatable {
   Show({
     required this.id,
     required this.vendorId,
@@ -52,4 +54,19 @@ final class Show {
     if (bCreated == null) return -1;
     return bCreated.compareTo(aCreated);
   }
+
+  @override
+  List<Object?> get props => <Object?>[
+    id,
+    vendorId,
+    title,
+    description,
+    showDate,
+    imageId,
+    status,
+    bookedCount,
+    lastBookingId,
+    createdAt,
+    updatedAt,
+  ];
 }

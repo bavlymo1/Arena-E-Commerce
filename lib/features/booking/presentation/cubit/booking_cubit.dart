@@ -1,3 +1,4 @@
+import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/models/booking_recovery.dart';
@@ -17,7 +18,7 @@ enum BookingPhase {
   absent,
 }
 
-final class BookingState {
+final class BookingState extends Equatable {
   const BookingState(
     this.phase, {
     this.request,
@@ -32,6 +33,9 @@ final class BookingState {
       phase == BookingPhase.unconfirmed || phase == BookingPhase.recovering;
   bool get busy =>
       phase == BookingPhase.submitting || phase == BookingPhase.recovering;
+
+  @override
+  List<Object?> get props => <Object?>[phase, request, message, conflicts];
 }
 
 /// One logical request per route; uncertain outcomes can only be reconciled.
@@ -61,7 +65,7 @@ final class BookingCubit extends Cubit<BookingState> {
     try {
       final result = await _repository.confirm(request);
       if (isClosed) return;
-      if (!_sameRequest(request, result.request)) {
+      if (request != result.request) {
         _unconfirmed(
           request,
           'The response did not match this request. Check its status.',
@@ -133,7 +137,7 @@ final class BookingCubit extends Cubit<BookingState> {
       }
       switch (recovery) {
         case RecoveryConfirmed():
-          if (_sameRequest(request, recovery.booking.request)) {
+          if (request == recovery.booking.request) {
             emit(BookingState(BookingPhase.confirmed, request: request));
           } else {
             _unconfirmed(
@@ -172,12 +176,4 @@ final class BookingCubit extends Cubit<BookingState> {
     }
     emit(const BookingState(BookingPhase.ready));
   }
-
-  static bool _sameRequest(BookingRequest a, BookingRequest b) =>
-      a.bookingId == b.bookingId &&
-      a.customerUid == b.customerUid &&
-      a.showId == b.showId &&
-      a.sessionId == b.sessionId &&
-      a.seats.length == b.seats.length &&
-      a.seats.containsAll(b.seats);
 }
