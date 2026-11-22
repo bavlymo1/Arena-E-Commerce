@@ -206,6 +206,7 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
             },
           );
     } catch (_) {
+      if (generation == _listenGeneration) _openingSubscriptions = false;
       _onStreamError(generation, showFailed: true, sessionsFailed: true);
       await _cancelSubscriptions();
     } finally {

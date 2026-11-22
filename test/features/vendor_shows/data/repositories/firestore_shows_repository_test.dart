@@ -26,7 +26,14 @@ final class _FakeVendorAccessRepository implements VendorAccessRepository {
 }
 
 class _ShowStore {
-  _ShowStore({required this.deletingShows, this.failShowId});
+  _ShowStore({
+    required this.deletingShows,
+    this.failShowId,
+    StreamController<QuerySnapshot<Map<String, dynamic>>>?
+    showsQueryStreamController,
+  }) : showsQueryStreamController =
+           showsQueryStreamController ??
+           StreamController<QuerySnapshot<Map<String, dynamic>>>.broadcast();
 
   final Map<String, Map<String, dynamic>> deletingShows;
   final String? failShowId;
@@ -60,8 +67,7 @@ class _ShowStore {
   showStreamController =
       StreamController<DocumentSnapshot<Map<String, dynamic>>>.broadcast();
   final StreamController<QuerySnapshot<Map<String, dynamic>>>
-  showsQueryStreamController =
-      StreamController<QuerySnapshot<Map<String, dynamic>>>.broadcast();
+  showsQueryStreamController;
   final StreamController<QuerySnapshot<Map<String, dynamic>>>
   sessionsStreamController =
       StreamController<QuerySnapshot<Map<String, dynamic>>>.broadcast();
@@ -1123,5 +1129,92 @@ void main() {
     );
     await pumpEventQueue();
     expect(emitted4, isEmpty);
+  });
+
+  test('watchVendorShows forwards pending and active pause/resume and closes cleanly on upstream onDone', () async {
+    var pauseCount = 0;
+    var resumeCount = 0;
+    final upstream = StreamController<QuerySnapshot<Map<String, dynamic>>>(
+      onPause: () => pauseCount++,
+      onResume: () => resumeCount++,
+    );
+    final store = _ShowStore(
+      deletingShows: <String, Map<String, dynamic>>{},
+      showsQueryStreamController: upstream,
+    );
+    addTearDown(store.dispose);
+
+    final accessGate = Completer<VendorAccess>();
+    final repo = FirestoreShowsRepository(
+      _FakeFirestore(store),
+      vendorAccess: _FakeVendorAccessRepository(
+        VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+        onCheck: () => accessGate.future,
+      ),
+    );
+
+    final emitted = <List<Show>>[];
+    var done = false;
+    final sub = repo
+        .watchVendorShows('vendor-a')
+        .listen(emitted.add, onDone: () => done = true);
+    addTearDown(sub.cancel);
+    await pumpEventQueue();
+
+    // Pause while _requireVendor is still pending -> pauses immediately upon attach.
+    sub.pause();
+    expect(pauseCount, 0);
+
+    accessGate.complete(VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'));
+    await pumpEventQueue();
+    expect(pauseCount, 1);
+    expect(upstream.isPaused, isTrue);
+
+    QuerySnapshot<Map<String, dynamic>> showSnap(String id) =>
+        _FakeQuerySnapshot(<QueryDocumentSnapshot<Map<String, dynamic>>>[
+          _FakeQueryDocumentSnapshot(id, <String, dynamic>{
+            'vendorId': 'vendor-a',
+            'title': 'Show $id',
+            'description': 'Desc',
+            'showDate': '2026-12-22',
+            'imageId': id,
+            'status': 'active',
+            'bookedCount': 0,
+            'lastBookingId': '',
+          }),
+        ]);
+
+    upstream.add(showSnap('s1'));
+    await pumpEventQueue();
+    expect(emitted, isEmpty);
+
+    sub.resume();
+    await pumpEventQueue();
+    expect(resumeCount, 1);
+    expect(upstream.isPaused, isFalse);
+    expect(emitted, hasLength(1));
+    expect(emitted.single.single.id, 's1');
+
+    // Post-attach pause and resume forward cleanly.
+    sub.pause();
+    await pumpEventQueue();
+    expect(pauseCount, 2);
+    expect(upstream.isPaused, isTrue);
+
+    upstream.add(showSnap('s2'));
+    await pumpEventQueue();
+    expect(emitted, hasLength(1));
+
+    sub.resume();
+    await pumpEventQueue();
+    expect(resumeCount, 2);
+    expect(upstream.isPaused, isFalse);
+    expect(emitted, hasLength(2));
+    expect(emitted.last.single.id, 's2');
+
+    // Closing upstream closes returned stream cleanly.
+    await upstream.close();
+    await pumpEventQueue();
+    expect(done, isTrue);
   });
 }

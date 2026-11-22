@@ -24,8 +24,13 @@ final class _FakeVendorAccessRepository implements VendorAccessRepository {
 }
 
 final class _QueryRecorder {
-  final controller =
-      StreamController<QuerySnapshot<Map<String, dynamic>>>.broadcast();
+  _QueryRecorder({
+    StreamController<QuerySnapshot<Map<String, dynamic>>>? controller,
+  }) : controller =
+           controller ??
+           StreamController<QuerySnapshot<Map<String, dynamic>>>.broadcast();
+
+  final StreamController<QuerySnapshot<Map<String, dynamic>>> controller;
   final requestedCollections = <String>[];
   final whereCalls = <(Object, Object?)>[];
   final orderByCalls = <(Object, bool)>[];
@@ -544,5 +549,80 @@ void main() {
     );
     await pumpEventQueue();
     expect(emitted4, isEmpty);
+  });
+
+  test('watchEvents forwards pending and active pause/resume and closes cleanly on upstream onDone', () async {
+    var pauseCount = 0;
+    var resumeCount = 0;
+    final upstream = StreamController<QuerySnapshot<Map<String, dynamic>>>(
+      onPause: () => pauseCount++,
+      onResume: () => resumeCount++,
+    );
+    final recorder = _QueryRecorder(controller: upstream);
+    addTearDown(recorder.dispose);
+
+    final accessGate = Completer<VendorAccess>();
+    final repo = FirestoreBookingEventsRepository(
+      _FakeFirestore(recorder),
+      _FakeVendorAccessRepository(() => accessGate.future),
+    );
+
+    final emitted = <List<BookingEvent>>[];
+    var done = false;
+    final sub = repo
+        .watchEvents('vendor-a')
+        .listen(emitted.add, onDone: () => done = true);
+    addTearDown(sub.cancel);
+    await pumpEventQueue();
+
+    // Pause while _requireVendor is still pending -> pauses immediately upon attach.
+    sub.pause();
+    expect(pauseCount, 0);
+
+    accessGate.complete(VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'));
+    await pumpEventQueue();
+    expect(pauseCount, 1);
+    expect(upstream.isPaused, isTrue);
+
+    upstream.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot('b1', _validEventData(bookingId: 'b1')),
+      ]),
+    );
+    await pumpEventQueue();
+    expect(emitted, isEmpty);
+
+    sub.resume();
+    await pumpEventQueue();
+    expect(resumeCount, 1);
+    expect(upstream.isPaused, isFalse);
+    expect(emitted, hasLength(1));
+    expect(emitted.single.single.bookingId, 'b1');
+
+    // Post-attach pause and resume forward cleanly.
+    sub.pause();
+    await pumpEventQueue();
+    expect(pauseCount, 2);
+    expect(upstream.isPaused, isTrue);
+
+    upstream.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot('b2', _validEventData(bookingId: 'b2')),
+      ]),
+    );
+    await pumpEventQueue();
+    expect(emitted, hasLength(1));
+
+    sub.resume();
+    await pumpEventQueue();
+    expect(resumeCount, 2);
+    expect(upstream.isPaused, isFalse);
+    expect(emitted, hasLength(2));
+    expect(emitted.last.single.bookingId, 'b2');
+
+    // Closing upstream closes returned stream cleanly.
+    await upstream.close();
+    await pumpEventQueue();
+    expect(done, isTrue);
   });
 }

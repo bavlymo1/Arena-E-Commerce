@@ -186,6 +186,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
             },
           );
     } catch (_) {
+      if (generation == _listenGeneration) _openingSubscription = false;
       _onStreamError(generation);
       await _cancelSubscription();
     } finally {

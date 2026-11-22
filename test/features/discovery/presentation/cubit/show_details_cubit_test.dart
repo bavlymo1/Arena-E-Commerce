@@ -564,4 +564,54 @@ void main() {
     expect(cubit.state.status, ShowDetailsStatus.ready);
     await expectLater(cubit.close(), completes);
   });
+
+  test('immediate retry on synchronous sibling attach error runs while async cancel is still pending', () async {
+    final cancelGate = Completer<void>();
+    var showCancels = 0;
+    final repo = _StreamingShowDetailsRepository(
+      onShowCancel: () {
+        showCancels++;
+        return showCancels == 1 ? cancelGate.future : Future<void>.value();
+      },
+      throwOnWatchSessions: true,
+    );
+    addTearDown(repo.dispose);
+
+    final cubit = ShowDetailsCubit(repo, showId: 'show-1', autoStart: false);
+    addTearDown(cubit.close);
+
+    Future<void>? retryFuture;
+    final stateSub = cubit.stream.listen((state) {
+      if (state.hasError && retryFuture == null) {
+        repo.throwOnWatchSessions = false;
+        final oldShow = repo.showController;
+        final oldSessions = repo.sessionsController;
+        repo.showController = StreamController<Show?>();
+        repo.sessionsController = StreamController<List<Session>>();
+        unawaited(oldShow.close());
+        unawaited(oldSessions.close());
+        retryFuture = cubit.retry();
+      }
+    });
+    addTearDown(stateSub.cancel);
+
+    final startFuture = cubit.start();
+    await pumpEventQueue();
+
+    expect(retryFuture, isNotNull);
+    expect(cubit.state.status, ShowDetailsStatus.loading);
+    expect(repo.watchShowCalls, 1);
+
+    cancelGate.complete();
+    await Future.wait<void>(<Future<void>>[startFuture, retryFuture!]);
+
+    expect(repo.watchShowCalls, 2);
+    expect(repo.watchSessionsCalls, 1);
+
+    repo.showController.add(_show());
+    repo.sessionsController.add(<Session>[_session('19:00')]);
+    await pumpEventQueue();
+
+    expect(cubit.state.status, ShowDetailsStatus.ready);
+  });
 }

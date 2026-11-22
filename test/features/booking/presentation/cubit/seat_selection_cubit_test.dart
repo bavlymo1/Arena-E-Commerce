@@ -18,6 +18,7 @@ final class _StreamingBookingRepository implements BookingRepository {
     Future<void> Function()? onSessionCancel,
     Future<void> Function()? onMySeatsCancel,
     this.throwOnOwnWatch = false,
+    this.wrapSessionStream,
   }) : sessionController = StreamController<Session?>(
          onCancel: onSessionCancel,
        ),
@@ -28,6 +29,7 @@ final class _StreamingBookingRepository implements BookingRepository {
   StreamController<Session?> sessionController;
   StreamController<Set<int>> mySeatsController;
   bool throwOnOwnWatch;
+  Stream<Session?> Function(Stream<Session?>)? wrapSessionStream;
   (String, String)? watchedSessionArgs;
   (String, String, String)? watchedMySeatsArgs;
   int watchSessionCalls = 0;
@@ -37,7 +39,8 @@ final class _StreamingBookingRepository implements BookingRepository {
   Stream<Session?> watchSession(String showId, String sessionId) {
     watchSessionCalls++;
     watchedSessionArgs = (showId, sessionId);
-    return sessionController.stream;
+    final stream = sessionController.stream;
+    return wrapSessionStream != null ? wrapSessionStream!(stream) : stream;
   }
 
   @override
@@ -477,6 +480,163 @@ void main() {
 
     await expectLater(cubit.close(), completes);
   });
+
+  test('handles synchronous StreamSubscription.cancel() throw on close and retry without Zone errors while cancelling sibling', () async {
+    final uncaught = <Object>[];
+
+    // 1. close() completes cleanly and cancels sibling on sync cancel throw.
+    var mySeatsCancelled1 = false;
+    final repo1 = _StreamingBookingRepository(
+      onMySeatsCancel: () async {
+        mySeatsCancelled1 = true;
+      },
+      wrapSessionStream: (inner) => _SyncCancelThrowStream<Session?>(inner),
+    );
+    addTearDown(repo1.dispose);
+    Object? close1Error;
+    late SeatSelectionCubit cubit1;
+    final done1 = Completer<void>();
+    runZonedGuarded(() async {
+      try {
+        cubit1 = SeatSelectionCubit(
+          bookingRepository: repo1,
+          customerUid: 'cust-1',
+          showId: 'show-1',
+          sessionId: '1900',
+        );
+        await pumpEventQueue();
+        try {
+          await cubit1.close();
+        } catch (error) {
+          close1Error = error;
+        }
+      } finally {
+        if (!done1.isCompleted) done1.complete();
+      }
+    }, (error, _) => uncaught.add(error));
+    await done1.future;
+
+    expect(uncaught, isEmpty);
+    expect(close1Error, isNull);
+    expect(cubit1.isClosed, isTrue);
+    expect(mySeatsCancelled1, isTrue);
+    expect(repo1.sessionController.hasListener, isFalse);
+    expect(repo1.mySeatsController.hasListener, isFalse);
+
+    // 2. retry()/start() recovers cleanly after sync cancel throw without Zone errors.
+    var mySeatsCancelled2 = false;
+    var wrapFirst = true;
+    final repo2 = _StreamingBookingRepository(
+      onMySeatsCancel: () async {
+        mySeatsCancelled2 = true;
+      },
+      wrapSessionStream: (inner) =>
+          wrapFirst ? _SyncCancelThrowStream<Session?>(inner) : inner,
+    );
+    addTearDown(repo2.dispose);
+    Object? retry2Error;
+    Object? close2Error;
+    late SeatSelectionCubit cubit2;
+    final done2 = Completer<void>();
+    runZonedGuarded(() async {
+      try {
+        cubit2 = SeatSelectionCubit(
+          bookingRepository: repo2,
+          customerUid: 'cust-1',
+          showId: 'show-1',
+          sessionId: '1900',
+        );
+        await pumpEventQueue();
+        repo2.sessionController.addError(StateError('stream drop'));
+        await pumpEventQueue();
+
+        wrapFirst = false;
+        final oldSession = repo2.sessionController;
+        repo2.sessionController = StreamController<Session?>();
+        unawaited(oldSession.close());
+
+        try {
+          await cubit2.retry();
+        } catch (error) {
+          retry2Error = error;
+        }
+        repo2.sessionController.add(_session());
+        repo2.mySeatsController.add(const <int>{});
+        await pumpEventQueue();
+
+        try {
+          await cubit2.close();
+        } catch (error) {
+          close2Error = error;
+        }
+      } finally {
+        if (!done2.isCompleted) done2.complete();
+      }
+    }, (error, _) => uncaught.add(error));
+    await done2.future;
+
+    expect(uncaught, isEmpty);
+    expect(retry2Error, isNull);
+    expect(close2Error, isNull);
+    expect(mySeatsCancelled2, isTrue);
+    expect(cubit2.state.status, SeatSelectionStatus.ready);
+    expect(cubit2.isClosed, isTrue);
+  });
+}
+
+final class _SyncCancelThrowStream<T> extends Stream<T> {
+  _SyncCancelThrowStream(this._inner);
+
+  final Stream<T> _inner;
+
+  @override
+  StreamSubscription<T> listen(
+    void Function(T event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    final innerSub = _inner.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+    return _SyncCancelThrowSubscription<T>(innerSub);
+  }
+}
+
+final class _SyncCancelThrowSubscription<T> implements StreamSubscription<T> {
+  _SyncCancelThrowSubscription(this._inner);
+
+  final StreamSubscription<T> _inner;
+
+  @override
+  Future<void> cancel() {
+    unawaited(_inner.cancel());
+    throw StateError('sync cancel boom');
+  }
+
+  @override
+  void onData(void Function(T data)? handleData) => _inner.onData(handleData);
+
+  @override
+  void onError(Function? handleError) => _inner.onError(handleError);
+
+  @override
+  void onDone(void Function()? handleDone) => _inner.onDone(handleDone);
+
+  @override
+  void pause([Future<void>? resumeSignal]) => _inner.pause(resumeSignal);
+
+  @override
+  void resume() => _inner.resume();
+
+  @override
+  bool get isPaused => _inner.isPaused;
+
+  @override
+  Future<E> asFuture<E>([E? futureValue]) => _inner.asFuture<E>(futureValue);
 }
 
 final class _RetryableBookingRepository implements BookingRepository {

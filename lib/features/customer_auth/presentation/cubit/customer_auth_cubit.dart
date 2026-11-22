@@ -211,6 +211,9 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
         },
       );
     } catch (_) {
+      if (generation == _listenGeneration) {
+        _openingSubscription = false;
+      }
       _onStreamError(generation);
       await _cancelSubscription();
     } finally {
