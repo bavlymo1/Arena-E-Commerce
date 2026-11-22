@@ -851,6 +851,127 @@ void main() {
     expect(await repo.loadPoster('show-a'), <int>[99, 98, 97]);
   });
 
+  test('concurrent same-show loadPoster calls keep per-show generation intact across refcount decrements until all stale loads finish', () async {
+    final store = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store.dispose);
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[1, 2, 3])),
+    };
+
+    final repo = FirestoreShowsRepository(_FakeFirestore(store));
+    final gates = <Completer<void>>[];
+    store.onBeforePosterGet = (id) {
+      if (id != 'show-a') return Future<void>.value();
+      final gate = Completer<void>();
+      gates.add(gate);
+      return gate.future;
+    };
+
+    // Sub-case A: Call 1 + Call 2 -> invalidate -> Call 3 -> complete 1 -> 2 -> 3.
+    final call1 = repo.loadPoster('show-a');
+    final call2 = repo.loadPoster('show-a');
+    await pumpEventQueue();
+    expect(gates, hasLength(2));
+
+    repo.invalidatePoster('show-a');
+    final call3 = repo.loadPoster('show-a');
+    await pumpEventQueue();
+    expect(gates, hasLength(3));
+
+    gates[0].complete();
+    expect(await call1, isNull);
+    gates[1].complete();
+    expect(await call2, isNull);
+
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[20, 21, 22])),
+    };
+    gates[2].complete();
+    expect(await call3, <int>[20, 21, 22]);
+
+    final getsAfterCall3 = store.posterGetCalls.length;
+    expect(await repo.loadPoster('show-a'), <int>[20, 21, 22]);
+    expect(store.posterGetCalls, hasLength(getsAfterCall3));
+
+    // Sub-case B: Call 1 finishes after invalidate and BEFORE Call 3 starts while Call 2 stays active.
+    gates.clear();
+    repo.invalidatePoster('show-a');
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[1, 2, 3])),
+    };
+
+    final subCall1 = repo.loadPoster('show-a');
+    final subCall2 = repo.loadPoster('show-a');
+    await pumpEventQueue();
+    expect(gates, hasLength(2));
+
+    repo.invalidatePoster('show-a');
+    gates[0].complete();
+    expect(await subCall1, isNull);
+
+    final subCall3 = repo.loadPoster('show-a');
+    await pumpEventQueue();
+    expect(gates, hasLength(3));
+
+    gates[1].complete();
+    expect(await subCall2, isNull);
+
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[30, 31, 32])),
+    };
+    gates[2].complete();
+    expect(await subCall3, <int>[30, 31, 32]);
+
+    final getsAfterSubCall3 = store.posterGetCalls.length;
+    expect(await repo.loadPoster('show-a'), <int>[30, 31, 32]);
+    expect(store.posterGetCalls, hasLength(getsAfterSubCall3));
+  });
+
+  test('overlapping clearPosterCache and invalidatePoster across concurrent same-show loads discards both and lets subsequent load fetch and cache fresh bytes', () async {
+    final store = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store.dispose);
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[1, 2, 3])),
+    };
+
+    final repo = FirestoreShowsRepository(_FakeFirestore(store));
+    final gates = <Completer<void>>[];
+    store.onBeforePosterGet = (id) {
+      if (id != 'show-a') return Future<void>.value();
+      final gate = Completer<void>();
+      gates.add(gate);
+      return gate.future;
+    };
+
+    final call1 = repo.loadPoster('show-a');
+    await pumpEventQueue();
+    expect(gates, hasLength(1));
+
+    repo.clearPosterCache();
+
+    final call2 = repo.loadPoster('show-a');
+    await pumpEventQueue();
+    expect(gates, hasLength(2));
+
+    repo.invalidatePoster('show-a');
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[44, 55, 66])),
+    };
+
+    gates[0].complete();
+    expect(await call1, isNull);
+    gates[1].complete();
+    expect(await call2, isNull);
+
+    store.onBeforePosterGet = null;
+    final getsBeforeFresh = store.posterGetCalls.length;
+    expect(await repo.loadPoster('show-a'), <int>[44, 55, 66]);
+    expect(store.posterGetCalls, hasLength(getsBeforeFresh + 1));
+
+    expect(await repo.loadPoster('show-a'), <int>[44, 55, 66]);
+    expect(store.posterGetCalls, hasLength(getsBeforeFresh + 1));
+  });
+
   test('in-flight loadPoster started before or during deleteShow resolves null and never repopulates cache', () async {
     final store = _ShowStore(
       deletingShows: <String, Map<String, dynamic>>{
