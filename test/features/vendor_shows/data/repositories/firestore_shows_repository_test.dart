@@ -61,6 +61,7 @@ class _ShowStore {
   final List<(String path, bool includeMetadataChanges)> snapshotCalls =
       <(String, bool)>[];
   int generatedIdCounter = 0;
+  int runTransactionCalls = 0;
   Future<void> Function(String showId)? onBeforeShowGet;
   Future<void> Function(String showId)? onBeforePosterGet;
   final StreamController<DocumentSnapshot<Map<String, dynamic>>>
@@ -130,6 +131,7 @@ final class _FakeFirestore extends Fake implements FirebaseFirestore {
     Duration timeout = const Duration(seconds: 30),
     int maxAttempts = 5,
   }) async {
+    store.runTransactionCalls++;
     final tx = _FakeTransaction(store);
     final result = await transactionHandler(tx);
     tx.apply();
@@ -1146,6 +1148,109 @@ void main() {
     expect(sessions[0].$2['lastBookingId'], '');
     expect(sessions[0].$2['updatedAt'], isA<FieldValue>());
     expect(sessions[1].$2['time'], '19:00');
+  });
+
+  test('addShow uses injected readImageDimensions to persist width and height without dart:ui decoding', () async {
+    final store = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store.dispose);
+    // Header-only JPEG bytes would fail dart:ui.instantiateImageCodec decoding.
+    final headerOnlyPoster = Uint8List.fromList(<int>[
+      0xff,
+      0xd8,
+      0xff,
+      0xe0,
+      0x01,
+      0x02,
+    ]);
+    Uint8List? receivedBytes;
+
+    final repo = FirestoreShowsRepository(
+      _FakeFirestore(store),
+      vendorAccess: _FakeVendorAccessRepository(
+        VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+      ),
+      readImageDimensions: (bytes) async {
+        receivedBytes = bytes;
+        return (1280, 720);
+      },
+    );
+
+    await repo.addShow(
+      NewShow(
+        vendorId: 'vendor-a',
+        title: 'Synthetic Dimensions',
+        description: 'Uses injected dimension reader',
+        showDate: '2026-12-21',
+        sessions: <SessionTime>[SessionTime('14:00')],
+      ),
+      headerOnlyPoster,
+    );
+
+    expect(receivedBytes, headerOnlyPoster);
+    expect(store.runTransactionCalls, 1);
+    expect(store.transactionSets.map((entry) => entry.$1), <String>[
+      'shows/generated-1',
+      'showImages/generated-1',
+      'shows/generated-1/sessions/1400',
+    ]);
+    final imageDoc = store.showImages['generated-1']!;
+    expect(imageDoc['vendorId'], 'vendor-a');
+    expect(imageDoc['mimeType'], 'image/jpeg');
+    expect(imageDoc['width'], 1280);
+    expect(imageDoc['height'], 720);
+    expect((imageDoc['poster'] as Blob).bytes, headerOnlyPoster);
+  });
+
+  test('addShow rethrows readImageDimensions errors before vendor check or Firestore transaction', () async {
+    final store = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store.dispose);
+    var vendorCheckCalls = 0;
+    final headerOnlyPoster = Uint8List.fromList(<int>[
+      0xff,
+      0xd8,
+      0xff,
+      0xe0,
+      0x01,
+      0x02,
+    ]);
+    final show = NewShow(
+      vendorId: 'vendor-a',
+      title: 'Corrupt Poster Show',
+      description: 'Should fail before vendor check or writes',
+      showDate: '2026-12-21',
+      sessions: <SessionTime>[SessionTime('14:00')],
+    );
+
+    Future<void> expectThrowsAndNoSideEffects(Object error) async {
+      final repo = FirestoreShowsRepository(
+        _FakeFirestore(store),
+        vendorAccess: _FakeVendorAccessRepository(
+          VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+          onCheck: () async {
+            vendorCheckCalls++;
+            return VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a');
+          },
+        ),
+        readImageDimensions: (_) async => throw error,
+      );
+
+      await expectLater(
+        repo.addShow(show, headerOnlyPoster),
+        throwsA(same(error)),
+      );
+      expect(vendorCheckCalls, 0);
+      expect(store.runTransactionCalls, 0);
+      expect(store.generatedIdCounter, 0);
+      expect(store.transactionSets, isEmpty);
+      expect(store.deletingShows, isEmpty);
+      expect(store.showImages, isEmpty);
+      expect(store.sessionDocsByShow, isEmpty);
+    }
+
+    await expectThrowsAndNoSideEffects(
+      const FormatException('Corrupt JPEG body'),
+    );
+    await expectThrowsAndNoSideEffects(StateError('Image codec failed'));
   });
 
   test('deleteShow validates inputs, guards ownership, coalesces calls, chunks <=3 pairs per batch, and deletes parent last', () async {

@@ -13,12 +13,20 @@ import '../../domain/models/session_time.dart';
 import '../../domain/models/show.dart';
 import '../../domain/repositories/shows_repository.dart';
 
+/// Decodes `(width, height)` pixel dimensions from encoded poster bytes.
+typedef ImageDimensionsReader = Future<(int, int)> Function(Uint8List bytes);
+
 final class FirestoreShowsRepository implements ShowsRepository {
+  /// Creates a Firestore-backed [ShowsRepository].
+  ///
+  /// Supply [readImageDimensions] to override the default `dart:ui` image codec
+  /// decoder in tests.
   FirestoreShowsRepository(
     this._firestore, {
     this._vendorAccess,
+    ImageDimensionsReader? readImageDimensions,
     @visibleForTesting this.onDeletePairBatchCommitted,
-  });
+  }) : _readImageDimensions = readImageDimensions ?? _jpegDimensions;
 
   /// Maximum `(bookings/{id}, bookingEvents/{id})` pairs deleted per batch.
   ///
@@ -30,6 +38,7 @@ final class FirestoreShowsRepository implements ShowsRepository {
 
   final FirebaseFirestore _firestore;
   final VendorAccessRepository? _vendorAccess;
+  final ImageDimensionsReader _readImageDimensions;
   final _posters = <String, Uint8List>{};
   final _posterGenerations = <String, int>{};
   final _inFlightPosterCounts = <String, int>{};
@@ -247,7 +256,7 @@ final class FirestoreShowsRepository implements ShowsRepository {
       throw ArgumentError('Expected a JPEG poster up to 200 KiB');
     }
     final bytes = Uint8List.fromList(poster);
-    final (width, height) = await _jpegDimensions(bytes);
+    final (width, height) = await _readImageDimensions(bytes);
     final access = await _requireVendor(show.vendorId);
     final vendorId = access.vendorId;
     final document = _shows.doc();
