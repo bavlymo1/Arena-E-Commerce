@@ -253,6 +253,9 @@ final class DemoCustomerRepository
   }
 
   @override
+  void invalidatePoster(String showId) => _posters.remove(showId);
+
+  @override
   void clearPosterCache() => _posters.clear();
   @override
   void dispose() {

@@ -13,6 +13,7 @@ final class FakeShowsRepository implements ShowsRepository {
   final added = <(NewShow, Uint8List)>[];
   final deleted = <String>[];
   final resumed = <String>[];
+  final invalidatedPosters = <String>[];
   int cacheClears = 0;
   bool disposed = false;
 
@@ -80,6 +81,12 @@ final class FakeShowsRepository implements ShowsRepository {
     _checkOpen();
     final poster = posters[showId];
     return poster == null ? null : Uint8List.fromList(poster);
+  }
+
+  @override
+  void invalidatePoster(String showId) {
+    _checkOpen();
+    invalidatedPosters.add(showId);
   }
 
   @override

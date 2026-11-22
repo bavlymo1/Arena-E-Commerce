@@ -46,6 +46,7 @@ final class _StreamingShowsRepository implements ShowsRepository {
   Future<Uint8List?> Function(String showId)? loadPosterHandler;
   int watchCalls = 0;
   final loadedPosterIds = <String>[];
+  final invalidatedPosters = <String>[];
   int cacheClears = 0;
 
   @override
@@ -85,6 +86,9 @@ final class _StreamingShowsRepository implements ShowsRepository {
 
   @override
   Future<void> resumeDeletes(String vendorId) async {}
+
+  @override
+  void invalidatePoster(String showId) => invalidatedPosters.add(showId);
 
   @override
   void clearPosterCache() => cacheClears++;
@@ -147,6 +151,8 @@ void main() {
       pending[0].complete(Uint8List.fromList([1]));
       await pumpEventQueue();
       expect(cubit.state.posters['s1'], [2]);
+      expect(repo.invalidatedPosters, <String>['s1']);
+      expect(repo.cacheClears, 0);
     },
   );
 
@@ -176,6 +182,62 @@ void main() {
     pending[0].complete(Uint8List.fromList([1]));
     await pumpEventQueue();
     expect(cubit.state.posters['s1'], [2]);
+    expect(repo.invalidatedPosters, <String>['s1']);
+    expect(repo.cacheClears, 0);
+  });
+
+  test('per-show revision change or removal invalidates only affected show without clearing cache, while retry clears cache', () async {
+    var loads = 0;
+    final repo = _StreamingShowsRepository(
+      loadPosterHandler: (_) async => Uint8List.fromList([++loads]),
+    );
+    addTearDown(repo.dispose);
+    final cubit = DiscoveryCubit(repo);
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    repo.controller.add(<Show>[
+      _show(id: 's1', title: 'First', createdAt: DateTime.utc(2026, 11, 18)),
+      _show(id: 's2', title: 'Second', createdAt: DateTime.utc(2026, 11, 17)),
+    ]);
+    await pumpEventQueue();
+    expect(cubit.state.posters['s1'], [1]);
+    expect(cubit.state.posters['s2'], [2]);
+
+    // Update s1 only -> invalidates s1, keeps s2, zero cacheClears.
+    repo.controller.add(<Show>[
+      _show(
+        id: 's1',
+        title: 'First Revised',
+        createdAt: DateTime.utc(2026, 11, 18),
+      ),
+      _show(id: 's2', title: 'Second', createdAt: DateTime.utc(2026, 11, 17)),
+    ]);
+    await pumpEventQueue();
+    expect(repo.invalidatedPosters, <String>['s1']);
+    expect(repo.cacheClears, 0);
+    expect(cubit.state.posters['s1'], [3]);
+    expect(cubit.state.posters['s2'], [2]);
+
+    // Remove s2 -> invalidates s2, keeps s1, zero cacheClears.
+    repo.controller.add(<Show>[
+      _show(
+        id: 's1',
+        title: 'First Revised',
+        createdAt: DateTime.utc(2026, 11, 18),
+      ),
+    ]);
+    await pumpEventQueue();
+    expect(repo.invalidatedPosters, <String>['s1', 's2']);
+    expect(repo.cacheClears, 0);
+    expect(cubit.state.posters['s1'], [3]);
+
+    // Full-feed retry still performs full cache clear.
+    final oldController = repo.controller;
+    repo.controller = StreamController<List<Show>>();
+    await cubit.retry();
+    await oldController.close();
+    expect(repo.cacheClears, 1);
   });
 
   test('retry waits for cleanup and coalesces pending retry', () async {

@@ -226,9 +226,7 @@ final class VendorShowsCubit extends Cubit<VendorShowsState> {
 
     for (final id in {...changedIds, ...removedIds}) {
       _posterRequests.remove(id);
-    }
-    if (changedIds.isNotEmpty || removedIds.isNotEmpty) {
-      _repository.clearPosterCache();
+      _repository.invalidatePoster(id);
     }
 
     final retainedPosters = <String, Uint8List?>{

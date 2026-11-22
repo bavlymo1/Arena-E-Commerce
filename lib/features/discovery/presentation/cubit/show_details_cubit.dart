@@ -102,7 +102,7 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
     try {
       await _cancelSubscriptions();
       if (isClosed || generation != _listenGeneration) return;
-      if (refreshPoster) _repository.clearPosterCache();
+      if (refreshPoster) _repository.invalidatePoster(state.showId);
       _showSubscription = _repository
           .watchShow(state.showId)
           .listen(
@@ -149,7 +149,7 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
       _latestSessions = const <Session>[];
       _posterRequest++;
       _posterRevision = null;
-      _repository.clearPosterCache();
+      _repository.invalidatePoster(state.showId);
       _posterRequestStarted = false;
       _posterLoading = false;
       _latestPosterBytes = null;
@@ -171,7 +171,7 @@ final class ShowDetailsCubit extends Cubit<ShowDetailsState> {
       _posterRequest++;
       _posterRequestStarted = false;
       _latestPosterBytes = null;
-      _repository.clearPosterCache();
+      _repository.invalidatePoster(state.showId);
     }
     _posterRevision = revision;
 

@@ -31,6 +31,8 @@ final class FirestoreShowsRepository implements ShowsRepository {
   final FirebaseFirestore _firestore;
   final VendorAccessRepository? _vendorAccess;
   final _posters = <String, Uint8List>{};
+  final _posterGenerations = <String, int>{};
+  final _inFlightPosterCounts = <String, int>{};
   final _inFlightDeletes = <String, Future<void>>{};
   int _posterGeneration = 0;
   bool _disposed = false;
@@ -106,28 +108,54 @@ final class FirestoreShowsRepository implements ShowsRepository {
 
   @override
   Future<Uint8List?> loadPoster(String showId) async {
-    if (_disposed) return null;
+    if (_disposed || _inFlightDeletes.containsKey(showId)) return null;
     if (_posters.remove(showId) case final bytes?) {
       _posters[showId] = bytes;
       return Uint8List.fromList(bytes);
     }
-    final generation = _posterGeneration;
-    final snapshot = await _firestore
-        .collection('showImages')
-        .doc(showId)
-        .get(const GetOptions(source: Source.server));
-    if (generation != _posterGeneration) return null;
-    final bytes = (snapshot.data()?['poster'] as Blob?)?.bytes;
-    if (bytes == null || bytes.isEmpty) return null;
-    _posters[showId] = Uint8List.fromList(bytes);
-    if (_posters.length > 32) _posters.remove(_posters.keys.first);
-    return Uint8List.fromList(bytes);
+    final globalGen = _posterGeneration;
+    final showGen = _posterGenerations[showId] ?? 0;
+    _inFlightPosterCounts[showId] = (_inFlightPosterCounts[showId] ?? 0) + 1;
+    try {
+      final snapshot = await _firestore
+          .collection('showImages')
+          .doc(showId)
+          .get(const GetOptions(source: Source.server));
+      if (_disposed ||
+          _inFlightDeletes.containsKey(showId) ||
+          globalGen != _posterGeneration ||
+          showGen != (_posterGenerations[showId] ?? 0)) {
+        return null;
+      }
+      final bytes = (snapshot.data()?['poster'] as Blob?)?.bytes;
+      if (bytes == null || bytes.isEmpty) return null;
+      _posters[showId] = Uint8List.fromList(bytes);
+      if (_posters.length > 32) _posters.remove(_posters.keys.first);
+      return Uint8List.fromList(bytes);
+    } finally {
+      final remaining = (_inFlightPosterCounts[showId] ?? 1) - 1;
+      if (remaining <= 0) {
+        _inFlightPosterCounts.remove(showId);
+        _posterGenerations.remove(showId);
+      } else {
+        _inFlightPosterCounts[showId] = remaining;
+      }
+    }
+  }
+
+  @override
+  void invalidatePoster(String showId) {
+    _posters.remove(showId);
+    if ((_inFlightPosterCounts[showId] ?? 0) > 0) {
+      _posterGenerations[showId] = (_posterGenerations[showId] ?? 0) + 1;
+    }
   }
 
   @override
   void clearPosterCache() {
     _posterGeneration++;
     _posters.clear();
+    _posterGenerations.clear();
   }
 
   @override
@@ -351,10 +379,10 @@ final class FirestoreShowsRepository implements ShowsRepository {
   }
 
   Future<void> _deleteShowInternal(String showId, String vendorId) async {
+    invalidatePoster(showId);
     final showRef = _shows.doc(showId);
     final showSnap = await showRef.get(_server);
     if (!showSnap.exists) {
-      _posters.remove(showId);
       return;
     }
 
@@ -425,6 +453,6 @@ final class FirestoreShowsRepository implements ShowsRepository {
     }
 
     await showRef.delete();
-    _posters.remove(showId);
+    invalidatePoster(showId);
   }
 }

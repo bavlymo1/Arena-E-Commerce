@@ -63,6 +63,7 @@ final class _StreamingShowDetailsRepository implements ShowsRepository {
   Future<Uint8List?> Function(String showId)? loadPosterHandler;
   int watchShowCalls = 0;
   int watchSessionsCalls = 0;
+  final invalidatedPosters = <String>[];
   int cacheClears = 0;
 
   @override
@@ -104,6 +105,9 @@ final class _StreamingShowDetailsRepository implements ShowsRepository {
 
   @override
   Future<void> resumeDeletes(String vendorId) async {}
+
+  @override
+  void invalidatePoster(String showId) => invalidatedPosters.add(showId);
 
   @override
   void clearPosterCache() => cacheClears++;
@@ -200,7 +204,8 @@ void main() {
     repo.sessionsController.add([_session('19:00')]);
     await pumpEventQueue();
     expect(cubit.state.posterBytes, [2]);
-    expect(repo.cacheClears, 1);
+    expect(repo.invalidatedPosters, <String>['show-1']);
+    expect(repo.cacheClears, 0);
   });
 
   test('removed and re-added show rejects old in-flight poster', () async {
@@ -231,6 +236,8 @@ void main() {
     await pumpEventQueue();
     expect(cubit.state.posterBytes, [2]);
     expect(cubit.state.sessions.single.id, '1400');
+    expect(repo.invalidatedPosters, <String>['show-1']);
+    expect(repo.cacheClears, 0);
   });
 
   test('retry waits for cleanup and coalesces pending retry', () async {
@@ -266,6 +273,8 @@ void main() {
     }
     expect(repo.watchShowCalls, 2);
     expect(repo.watchSessionsCalls, 2);
+    expect(repo.invalidatedPosters, <String>['show-1']);
+    expect(repo.cacheClears, 0);
   });
 
   test(
@@ -294,6 +303,8 @@ void main() {
       pending[0].complete(Uint8List.fromList([1]));
       await pumpEventQueue();
       expect(cubit.state.posterBytes, [2]);
+      expect(repo.invalidatedPosters, <String>['show-1']);
+      expect(repo.cacheClears, 0);
     },
   );
 
@@ -375,6 +386,8 @@ void main() {
     await pumpEventQueue();
     expect(cubit.state.status, ShowDetailsStatus.unavailable);
     expect(cubit.state.sessions, isEmpty);
+    expect(repo.invalidatedPosters, <String>['show-1', 'show-1']);
+    expect(repo.cacheClears, 0);
   });
 
   for (final failedShowChannel in <bool>[true, false]) {

@@ -48,6 +48,7 @@ final class _StreamingVendorShowsRepository implements ShowsRepository {
   Future<void> Function(String showId)? deleteShowHandler;
   Future<void> Function(String vendorId)? resumeDeletesHandler;
   int watchVendorShowsCalls = 0;
+  final invalidatedPosters = <String>[];
   int cacheClears = 0;
   int resumeDeletesCalls = 0;
   final deletedShowIds = <String>[];
@@ -65,6 +66,9 @@ final class _StreamingVendorShowsRepository implements ShowsRepository {
     if (loadPosterHandler != null) return loadPosterHandler!(showId);
     return null;
   }
+
+  @override
+  void invalidatePoster(String showId) => invalidatedPosters.add(showId);
 
   @override
   void clearPosterCache() => cacheClears++;
@@ -179,6 +183,7 @@ void main() {
 
       await cubit.retry();
       expect(repo.cacheClears, 1);
+      expect(repo.invalidatedPosters, isEmpty);
       expect(repo.watchVendorShowsCalls, 2);
 
       repo.controller.add(<Show>[
@@ -223,7 +228,8 @@ void main() {
     repo.controller.add(<Show>[revised]);
     await pumpEventQueue();
     expect(calls, 2);
-    expect(repo.cacheClears, 1);
+    expect(repo.invalidatedPosters, <String>['show-1']);
+    expect(repo.cacheClears, 0);
 
     // Finish newer request first, then older stale request.
     secondPoster.complete(Uint8List.fromList(<int>[9, 9]));
@@ -233,6 +239,33 @@ void main() {
     firstPoster.complete(Uint8List.fromList(<int>[1, 1]));
     await pumpEventQueue();
     expect(cubit.state.posters['show-1'], Uint8List.fromList(<int>[9, 9]));
+  });
+
+  test('removing one show invalidates only that show without clearing cache and preserves sibling posters', () async {
+    var loads = 0;
+    final repo = _StreamingVendorShowsRepository(
+      loadPosterHandler: (_) async => Uint8List.fromList(<int>[++loads]),
+    );
+    addTearDown(repo.dispose);
+    final cubit = VendorShowsCubit(repo, vendorId: 'vendor-1');
+    addTearDown(cubit.close);
+
+    repo.controller.add(<Show>[
+      _show(id: 'show-a', createdAt: DateTime.utc(2026, 11, 18)),
+      _show(id: 'show-b', createdAt: DateTime.utc(2026, 11, 17)),
+    ]);
+    await pumpEventQueue();
+    expect(cubit.state.posters['show-a'], <int>[1]);
+    expect(cubit.state.posters['show-b'], <int>[2]);
+
+    repo.controller.add(<Show>[
+      _show(id: 'show-b', createdAt: DateTime.utc(2026, 11, 17)),
+    ]);
+    await pumpEventQueue();
+    expect(repo.invalidatedPosters, <String>['show-a']);
+    expect(repo.cacheClears, 0);
+    expect(cubit.state.posters['show-b'], <int>[2]);
+    expect(cubit.state.posters.containsKey('show-a'), isFalse);
   });
 
   test('awaits prior subscription cancellation on retry and coalesces concurrent retries', () async {

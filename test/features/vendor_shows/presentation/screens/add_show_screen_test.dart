@@ -124,6 +124,9 @@ final class _ScriptedAddShowRepository implements ShowsRepository {
   Future<Uint8List?> loadPoster(String showId) async => null;
 
   @override
+  void invalidatePoster(String showId) {}
+
+  @override
   void clearPosterCache() {}
 
   @override

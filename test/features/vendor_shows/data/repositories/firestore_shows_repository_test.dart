@@ -772,6 +772,148 @@ void main() {
     expect(store.posterGetCalls, hasLength(countAfterClear + 1));
   });
 
+  test('invalidatePoster evicts only target show, discards matching in-flight load without dropping sibling loads, and cleans up per-show tracking', () async {
+    final store = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
+    addTearDown(store.dispose);
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[1, 2, 3])),
+    };
+    store.showImages['show-b'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[4, 5, 6])),
+    };
+    store.showImages['show-c'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[7, 8, 9])),
+    };
+
+    final repo = FirestoreShowsRepository(_FakeFirestore(store));
+
+    // 1. Invalidating show-a evicts only show-a while preserving show-b cached.
+    expect(await repo.loadPoster('show-a'), <int>[1, 2, 3]);
+    expect(await repo.loadPoster('show-b'), <int>[4, 5, 6]);
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[10, 20, 30])),
+    };
+    repo.invalidatePoster('show-a');
+
+    final getsBeforeSiblingRead = store.posterGetCalls.length;
+    expect(await repo.loadPoster('show-b'), <int>[4, 5, 6]);
+    expect(store.posterGetCalls, hasLength(getsBeforeSiblingRead));
+
+    expect(await repo.loadPoster('show-a'), <int>[10, 20, 30]);
+    expect(store.posterGetCalls, hasLength(getsBeforeSiblingRead + 1));
+
+    // 2. Mid-flight invalidatePoster(show-a) discards in-flight show-a while concurrent show-c still caches.
+    repo.invalidatePoster('show-a');
+    final gateA = Completer<void>();
+    final gateC = Completer<void>();
+    store.onBeforePosterGet = (id) => switch (id) {
+      'show-a' => gateA.future,
+      'show-c' => gateC.future,
+      _ => Future<void>.value(),
+    };
+
+    final inFlightA = repo.loadPoster('show-a');
+    final inFlightC = repo.loadPoster('show-c');
+    await pumpEventQueue();
+
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[99, 98, 97])),
+    };
+    repo.invalidatePoster('show-a');
+
+    store.onBeforePosterGet = null;
+    gateA.complete();
+    gateC.complete();
+
+    expect(await inFlightA, isNull);
+    expect(await inFlightC, <int>[7, 8, 9]);
+
+    // show-c is cached and show-b remains cached; show-a was not repopulated and fresh load caches new bytes.
+    final getsAfterConcurrent = store.posterGetCalls.length;
+    expect(await repo.loadPoster('show-c'), <int>[7, 8, 9]);
+    expect(await repo.loadPoster('show-b'), <int>[4, 5, 6]);
+    expect(store.posterGetCalls, hasLength(getsAfterConcurrent));
+
+    expect(await repo.loadPoster('show-a'), <int>[99, 98, 97]);
+    expect(store.posterGetCalls, hasLength(getsAfterConcurrent + 1));
+    expect(await repo.loadPoster('show-a'), <int>[99, 98, 97]);
+    expect(store.posterGetCalls, hasLength(getsAfterConcurrent + 1));
+
+    // 3. Error during loadPoster decrements in-flight count cleanly so subsequent loads work.
+    repo.invalidatePoster('show-a');
+    store.onBeforePosterGet = (id) => id == 'show-a'
+        ? Future<void>.error(StateError('transient read failure'))
+        : Future<void>.value();
+    await expectLater(repo.loadPoster('show-a'), throwsStateError);
+
+    store.onBeforePosterGet = null;
+    repo.invalidatePoster('show-a');
+    expect(await repo.loadPoster('show-a'), <int>[99, 98, 97]);
+  });
+
+  test('in-flight loadPoster started before or during deleteShow resolves null and never repopulates cache', () async {
+    final store = _ShowStore(
+      deletingShows: <String, Map<String, dynamic>>{
+        'show-a': <String, dynamic>{
+          'vendorId': 'vendor-a',
+          'status': 'active',
+          'sessionIds': const <String>[],
+        },
+      },
+    );
+    addTearDown(store.dispose);
+    store.showImages['show-a'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[1, 2, 3])),
+    };
+    store.showImages['show-b'] = <String, dynamic>{
+      'poster': Blob(Uint8List.fromList(<int>[4, 5, 6])),
+    };
+
+    final repo = FirestoreShowsRepository(
+      _FakeFirestore(store),
+      vendorAccess: _FakeVendorAccessRepository(
+        VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+      ),
+    );
+
+    // 1. Pre-cache show-b and pause a loadPoster('show-a') started BEFORE deleteShow.
+    expect(await repo.loadPoster('show-b'), <int>[4, 5, 6]);
+    final preDeletePosterGate = Completer<void>();
+    store.onBeforePosterGet = (id) =>
+        id == 'show-a' ? preDeletePosterGate.future : Future<void>.value();
+    final preDeleteLoad = repo.loadPoster('show-a');
+    await pumpEventQueue();
+
+    // Start deleteShow('show-a') paused on show get to also test loadPoster DURING deleteShow.
+    final deleteGate = Completer<void>();
+    store.onBeforeShowGet = (id) =>
+        id == 'show-a' ? deleteGate.future : Future<void>.value();
+    final deleteFuture = repo.deleteShow('show-a');
+    await pumpEventQueue();
+
+    // A loadPoster('show-a') started DURING deleteShow must resolve null immediately
+    // without touching showImages, while show-b remains cached.
+    final getCountBeforeDuring = store.posterGetCalls.length;
+    expect(await repo.loadPoster('show-a'), isNull);
+    expect(store.posterGetCalls, hasLength(getCountBeforeDuring));
+    expect(await repo.loadPoster('show-b'), <int>[4, 5, 6]);
+
+    // Finish deleteShow, then release pre-delete loadPoster('show-a').
+    store.onBeforeShowGet = null;
+    store.onBeforePosterGet = null;
+    deleteGate.complete();
+    await deleteFuture;
+
+    preDeletePosterGate.complete();
+    expect(await preDeleteLoad, isNull);
+
+    // Confirm _posters['show-a'] was NOT repopulated by preDeleteLoad:
+    // if _posters['show-a'] had been populated, this call would hit cache instead of server.
+    final getCountAfterDelete = store.posterGetCalls.length;
+    await repo.loadPoster('show-a');
+    expect(store.posterGetCalls, hasLength(getCountAfterDelete + 1));
+  });
+
   test('addShow validates inputs, enforces vendor enrollment, and writes atomic 3-collection show transaction', () async {
     final store = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
     addTearDown(store.dispose);

@@ -67,6 +67,7 @@ final class _StreamingVendorDetailsRepository implements ShowsRepository {
   Future<void> Function(String showId)? deleteShowHandler;
   int watchShowCalls = 0;
   int watchSessionsCalls = 0;
+  final invalidatedPosters = <String>[];
   int cacheClears = 0;
   final deletedShowIds = <String>[];
 
@@ -90,6 +91,9 @@ final class _StreamingVendorDetailsRepository implements ShowsRepository {
     if (loadPosterHandler != null) return loadPosterHandler!(showId);
     return null;
   }
+
+  @override
+  void invalidatePoster(String showId) => invalidatedPosters.add(showId);
 
   @override
   void clearPosterCache() => cacheClears++;
@@ -226,6 +230,8 @@ void main() {
     repo.showController.add(null);
     await pumpEventQueue();
     expect(cubit.state.status, VendorShowDetailsStatus.unavailable);
+    expect(repo.invalidatedPosters, <String>['show-1', 'show-1', 'show-1']);
+    expect(repo.cacheClears, 0);
   });
 
   test(
@@ -338,7 +344,8 @@ void main() {
 
     expect(repo.watchShowCalls, 2);
     expect(repo.watchSessionsCalls, 2);
-    expect(repo.cacheClears, 1);
+    expect(repo.invalidatedPosters, <String>['show-1']);
+    expect(repo.cacheClears, 0);
 
     await cubit.close();
     expect(cubit.isClosed, isTrue);
@@ -375,7 +382,8 @@ void main() {
       );
       await pumpEventQueue();
       expect(calls, 2);
-      expect(repo.cacheClears, 1);
+      expect(repo.invalidatedPosters, <String>['show-1']);
+      expect(repo.cacheClears, 0);
 
       secondPoster.complete(Uint8List.fromList(<int>[8, 8]));
       await pumpEventQueue();

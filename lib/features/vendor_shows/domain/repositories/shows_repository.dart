@@ -19,6 +19,9 @@ abstract interface class ShowsRepository {
   Future<void> resumeDeletes(String vendorId);
   Future<Uint8List?> loadPoster(String showId);
 
+  /// Evicts a single show's cached poster and drops matching in-flight loads.
+  void invalidatePoster(String showId);
+
   /// Session cleanup must leave this app-scoped repository usable.
   void clearPosterCache();
 

@@ -150,6 +150,9 @@ final class _ControllableDetailsRepository implements ShowsRepository {
   Future<void> resumeDeletes(String vendorId) async {}
 
   @override
+  void invalidatePoster(String showId) {}
+
+  @override
   void clearPosterCache() {}
 
   @override
