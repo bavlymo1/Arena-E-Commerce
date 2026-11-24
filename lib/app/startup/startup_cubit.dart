@@ -22,7 +22,9 @@ final class StartupCubit extends Cubit<StartupState> {
     emit(const StartupState());
     try {
       final reason = await _check();
-      if (!isClosed) emit(StartupState(checking: false, message: reason));
+      if (!isClosed && reason.isNotEmpty) {
+        emit(StartupState(checking: false, message: reason));
+      }
     } catch (_) {
       if (!isClosed) {
         emit(

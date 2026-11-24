@@ -170,6 +170,26 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
+
+      // Succeeding retry (empty message before root widget handoff) stays checking.
+      final okServices = createStartupErrorServices(
+        AppVariant.vendor,
+        initialError: 'Initial failure.',
+        retryLaunch: () async => '',
+      );
+      await tester.pumpWidget(
+        ArenaPassApp(services: okServices, startupTitle: 'Startup failed'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Initial failure.'), findsOneWidget);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
     },
   );
 

@@ -17,7 +17,7 @@ Implemented files:
 
 Remaining work:
 - Physical-device notification verification (including Android release/debug delivery and backgrounded reopen catch-up).
-- Optional Tier 2 approved FCM sender (dependencies, Android manifest/Gradle desugaring, and app DI/route wiring in `lib/app/di/vendor_registration.dart` and `lib/app/vendor/` are implemented).
+- Optional Tier 2 remote push sender (`firebase_messaging` / trusted backend trigger, excluded from Tier 1 `pubspec.yaml` while Tier 1 local alerts and `SharedPreferences` watermarks are implemented in `lib/app/di/vendor_registration.dart` and `lib/app/vendor/`).
 
 Dependencies: presentation -> domain contracts/models; data implements domain contracts. Domain has no Firebase/UI/GetIt imports. Cubits receive dependencies through constructors. GetIt resolution belongs to app composition, not this feature. Cross-feature use is through domain contracts; do not import another feature's presentation/data.
 
