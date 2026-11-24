@@ -5,11 +5,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../vendor_shows/domain/models/show.dart';
 import '../../../vendor_shows/domain/repositories/shows_repository.dart';
+import '../../../vendor_shows/domain/services/show_poster_coordination.dart';
 import 'discovery_state.dart';
 
 final class DiscoveryCubit extends Cubit<DiscoveryState> {
   DiscoveryCubit(this._repository, {bool autoStart = true})
-    : super(DiscoveryState()) {
+    : _posterCoordinator = ShowFeedPosterCoordinator(_repository),
+      super(DiscoveryState()) {
     if (autoStart) {
       unawaited(start());
     }
@@ -18,13 +20,13 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
   static const int feedLimit = 100;
 
   final ShowsRepository _repository;
+  final ShowFeedPosterCoordinator _posterCoordinator;
   StreamSubscription<List<Show>>? _showsSubscription;
   Future<void> _cancellation = Future<void>.value();
   Future<void>? _activeStartFuture;
   int _listenGeneration = 0;
   bool _awaitingInitialEvent = false;
   bool _openingSubscription = false;
-  final _posterRequests = <String, Object>{};
 
   Future<void> start() {
     if (isClosed) return Future<void>.value();
@@ -46,7 +48,7 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
     final generation = ++_listenGeneration;
     _awaitingInitialEvent = true;
     _openingSubscription = true;
-    _posterRequests.clear();
+    _posterCoordinator.reset();
 
     final nextPosters = retryMissingPosters
         ? <String, Uint8List?>{}
@@ -117,65 +119,35 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
     final activeShows =
         rawShows.where((show) => show.status == ShowStatus.active).toList()
           ..sort(Show.compareNewestFirst);
-    final activeIds = activeShows.map((show) => show.id).toSet();
-    final previous = {for (final show in state.shows) show.id: show};
-    final changedIds = {
-      for (final show in activeShows)
-        if (previous[show.id] case final old?
-            when old.posterRevision != show.posterRevision)
-          show.id,
-    };
-    final removedIds = previous.keys.toSet().difference(activeIds);
-    for (final id in {...changedIds, ...removedIds}) {
-      _posterRequests.remove(id);
-      _repository.invalidatePoster(id);
-    }
-
-    final retainedPosters = <String, Uint8List?>{
-      for (final entry in state.posters.entries)
-        if (activeIds.contains(entry.key) && !changedIds.contains(entry.key))
-          entry.key: entry.value,
-    };
-    final updatedLoading = state.loadingPosterIds
-        .where((id) => activeIds.contains(id) && !changedIds.contains(id))
-        .toSet();
-
-    final idsToLoad = <String>[];
-    for (final show in activeShows) {
-      if (!retainedPosters.containsKey(show.id) &&
-          updatedLoading.add(show.id)) {
-        idsToLoad.add(show.id);
-      }
-    }
+    final posterPlan = _posterCoordinator.reconcileSnapshot(
+      previousShows: state.shows,
+      nextShows: activeShows,
+      currentPosters: state.posters,
+      currentLoadingIds: state.loadingPosterIds,
+    );
 
     emit(
       state.copyWith(
         status: DiscoveryStatus.ready,
         shows: activeShows,
         filteredShows: _filterShows(activeShows, state.searchQuery),
-        posters: retainedPosters,
-        loadingPosterIds: updatedLoading,
+        posters: posterPlan.retainedPosters,
+        loadingPosterIds: posterPlan.loadingPosterIds,
         clearErrorMessage: true,
       ),
     );
 
-    for (final showId in idsToLoad) {
+    for (final showId in posterPlan.idsToLoad) {
       unawaited(_loadPoster(generation, showId));
     }
   }
 
   Future<void> _loadPoster(int generation, String showId) async {
-    final request = Object();
-    _posterRequests[showId] = request;
-    Uint8List? bytes;
-    try {
-      bytes = await _repository.loadPoster(showId);
-    } catch (_) {
-      bytes = null;
-    }
-    if (isClosed ||
-        generation != _listenGeneration ||
-        !identical(_posterRequests[showId], request)) {
+    final result = await _posterCoordinator.loadPoster(
+      showId: showId,
+      isActive: () => !isClosed && generation == _listenGeneration,
+    );
+    if (result == null || isClosed || generation != _listenGeneration) {
       return;
     }
 
@@ -189,7 +161,7 @@ final class DiscoveryCubit extends Cubit<DiscoveryState> {
     }
 
     final updatedPosters = Map<String, Uint8List?>.from(state.posters)
-      ..[showId] = bytes;
+      ..[showId] = result.bytes;
     emit(
       state.copyWith(posters: updatedPosters, loadingPosterIds: updatedLoading),
     );

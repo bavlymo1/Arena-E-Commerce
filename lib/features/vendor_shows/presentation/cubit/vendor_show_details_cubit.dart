@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -7,6 +6,7 @@ import '../../domain/models/new_show.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
 import '../../domain/repositories/shows_repository.dart';
+import '../../domain/services/show_poster_coordination.dart';
 import 'vendor_show_details_state.dart';
 
 /// Manages vendor-owned show metadata, daily sessions, poster, and selected session.
@@ -18,6 +18,10 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     String? initialSessionId,
     bool autoStart = true,
   }) : _preferredSessionId = _normalizeOptionalId(initialSessionId),
+       _poster = SingleShowPosterCoordinator(
+         _repository,
+         showId: _requireNonEmpty(showId, 'showId'),
+       ),
        super(
          VendorShowDetailsState(
            vendorId: _requireNonEmpty(vendorId, 'vendorId'),
@@ -33,6 +37,7 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
   static const int maxSessions = maxShowSessions;
 
   final ShowsRepository _repository;
+  final SingleShowPosterCoordinator _poster;
   StreamSubscription<Show?>? _showSubscription;
   StreamSubscription<List<Session>>? _sessionsSubscription;
   Future<void> _cancellation = Future<void>.value();
@@ -46,11 +51,6 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
   Show? _latestShow;
   List<Session> _latestSessions = const <Session>[];
   String? _preferredSessionId;
-  bool _posterRequestStarted = false;
-  bool _posterLoading = false;
-  Uint8List? _latestPosterBytes;
-  Object? _posterRevision;
-  int _posterRequest = 0;
 
   static String _requireNonEmpty(String value, String name) {
     if (value.trim().isEmpty) {
@@ -143,20 +143,16 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     final generation = ++_listenGeneration;
     _awaitingInitialEvent = true;
     _openingSubscriptions = true;
-    _posterRequest++;
     _hasShowSnapshot = false;
     _hasSessionsSnapshot = false;
     _latestShow = null;
     _latestSessions = const <Session>[];
-    _latestPosterBytes = null;
-    _posterRequestStarted = false;
-    _posterLoading = false;
-    _posterRevision = null;
+    _poster.reset();
 
     emit(
       state.copyWith(
         status: VendorShowDetailsStatus.loading,
-        posterLoading: _posterLoading,
+        posterLoading: _poster.isLoading,
         clearPosterBytes: true,
         clearErrorMessage: true,
       ),
@@ -236,12 +232,7 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
       }
       _hasSessionsSnapshot = false;
       _latestSessions = const <Session>[];
-      _posterRequest++;
-      _posterRevision = null;
-      _repository.invalidatePoster(state.showId);
-      _posterRequestStarted = false;
-      _posterLoading = false;
-      _latestPosterBytes = null;
+      _poster.reset(invalidateCache: true);
       emit(
         state.copyWith(
           status: VendorShowDetailsStatus.unavailable,
@@ -257,14 +248,9 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     }
 
     final ownedShow = show!;
-    final revision = ownedShow.posterRevision;
-    if (_posterRevision != null && _posterRevision != revision) {
-      _posterRequest++;
-      _posterRequestStarted = false;
-      _latestPosterBytes = null;
-      _repository.invalidatePoster(state.showId);
-    }
-    _posterRevision = revision;
+    final posterRequestId = _poster.prepareLoadForRevision(
+      ownedShow.posterRevision,
+    );
 
     if (state.isUnavailable && !_hasSessionsSnapshot) {
       emit(
@@ -277,10 +263,8 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
       );
     }
 
-    if (!_posterRequestStarted && _latestPosterBytes == null) {
-      _posterRequestStarted = true;
-      _posterLoading = true;
-      unawaited(_loadPoster(generation, ++_posterRequest));
+    if (posterRequestId != null) {
+      unawaited(_loadPoster(generation, posterRequestId));
     }
 
     _reconcileSnapshots();
@@ -300,9 +284,10 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     if (!_isOwnedActiveShow(show)) return;
     if (!_hasSessionsSnapshot) return;
 
-    final ordered = List<Session>.of(_latestSessions)
-      ..sort((a, b) => a.time.value.compareTo(b.time.value));
-    final bounded = List<Session>.unmodifiable(ordered.take(maxSessions));
+    final bounded = sortAndBoundSessions(
+      _latestSessions,
+      maxSessions: maxSessions,
+    );
 
     String? resolvedSessionId;
     if (bounded.isNotEmpty) {
@@ -322,40 +307,28 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
         sessions: bounded,
         selectedSessionId: resolvedSessionId,
         clearSelectedSessionId: resolvedSessionId == null,
-        posterBytes: _latestPosterBytes,
-        clearPosterBytes: _latestPosterBytes == null,
-        posterLoading: _posterLoading,
+        posterBytes: _poster.bytes,
+        clearPosterBytes: _poster.bytes == null,
+        posterLoading: _poster.isLoading,
         clearErrorMessage: true,
       ),
     );
   }
 
-  Future<void> _loadPoster(int generation, int request) async {
-    Uint8List? bytes;
-    try {
-      bytes = await _repository.loadPoster(state.showId);
-    } catch (_) {
-      bytes = null;
-    }
-    if (isClosed ||
-        generation != _listenGeneration ||
-        request != _posterRequest) {
-      return;
-    }
+  Future<void> _loadPoster(int generation, int requestId) async {
+    final applied = await _poster.completeLoad(
+      requestId,
+      isActive: () => !isClosed && generation == _listenGeneration,
+      isShowValid: () => _isOwnedActiveShow(_latestShow),
+    );
+    if (!applied) return;
 
-    _posterLoading = false;
-    final show = _latestShow;
-    if (!_isOwnedActiveShow(show)) {
-      return;
-    }
-
-    _latestPosterBytes = bytes;
     if (state.status == VendorShowDetailsStatus.ready) {
       emit(
         state.copyWith(
-          posterBytes: bytes,
-          clearPosterBytes: bytes == null,
-          posterLoading: false,
+          posterBytes: _poster.bytes,
+          clearPosterBytes: _poster.bytes == null,
+          posterLoading: _poster.isLoading,
         ),
       );
     }
@@ -374,11 +347,11 @@ final class VendorShowDetailsCubit extends Cubit<VendorShowDetailsState> {
     _awaitingInitialEvent = false;
     if (showFailed) _hasShowSnapshot = false;
     if (sessionsFailed) _hasSessionsSnapshot = false;
-    _posterLoading = false;
+    _poster.cancelLoadingState();
     emit(
       state.copyWith(
         status: VendorShowDetailsStatus.error,
-        posterLoading: false,
+        posterLoading: _poster.isLoading,
         errorMessage:
             'Unable to load show details. Your existing data is preserved.',
       ),
