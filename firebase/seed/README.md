@@ -20,7 +20,7 @@ There is no fallback to live Firebase endpoints.
   - `seed-show-skyline-jam` (`Skyline Jam`, `2026-12-20`, slots `14:00` / `19:00`; `19:00` pre-booked seats `[1, 2, 3, 4, 5]` by `c1@test.dev` with `shows.bookedCount = 5`, `bookings/seed-booking-1`, and `bookingEvents/seed-booking-1`).
   - `seed-show-kingdom-clash` (`Kingdom Clash`, `2026-12-21`, slots `14:00` / `19:00` / `21:30`).
   - `seed-show-midnight-drift` (`Midnight Drift`, `2026-12-22`, slots `16:00` / `20:00`).
-- **Posters:** `showImages/{showId}` binary `bytesValue` blobs loaded from `assets/demo/*.jpg` (`< 150 KiB`), `mimeType: 'image/jpeg'`, with integer `width` and `height`.
+- **Posters:** `showImages/{showId}` binary `bytesValue` blobs loaded from `test/fixtures/posters/*.jpg` (`< 150 KiB`), `mimeType: 'image/jpeg'`, with integer `width` and `height`.
 
 The first run creates the fixture documents and an emulator-only marker in one atomic commit. Later runs preserve rehearsal changes, including bookings and deleted shows. Use a fresh disposable emulator to restore the original fixtures. An older or partial seed with colliding document IDs fails without overwriting Firestore records.
 

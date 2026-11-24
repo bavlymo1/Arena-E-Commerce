@@ -1,13 +1,10 @@
 # Discovery
 
-**Status: scaffold only.** No feature behavior/configuration is implemented here.
+**Status: newest-first customer show feed, search filter, and show details/session selection implemented.**
 
-Newest-show feed, bounded title search and details.
+Implemented components:
+- `presentation/cubit/discovery_cubit.dart`: watches `ShowsRepository.watchActiveShows(limit: 100)`, sorts newest-first, filters case-insensitively on loaded `titleSearch`, and manages bounded poster loading.
+- `presentation/cubit/show_details_cubit.dart`: watches `watchShow` and `watchSessions` (1–5 chronological slots), transitioning cleanly to unavailable on `ShowStatus.deleting` or removal.
+- `presentation/screens/`: `DiscoveryScreen` and `ShowDetailsScreen` consuming canonical `Show`, `Session`, and `ShowsRepository` from `vendor_shows/domain`.
 
-Contracts: Consumes canonical Show, Session and ShowsRepository from vendor_shows/domain; no duplicate model or second writer.
-
-Intended implementation: DiscoveryCubit and ShowDetailsCubit; close route subscriptions, render unavailable/deleted state.
-
-Dependencies: presentation -> domain contracts/models; data implements domain contracts. Domain has no Firebase/UI/GetIt imports. Cubits receive dependencies through constructors. GetIt resolution belongs to app composition, not this feature. Cross-feature use is through domain contracts; do not import another feature's presentation/data. Use snake_case files, capability_repository.dart, backend-specific implementations, *_cubit.dart, *_state.dart, *_screen.dart and *_test.dart names only when content is implemented.
-
-Private workspace references (not copied into the app export): `plan/FEATURE_ARCHITECTURE.md` §§1–8; merged plan §§5/9–13; Tier 2 plan §5 for extensions. These paths are relative to the full workspace; they are intentionally not public Markdown links.
+Private workspace references (not copied into the app export): `plan/FEATURE_ARCHITECTURE.md` §§1–8; merged plan §§5/9–13.

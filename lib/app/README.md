@@ -1,21 +1,16 @@
 # Application composition
 
-**Status: startup shells and opt-in local Customer/Vendor journeys implemented.** Normal entrypoints remain setup pending. The explicit `main_customer_demo.dart` and `main_vendor_demo.dart` targets use in-memory fixtures that reset on restart; they do not authenticate or share state between installed apps.
+**Status: live Customer and gated Vendor Android roots implemented (`kVendorD01Approved` defaults to `false`).**
 
-`main_customer_auth_emulator.dart` uses local Firebase Auth and Firestore for Customer login, Discover, Details and Account. One root auth Cubit owns the subscription. Identity exit clears posters and replaces protected route state. Booking stays setup pending in this preview.
+- `customer/`: `createCustomerApp` and `CustomerJourneyApp` (email/password auth redirect gate, poster cache clearing + `_sessionEpoch` rebuild on logout, discovery, details, seat selection, and booking result routes).
+- `vendor/`: `createVendorApp` (`Setup pending` gate while `kVendorD01Approved == false`), `VendorEnrolledApp` (`VendorAccessGate` -> `VendorNotificationsCubit` + `VendorJourneyRouter` for shows, add-show, show details, and booking updates).
+- `di/`: separated `shared_registration.dart` (`createStartupErrorServices`), `customer_registration.dart` (`createCustomerServices`, `createLiveCustomerServices`, booking/discovery factories), and `vendor_registration.dart` (`createVendorServices`, `createLiveVendorServices`, access/shows/notifications factories).
+- `startup/`: `ArenaPassApp`, `StartupCubit`, `StartupScreen`, and `AppVariant` — retained for the `kVendorD01Approved == false` startup gate, non-Android fallback, and retryable `Firebase.initializeApp` startup failures. Once `D01` and live cloud setup are accepted, remove `lib/app/startup/` (keep only a minimal retryable startup-error shell if needed).
+- `theme/`: `buildAppTheme` light/dark Material 3 `ThemeData` aligned with the approved prototype.
 
-Customer/vendor roots and routers live in customer/ and vendor/; router files such as customer_router.dart belong there, not a second routing hierarchy. Startup/splash and startup retry states belong in startup/. DI registration is shared/customer/vendor under di/; theme tokens/component themes stay under app/theme/.
+Invariants:
+- GetIt registrations and lookups belong exclusively to `lib/app/**` and `lib/main_*.dart`.
+- Route Cubits are registered as factories (`BlocProvider(create: ...)` owns `close()`); app-scoped repositories remain reusable after logout.
+- Demo apps/repositories (`customer_demo_app.dart`, `vendor_demo_app.dart`, `demo_customer_repository.dart`, `customer_test_services.dart`) live exclusively under `test/support/`.
 
-GetIt registrations/lookups belong to composition and route/provider creation. Inject repositories into Cubit constructors; route Cubits are factories owned by BlocProvider(create: ...), never factory-created BlocProvider.value. Root providers own auth/access/notification lifetimes. App-scoped repositories remain usable after logout. Routes pass IDs, not mutable models. Composition imports concrete data implementations and domain contracts; features do not import app composition.
-
-Customer composition wires discovery/details/selection/result. Vendor composition wires shows/details/read-only session maps. Both use GetIt factory Cubits and go_router; future authorized repositories can use the journey registration functions with explicit customer/vendor scope. Firebase startup, auth/access gates and trusted notification delivery remain pending.
-
-Local preview builds:
-
-```powershell
-flutter build apk --debug --no-pub --flavor customer -t lib/main_customer_demo.dart
-flutter build apk --debug --no-pub --flavor vendor -t lib/main_vendor_demo.dart
-flutter build apk --debug --no-pub --flavor customer -t lib/main_customer_auth_emulator.dart
-```
-
-Private workspace references (not copied into the app export): `plan/FEATURE_ARCHITECTURE.md` §§1/6; merged plan §5. These paths are relative to the full workspace; they are intentionally not public Markdown links.
+Private workspace references (not copied into the app export): `plan/FEATURE_ARCHITECTURE.md` §§1/6; merged plan §5.

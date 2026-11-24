@@ -7,12 +7,6 @@ import '../../domain/models/alert_permission.dart';
 import '../../domain/models/booking_alert.dart';
 import '../../domain/repositories/local_alert_presenter.dart';
 
-typedef AlertTapCallback = void Function({
-  required String showId,
-  required String sessionId,
-  String? bookingId,
-});
-
 /// Android/OS local notification adapter implementing [LocalAlertPresenter].
 ///
 /// Designed for `flutter_local_notifications: ^23.0.2` (named arguments on
@@ -21,7 +15,6 @@ final class FlutterLocalAlertPresenter implements LocalAlertPresenter {
   FlutterLocalAlertPresenter({
     FlutterLocalNotificationsPlugin? plugin,
     this.androidSmallIcon = 'ic_stat_arenapass',
-    this.onAlertTapped,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   static const String channelId = 'arenapass_booking_alerts';
@@ -32,7 +25,6 @@ final class FlutterLocalAlertPresenter implements LocalAlertPresenter {
 
   final FlutterLocalNotificationsPlugin _plugin;
   final String androidSmallIcon;
-  final AlertTapCallback? onAlertTapped;
 
   Future<void>? _initFuture;
 
@@ -57,10 +49,7 @@ final class FlutterLocalAlertPresenter implements LocalAlertPresenter {
       macOS: darwinSettings,
     );
 
-    await _plugin.initialize(
-      settings: settings,
-      onDidReceiveNotificationResponse: _handleNotificationResponse,
-    );
+    await _plugin.initialize(settings: settings);
 
     final androidPlugin = _resolveAndroidPlugin();
     if (androidPlugin != null) {
@@ -145,33 +134,6 @@ final class FlutterLocalAlertPresenter implements LocalAlertPresenter {
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
-  }
-
-  void _handleNotificationResponse(NotificationResponse response) {
-    final rawPayload = response.payload;
-    if (rawPayload == null || rawPayload.isEmpty || onAlertTapped == null) {
-      return;
-    }
-    try {
-      final decoded = jsonDecode(rawPayload);
-      if (decoded is Map<String, dynamic>) {
-        final showId = decoded['showId'];
-        final sessionId = decoded['sessionId'];
-        final bookingId = decoded['bookingId'];
-        if (showId is String &&
-            showId.isNotEmpty &&
-            sessionId is String &&
-            sessionId.isNotEmpty) {
-          onAlertTapped!(
-            showId: showId,
-            sessionId: sessionId,
-            bookingId: bookingId is String ? bookingId : null,
-          );
-        }
-      }
-    } catch (_) {
-      // Ignore malformed notification payloads.
-    }
   }
 
   static int _notificationIdForBooking(String bookingId) =>

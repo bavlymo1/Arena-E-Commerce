@@ -81,7 +81,7 @@ void main() {
       ..onPickImage = () async => XFile.fromData(gallerySource);
     final adapter = ImagePickerShowPosterAdapter(picker: picker);
 
-    final ShowPosterPicker callback = adapter.call;
+    final ShowPosterPicker callback = adapter.pickPoster;
     final galleryBytes = await callback(ShowPosterSource.gallery);
     expect(galleryBytes, _jpeg([10, 20, 30, 40]));
     galleryBytes![3] = 99;
@@ -308,7 +308,7 @@ void main() {
     final cubit = ShowFormCubit(
       repo,
       vendorId: 'arena',
-      posterPicker: adapter.call,
+      posterPicker: adapter.pickPoster,
     );
     addTearDown(cubit.close);
 

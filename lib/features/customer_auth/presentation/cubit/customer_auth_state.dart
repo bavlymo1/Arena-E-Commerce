@@ -20,7 +20,6 @@ final class CustomerAuthState extends Equatable {
   final String? errorMessage;
 
   bool get isChecking => status == CustomerAuthStatus.checking;
-  bool get isSignedOut => status == CustomerAuthStatus.signedOut;
   bool get isSignedIn => status == CustomerAuthStatus.signedIn && user != null;
   bool get hasError => status == CustomerAuthStatus.error;
 

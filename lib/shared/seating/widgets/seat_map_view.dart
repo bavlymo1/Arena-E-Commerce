@@ -24,12 +24,9 @@ class SeatMapView extends StatefulWidget {
     this.loadState = SeatMapLoadState.ready,
     this.conflictMessage,
     this.errorMessage,
-    this.unavailableMessage,
     this.onRetry,
     this.seatSelectorBuilder,
     this.selectedSummaryBuilder,
-    this.initialListMode = false,
-    this.initialRow = 1,
     super.key,
   });
 
@@ -42,20 +39,17 @@ class SeatMapView extends StatefulWidget {
   final SeatMapLoadState loadState;
   final String? conflictMessage;
   final String? errorMessage;
-  final String? unavailableMessage;
   final VoidCallback? onRetry;
   final SeatTileSelectorBuilder? seatSelectorBuilder;
   final WidgetBuilder? selectedSummaryBuilder;
-  final bool initialListMode;
-  final int initialRow;
 
   @override
   State<SeatMapView> createState() => _SeatMapViewState();
 }
 
 class _SeatMapViewState extends State<SeatMapView> {
-  late bool _listMode = widget.initialListMode;
-  late int _selectedRow = widget.initialRow.clamp(1, SeatLayout.rowCount);
+  bool _listMode = false;
+  int _selectedRow = 1;
 
   int get _bookedTotal =>
       widget.bookedSeats.union(widget.myConfirmedSeats).length;
@@ -239,8 +233,7 @@ class _SeatMapViewState extends State<SeatMapView> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  widget.unavailableMessage ??
-                      'This show or session no longer accepts bookings.',
+                  'This show or session no longer accepts bookings.',
                   textAlign: TextAlign.center,
                 ),
               ],

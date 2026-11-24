@@ -20,7 +20,6 @@ class VendorJourneyRouter extends StatefulWidget {
     required this.createShowsCubit,
     required this.createDetailsCubit,
     this.createShowFormCubit,
-    this.canAddShow = false,
     this.hasUpdates = false,
     this.title = 'ArenaPass Vendor',
     this.banner,
@@ -30,7 +29,6 @@ class VendorJourneyRouter extends StatefulWidget {
   final VendorShowsCubit Function() createShowsCubit;
   final VendorShowDetailsCubit Function(String showId) createDetailsCubit;
   final ShowFormCubit Function()? createShowFormCubit;
-  final bool canAddShow;
   final bool hasUpdates;
   final String title;
   final String? banner;
@@ -63,7 +61,7 @@ class _VendorJourneyRouterState extends State<VendorJourneyRouter> {
                 >(
                   selector: (state) => state.unreadCount,
                   builder: (context, unreadCount) => VendorShowsScreen(
-                    onAddShow: widget.canAddShow
+                    onAddShow: widget.createShowFormCubit != null
                         ? () => context.push('/add-show')
                         : null,
                     onShowSelected: (id) =>
@@ -73,7 +71,7 @@ class _VendorJourneyRouterState extends State<VendorJourneyRouter> {
                   ),
                 )
               : VendorShowsScreen(
-                  onAddShow: widget.canAddShow
+                  onAddShow: widget.createShowFormCubit != null
                       ? () => context.push('/add-show')
                       : null,
                   onShowSelected: (id) =>
@@ -84,9 +82,7 @@ class _VendorJourneyRouterState extends State<VendorJourneyRouter> {
       GoRoute(
         path: '/add-show',
         redirect: (_, _) =>
-            widget.canAddShow && widget.createShowFormCubit != null
-            ? null
-            : '/shows',
+            widget.createShowFormCubit != null ? null : '/shows',
         pageBuilder: (context, state) => MaterialPage<void>(
           key: state.pageKey,
           child: BlocProvider(

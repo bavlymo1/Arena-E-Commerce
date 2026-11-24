@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:e_commerce_project/app/customer/customer_app.dart';
 import 'package:e_commerce_project/app/di/customer_registration.dart';
+import 'package:e_commerce_project/app/di/shared_registration.dart';
 import 'package:e_commerce_project/app/di/vendor_registration.dart';
 import 'package:e_commerce_project/app/startup/app_variant.dart';
 import 'package:e_commerce_project/app/startup/arena_pass_app.dart';
@@ -141,6 +142,36 @@ void main() {
     expect(created.isClosed, isTrue);
     expect(services.isRegistered<AppVariant>(), isFalse);
   });
+
+  testWidgets(
+    'startup error fallback renders initial failure and retries on tap',
+    (tester) async {
+      var retryCalls = 0;
+      final services = createStartupErrorServices(
+        AppVariant.customer,
+        initialError: 'Initial Firebase failure.',
+        retryLaunch: () async {
+          retryCalls++;
+          return 'Retry $retryCalls failed.';
+        },
+      );
+      await tester.pumpWidget(
+        ArenaPassApp(services: services, startupTitle: 'Startup failed'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Startup failed'), findsOneWidget);
+      expect(find.text('Initial Firebase failure.'), findsOneWidget);
+      expect(retryCalls, 0);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(retryCalls, 1);
+      expect(find.text('Retry 1 failed.'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
 
   test('createLiveVendorServices registers singletons and parameterized vendor factories', () async {
     final services = createLiveVendorServices(

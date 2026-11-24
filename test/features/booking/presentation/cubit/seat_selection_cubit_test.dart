@@ -220,7 +220,6 @@ void main() {
       expect(cubit.state.status, SeatSelectionStatus.ready);
       expect(cubit.state.bookedSeats, {14, 21});
       expect(cubit.state.myConfirmedSeats, {14});
-      expect(cubit.state.otherBookedSeats, {21});
       expect(cubit.state.visualStatusFor(14), SeatVisualStatus.mineConfirmed);
       expect(cubit.state.visualStatusFor(21), SeatVisualStatus.bookedByOther);
       expect(cubit.state.visualStatusFor(1), SeatVisualStatus.available);
@@ -258,10 +257,6 @@ void main() {
 
       expect(cubit.state.selectedSeats, {5, 12});
       expect(cubit.state.canSubmit, isTrue);
-      final request = cubit.state.toBookingRequest(bookingId: 'booking-ref-1');
-      expect(request.bookingId, 'booking-ref-1');
-      expect(request.customerUid, 'cust-1');
-      expect(request.seats, {5, 12});
 
       cubit.toggleSeat(5);
       expect(cubit.state.selectedSeats, {12});
@@ -297,13 +292,16 @@ void main() {
     expect(cubit.state.conflictMessage, contains('Seat 12'));
 
     // Current customer's own booking for seat 13 confirms cleanly (no false conflict).
-    cubit.clearConflictNotice();
     repo.sessionController.add(_session(bookedSeats: {14, 12, 13}));
     repo.mySeatsController.add({14, 13});
     await pumpEventQueue();
 
     expect(cubit.state.selectedSeats, isEmpty);
     expect(cubit.state.myConfirmedSeats, {13, 14});
+    expect(cubit.state.droppedByConflict, {12});
+
+    // Next seat selection clears prior conflict notice.
+    cubit.toggleSeat(1);
     expect(cubit.state.droppedByConflict, isEmpty);
     expect(cubit.state.conflictMessage, isNull);
   });

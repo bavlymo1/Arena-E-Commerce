@@ -14,3 +14,26 @@ void registerShared(GetIt services, AppVariant variant) {
     () => StartupCubit(services<StartupCheck>()),
   );
 }
+
+/// Registers retryable startup error state when live Firebase boot fails.
+GetIt createStartupErrorServices(
+  AppVariant variant, {
+  required String initialError,
+  required Future<String> Function() retryLaunch,
+}) {
+  var showInitial = true;
+  final services = GetIt.asNewInstance();
+  services
+    ..registerSingleton<AppVariant>(variant)
+    ..registerSingleton<StartupCheck>(() async {
+      if (showInitial) {
+        showInitial = false;
+        return initialError;
+      }
+      return retryLaunch();
+    })
+    ..registerFactory<StartupCubit>(
+      () => StartupCubit(services<StartupCheck>()),
+    );
+  return services;
+}

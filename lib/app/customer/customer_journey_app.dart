@@ -26,7 +26,7 @@ import '../startup/startup_screen.dart';
 import '../startup/startup_cubit.dart';
 import '../startup/app_variant.dart';
 
-/// Root route graph for authenticated and demo Customer journeys; optional
+/// Root route graph for authenticated Customer journeys; optional
 /// builders allow route-fixture tests to override discovery/details screens.
 class CustomerJourneyApp extends StatefulWidget {
   const CustomerJourneyApp({

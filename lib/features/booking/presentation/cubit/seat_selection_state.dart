@@ -3,7 +3,6 @@ import 'package:equatable/equatable.dart';
 import '../../../../shared/seating/seat_layout.dart';
 import '../../../../shared/seating/seat_numbers.dart';
 import '../../../vendor_shows/domain/models/session.dart';
-import '../../domain/models/booking_request.dart';
 
 enum SeatSelectionStatus { loading, ready, unavailable, error }
 
@@ -54,9 +53,6 @@ final class SeatSelectionState extends Equatable {
   final String? conflictMessage;
   final String? errorMessage;
 
-  Set<int> get otherBookedSeats =>
-      Set<int>.unmodifiable(bookedSeats.difference(myConfirmedSeats));
-
   int get totalBookedCount => bookedSeats.union(myConfirmedSeats).length;
 
   bool get isSoldOut =>
@@ -76,17 +72,6 @@ final class SeatSelectionState extends Equatable {
         selectedSeats: selectedSeats,
         vendorMode: vendorMode,
       );
-
-  BookingRequest toBookingRequest({required String bookingId}) {
-    final sortedSeats = selectedSeats.toList()..sort();
-    return BookingRequest(
-      bookingId: bookingId,
-      customerUid: customerUid,
-      showId: showId,
-      sessionId: sessionId,
-      seats: sortedSeats,
-    );
-  }
 
   SeatSelectionState copyWith({
     SeatSelectionStatus? status,

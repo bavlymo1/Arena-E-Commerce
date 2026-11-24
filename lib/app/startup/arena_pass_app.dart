@@ -33,8 +33,13 @@ Widget wrapWithEnvironmentBanner(
 
 /// Owns its isolated composition container and router for this app instance.
 class ArenaPassApp extends StatefulWidget {
-  const ArenaPassApp({required this.services, super.key});
+  const ArenaPassApp({
+    required this.services,
+    this.startupTitle = 'Setup pending',
+    super.key,
+  });
   final GetIt services;
+  final String startupTitle;
 
   @override
   State<ArenaPassApp> createState() => _ArenaPassAppState();
@@ -51,7 +56,7 @@ class _ArenaPassAppState extends State<ArenaPassApp> {
         path: '/startup',
         builder: (context, state) => BlocProvider(
           create: (_) => widget.services<StartupCubit>()..retry(),
-          child: StartupScreen(variant: variant),
+          child: StartupScreen(variant: variant, title: widget.startupTitle),
         ),
       ),
     ],

@@ -1,7 +1,11 @@
 # Integration scenarios
 
-**Status: scaffold only.** No feature behavior/configuration is implemented here.
+Local Firebase Auth (`9099`) and Firestore (`8180`) integration suites runnable against `demo-arenapass`:
 
-Future *_test.dart scenarios exercise cross-feature behavior through app boundaries: two-app startup, atomic booking races, deletion restart, UID isolation and pending/offline recovery. Reuse canonical models and constructor/composition boundaries; do not introduce another data writer. Each test owns emulator/fixture/subscription teardown. Real scanning, notifications and process loss require separate device evidence. No tests/dependencies/config added now.
+- `customer_auth_adapter_test.dart`: `FirebaseCustomerAuthRepository` register, stream, logout, invalid login, and error mapping.
+- `customer_auth_journey_test.dart`: end-to-end Customer auth routing, logout cache clear, Back guard, and multi-UID isolation.
+- `customer_firestore_reads_test.dart`: live Firestore show feed sorting, search, poster bytes, session updates, and delete -> unavailable transition.
+- `customer_booking_emulator_test.dart`: atomic Customer booking, Vendor read-only map propagation, same-reference recovery, and concurrent contention race.
+- `vendor_show_delete_emulator_test.dart`: multi-batch (`<= 3` pairs/batch) delete, customer unavailable transition, interrupted delete `resumeDeletes`, and idempotency.
 
-Private workspace references (not copied into the app export): `plan/FEATURE_ARCHITECTURE.md` §8; merged plan §§19/21; Tier 2 §5. These paths are relative to the full workspace; they are intentionally not public Markdown links.
+Shared emulator helpers and the offline JPEG fixture live under `integration_test/support/` (`emulator_support.dart`, `poster_fixture.dart`). Run suites individually with `--flavor customer -d <device-id>` after forwarding emulator ports (`adb reverse tcp:9099 tcp:9099` and `adb reverse tcp:8180 tcp:8180`).

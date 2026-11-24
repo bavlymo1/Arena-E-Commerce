@@ -6,10 +6,11 @@ This script operationalizes the ArenaPass Tier 1 live demonstration scenario acr
 
 ## 1. Environment & Device Setup
 
-- **Customer Device A:** Android device with `com.arenapass.customer` installed (Customer build).
+- **Target Project:** `arenapass-demo` (`firebase_options_customer.dart` and `firebase_options_vendor.dart`, with Rules and composite indexes deployed before live acceptance).
+- **Customer Device A:** Android device with `com.arenapass.customer` installed (`flutter build apk --flavor customer -t lib/main_customer.dart`).
 - **Customer Device B:** Second physical Android device with `com.arenapass.customer` installed (required to prove simultaneous real-time seat blocking; single-device account switching is insufficient).
-- **Vendor Device (or approved emulator):** Android device with `com.arenapass.vendor` installed, pre-enrolled in `vendorDevices/{uid}` (`enabled: true`, `vendorId: 'arena'`), plus a **second unenrolled Vendor device** (or cleared app data) for Step 17.
-- **Backend Target:** Live Firebase Spark project (for physical demonstration) or local Firebase Auth + Firestore Emulator Suite (for rehearsal).
+- **Vendor Device:** Android device with `com.arenapass.vendor` installed (`flutter build apk --flavor vendor -t lib/main_vendor.dart` with authorized `--dart-define=VENDOR_D01_APPROVED=true` or approved release default), pre-enrolled in `vendorDevices/{uid}` (`enabled: true`, `vendorId: 'arena'`), plus a **second unenrolled Vendor device** (or cleared app data) for Step 17.
+- **Backend Target:** Live Firebase Spark project `arenapass-demo` (for physical demonstration once Auth providers, Rules, indexes, and enrollment are verified) or local Firebase Auth + Firestore Emulator Suite (for `integration_test/` rehearsal).
 
 ### Day-Before Readiness Checks
 

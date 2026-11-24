@@ -11,28 +11,41 @@ import 'vendor_not_enrolled_screen.dart';
 
 /// Gates vendor management UI behind [VendorAccessCubit] enrollment verification.
 class VendorAccessGate extends StatelessWidget {
-  const VendorAccessGate({required this.builder, super.key});
+  const VendorAccessGate({
+    required this.builder,
+    this.blockedShellBuilder,
+    super.key,
+  });
 
   final Widget Function(BuildContext context, AccessAllowed allowed) builder;
+  final Widget Function(BuildContext context, Widget child)?
+  blockedShellBuilder;
 
   @override
   Widget build(BuildContext context) {
+    Widget wrapBlocked(Widget child) =>
+        blockedShellBuilder?.call(context, child) ?? child;
+
     return BlocBuilder<VendorAccessCubit, VendorAccessState>(
       builder: (context, state) {
         switch (state) {
           case AccessChecking():
-            return const _VendorAccessCheckingView();
+            return wrapBlocked(const _VendorAccessCheckingView());
           case AccessNotEnrolled(:final uid):
-            return VendorNotEnrolledScreen(
-              uid: uid,
-              onRetry: () =>
-                  unawaited(context.read<VendorAccessCubit>().retry()),
+            return wrapBlocked(
+              VendorNotEnrolledScreen(
+                uid: uid,
+                onRetry: () =>
+                    unawaited(context.read<VendorAccessCubit>().retry()),
+              ),
             );
           case AccessError(:final message):
-            return _VendorAccessErrorView(
-              message: message,
-              onRetry: () =>
-                  unawaited(context.read<VendorAccessCubit>().retry()),
+            return wrapBlocked(
+              _VendorAccessErrorView(
+                message: message,
+                onRetry: () =>
+                    unawaited(context.read<VendorAccessCubit>().retry()),
+              ),
             );
           case AccessAllowed():
             return builder(context, state);

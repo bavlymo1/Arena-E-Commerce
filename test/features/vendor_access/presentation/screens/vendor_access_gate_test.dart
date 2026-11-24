@@ -407,4 +407,60 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'VendorAccessGate wraps blocked states in blockedShellBuilder without wrapping AccessAllowed',
+    (tester) async {
+      final gate1 = Completer<VendorAccess>();
+      final gate2 = Completer<VendorAccess>();
+      var call = 0;
+      final repo = _FakeVendorAccessRepository()
+        ..onCheck = () {
+          call++;
+          return call == 1 ? gate1.future : gate2.future;
+        };
+      final cubit = VendorAccessCubit(repo);
+      try {
+        await tester.pumpWidget(
+          BlocProvider<VendorAccessCubit>.value(
+            value: cubit,
+            child: VendorAccessGate(
+              blockedShellBuilder: (_, child) => MaterialApp(
+                theme: buildAppTheme(),
+                home: Banner(
+                  message: 'BLOCKED SHELL',
+                  location: BannerLocation.topStart,
+                  child: child,
+                ),
+              ),
+              builder: (_, allowed) => MaterialApp(
+                theme: buildAppTheme(),
+                home: Scaffold(
+                  body: Text('Allowed vendor: ${allowed.vendorId}'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.text(VendorAccessStrings.checkingMessage), findsOneWidget);
+
+        gate1.complete(VendorNotEnrolled(uid: 'anon-99'));
+        await tester.pumpAndSettle();
+        expect(find.byType(VendorNotEnrolledScreen), findsOneWidget);
+
+        await tester.tap(
+          find.byKey(const ValueKey<String>('vendor-access-retry-button')),
+        );
+        await tester.pump();
+        gate2.complete(VendorAllowed(uid: 'anon-99', vendorId: 'arena'));
+        await tester.pumpAndSettle();
+        expect(find.text('Allowed vendor: arena'), findsOneWidget);
+        expect(find.byType(VendorNotEnrolledScreen), findsNothing);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(cubit.close);
+      }
+    },
+  );
 }

@@ -55,7 +55,7 @@ ShowFormCubit _buildShowFormCubit(
   return ShowFormCubit(
     services<ShowsRepository>(),
     vendorId: vendorId,
-    posterPicker: posterPicker ?? nativePicker?.call,
+    posterPicker: posterPicker ?? nativePicker?.pickPoster,
     recoverPoster: recoverPoster ?? nativePicker?.retrieveLostPoster,
   );
 }

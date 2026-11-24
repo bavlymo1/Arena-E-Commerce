@@ -223,16 +223,6 @@ final class SeatSelectionCubit extends Cubit<SeatSelectionState> {
     );
   }
 
-  void clearConflictNotice() {
-    if (isClosed) return;
-    emit(
-      state.copyWith(
-        droppedByConflict: const <int>{},
-        clearConflictMessage: true,
-      ),
-    );
-  }
-
   void setSubmitting(bool submitting) {
     if (isClosed) return;
     if (submitting && state.status != SeatSelectionStatus.ready) return;

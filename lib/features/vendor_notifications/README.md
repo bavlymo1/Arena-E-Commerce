@@ -1,6 +1,6 @@
 # Vendor Notifications
 
-**Status: event stream, watermark persistence adapters, local alert orchestration, Updates screen, permission fallback, and app DI/route wiring implemented; physical-device notification verification and optional Tier 2 approved FCM sender pending.**
+**Status: event stream, watermark persistence adapters, local alert orchestration, Updates screen, permission fallback, and app DI/route wiring implemented (`arenapass-demo` live acceptance and physical notification verification pending).**
 
 Implemented files:
 - `domain/models/booking_event.dart`: immutable booking event record with atomic commit-time `slotTotal` and `showTotal`.

@@ -34,9 +34,6 @@ final class ImagePickerShowPosterAdapter {
     return _readPoster(file);
   }
 
-  /// Callable [ShowPosterPicker] entrypoint forwarding to [pickPoster].
-  Future<Uint8List?> call(ShowPosterSource source) => pickPoster(source);
-
   /// Retrieves Android lost-activity poster bytes at most once per instance.
   ///
   /// Returns `null` off Android, when nothing was lost, for non-image data, or

@@ -1,13 +1,11 @@
 # Vendor Shows
 
-**Status: read-only presentation implemented and tested with local fixtures.** Vendor-scoped list, details, session selection and the shared 47-seat map are composed by the explicit Vendor demo. Normal startup still reports setup pending.
+**Status: Tier 1 live Firestore show management, image acquisition, and restart-safe batch deletion implemented.**
 
-Show metadata, images, sessions and restart-safe real deletion.
+Implemented components:
+- `domain/`: `Show` (`ShowStatus { active, deleting }`), `NewShow`, `Session`, `SessionTime`, `ShowsRepository`, and `SingleShowPosterCoordinator` poster cache/invalidation coordinator.
+- `data/repositories/firestore_shows_repository.dart`: enrolled-vendor creation (`shows/{id}`, `showImages/{id}` JPEG `<= 204,800` bytes with decoded dimensions, and 1–5 `sessions`), 32-entry poster LRU cache, and restart-safe chunked delete (`maxDeletePairsPerBatch = 3`, `resumeDeletes`).
+- `presentation/adapters/image_picker_show_poster_adapter.dart`: gallery/camera `pickPoster` (`900x900` @ 75% quality) and single-shot Android `retrieveLostPoster()`.
+- `presentation/`: `VendorShowsCubit`, `VendorShowDetailsCubit`, `ShowFormCubit`, `VendorShowsScreen`, `VendorShowDetailsScreen`, `AddShowScreen`, and `DeleteShowDialog`.
 
-Contracts: Canonical Show, Session, NewShow and ShowsRepository; other features consume these models.
-
-Implemented: VendorShowsCubit and VendorShowDetailsCubit, including stream cleanup, retry and poster invalidation. Pending: ShowFormCubit, FirebaseShowsRepository, image acquisition, add/delete/resume writes and real authorized access. Optional action callbacks do not implement those operations.
-
-Dependencies: presentation -> domain contracts/models; data implements domain contracts. Domain has no Firebase/UI/GetIt imports. Cubits receive dependencies through constructors. GetIt resolution belongs to app composition, not this feature. Cross-feature use is through domain contracts; do not import another feature's presentation/data. Use snake_case files, capability_repository.dart, backend-specific implementations, *_cubit.dart, *_state.dart, *_screen.dart and *_test.dart names only when content is implemented.
-
-Private workspace references (not copied into the app export): `plan/FEATURE_ARCHITECTURE.md` §§1–8; merged plan §§5/9–13; Tier 2 plan §5 for extensions. These paths are relative to the full workspace; they are intentionally not public Markdown links.
+Private workspace references (not copied into the app export): `plan/FEATURE_ARCHITECTURE.md` §§1–8; merged plan §§5/9–13.

@@ -30,7 +30,7 @@ void registerVendorJourney(
     return ShowFormCubit(
       services<ShowsRepository>(),
       vendorId: vendorId,
-      posterPicker: posterPicker ?? nativePicker?.call,
+      posterPicker: posterPicker ?? nativePicker?.pickPoster,
       recoverPoster: recoverPoster ?? nativePicker?.retrieveLostPoster,
     );
   });
@@ -101,7 +101,6 @@ class _VendorDemoAppState extends State<VendorDemoApp> {
   Widget build(BuildContext context) => VendorJourneyRouter(
     title: 'ArenaPass Vendor · Demo',
     banner: widget.banner,
-    canAddShow: widget.canAddShow,
     createShowsCubit: () => widget.services<VendorShowsCubit>(),
     createShowFormCubit: widget.canAddShow
         ? () => widget.services<ShowFormCubit>()
