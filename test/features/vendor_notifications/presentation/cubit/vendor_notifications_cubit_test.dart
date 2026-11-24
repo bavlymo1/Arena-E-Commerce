@@ -1116,4 +1116,218 @@ void main() {
 
     await expectLater(cubit.close(), completes);
   });
+
+  test('deduplicates identical BookingEvent snapshots without alerts or saves while preserving unseen alerts and retry transitions', () async {
+    final repo = _StreamingBookingEventsRepository();
+    addTearDown(repo.dispose);
+    final store = _FakeWatermarkStore();
+    final presenter = _FakeLocalAlertPresenter();
+
+    final cubit = VendorNotificationsCubit(
+      repo,
+      vendorId: 'vendor-a',
+      watermarkStore: store,
+      alertPresenter: presenter,
+    );
+    addTearDown(cubit.close);
+
+    final emitted = <VendorNotificationsState>[];
+    final sub = cubit.stream.listen(emitted.add);
+    addTearDown(sub.cancel);
+
+    await pumpEventQueue();
+    emitted.clear();
+
+    final t0 = DateTime.utc(2026, 11, 20, 12, 0);
+    final t1 = DateTime.utc(2026, 11, 20, 12, 1);
+    final t2 = DateTime.utc(2026, 11, 20, 12, 2);
+
+    // Initial snapshot seeds watermark without firing alerts.
+    repo.controller.add(<BookingEvent>[
+      _event(
+        bookingId: 'e1',
+        seats: const <int>[1, 2],
+        slotTotal: 2,
+        showTotal: 2,
+        createdAt: t0,
+      ),
+      _event(
+        bookingId: 'e2',
+        seats: const <int>[3, 4],
+        slotTotal: 4,
+        showTotal: 4,
+        createdAt: t1,
+      ),
+    ]);
+    await pumpEventQueue();
+
+    final readyCount = emitted.length;
+    expect(readyCount, 1);
+    expect(emitted.last.status, VendorNotificationsStatus.ready);
+    expect(emitted.last.events.map((e) => e.id).toList(), <String>['e2', 'e1']);
+    expect(presenter.shownAlerts, isEmpty);
+    expect(presenter.groupedCounts, isEmpty);
+    expect(store.saved, hasLength(1));
+
+    // (a) Duplicate snapshot (new instances, equal fields, reordered seats)
+    // emits 0 new states and triggers 0 alerts or watermark saves.
+    repo.controller.add(<BookingEvent>[
+      _event(
+        bookingId: 'e2',
+        seats: const <int>[4, 3],
+        slotTotal: 4,
+        showTotal: 4,
+        createdAt: t1,
+      ),
+      _event(
+        bookingId: 'e1',
+        seats: const <int>[2, 1],
+        slotTotal: 2,
+        showTotal: 2,
+        createdAt: t0,
+      ),
+    ]);
+    await pumpEventQueue();
+
+    expect(emitted, hasLength(readyCount));
+    expect(presenter.shownAlerts, isEmpty);
+    expect(presenter.groupedCounts, isEmpty);
+    expect(store.saved, hasLength(1));
+
+    // (b) Subsequent unseen event still emits, alerts, and persists watermark.
+    repo.controller.add(<BookingEvent>[
+      _event(
+        bookingId: 'e1',
+        seats: const <int>[2, 1],
+        slotTotal: 2,
+        showTotal: 2,
+        createdAt: t0,
+      ),
+      _event(
+        bookingId: 'e2',
+        seats: const <int>[4, 3],
+        slotTotal: 4,
+        showTotal: 4,
+        createdAt: t1,
+      ),
+      _event(
+        bookingId: 'e3',
+        seats: const <int>[5, 6],
+        slotTotal: 6,
+        showTotal: 6,
+        createdAt: t2,
+      ),
+    ]);
+    await pumpEventQueue();
+
+    expect(emitted, hasLength(readyCount + 1));
+    expect(emitted.last.status, VendorNotificationsStatus.ready);
+    expect(emitted.last.events.map((e) => e.id).toList(), <String>[
+      'e3',
+      'e2',
+      'e1',
+    ]);
+    expect(emitted.last.unreadEventIds, <String>{'e3'});
+    expect(presenter.shownAlerts.map((a) => a.bookingId).toList(), <String>[
+      'e3',
+    ]);
+    expect(presenter.groupedCounts, isEmpty);
+    expect(store.saved, hasLength(2));
+    expect(
+      store.saved.last,
+      NotificationWatermark(
+        lastSeenEventAtMs: t2.millisecondsSinceEpoch,
+        seenEventIdsAtWatermark: const <String>{'e3'},
+      ),
+    );
+
+    // Repeating the post-alert snapshot also deduplicates cleanly.
+    repo.controller.add(<BookingEvent>[
+      _event(
+        bookingId: 'e3',
+        seats: const <int>[6, 5],
+        slotTotal: 6,
+        showTotal: 6,
+        createdAt: t2,
+      ),
+      _event(
+        bookingId: 'e2',
+        seats: const <int>[3, 4],
+        slotTotal: 4,
+        showTotal: 4,
+        createdAt: t1,
+      ),
+      _event(
+        bookingId: 'e1',
+        seats: const <int>[1, 2],
+        slotTotal: 2,
+        showTotal: 2,
+        createdAt: t0,
+      ),
+    ]);
+    await pumpEventQueue();
+
+    expect(emitted, hasLength(readyCount + 1));
+    expect(presenter.shownAlerts.map((a) => a.bookingId).toList(), <String>[
+      'e3',
+    ]);
+    expect(presenter.groupedCounts, isEmpty);
+    expect(store.saved, hasLength(2));
+
+    // (c) Stream error followed by retry() emits loading then ready when
+    // identical events return, without re-alerting or re-saving.
+    repo.controller.addError(StateError('stream drop'));
+    await pumpEventQueue();
+    expect(emitted, hasLength(readyCount + 2));
+    expect(emitted.last.status, VendorNotificationsStatus.error);
+
+    final oldController = repo.controller;
+    repo.controller = StreamController<List<BookingEvent>>();
+    final beforeRetry = emitted.length;
+    await cubit.retry();
+    await oldController.close();
+
+    expect(emitted, hasLength(beforeRetry + 1));
+    expect(emitted[beforeRetry].status, VendorNotificationsStatus.loading);
+    expect(emitted[beforeRetry].errorMessage, isNull);
+
+    repo.controller.add(<BookingEvent>[
+      _event(
+        bookingId: 'e1',
+        seats: const <int>[1, 2],
+        slotTotal: 2,
+        showTotal: 2,
+        createdAt: t0,
+      ),
+      _event(
+        bookingId: 'e2',
+        seats: const <int>[3, 4],
+        slotTotal: 4,
+        showTotal: 4,
+        createdAt: t1,
+      ),
+      _event(
+        bookingId: 'e3',
+        seats: const <int>[6, 5],
+        slotTotal: 6,
+        showTotal: 6,
+        createdAt: t2,
+      ),
+    ]);
+    await pumpEventQueue();
+
+    expect(emitted, hasLength(beforeRetry + 2));
+    expect(emitted.last.status, VendorNotificationsStatus.ready);
+    expect(emitted.last.events.map((e) => e.id).toList(), <String>[
+      'e3',
+      'e2',
+      'e1',
+    ]);
+    expect(emitted.last.unreadEventIds, <String>{'e3'});
+    expect(presenter.shownAlerts.map((a) => a.bookingId).toList(), <String>[
+      'e3',
+    ]);
+    expect(presenter.groupedCounts, isEmpty);
+    expect(store.saved, hasLength(2));
+  });
 }
