@@ -374,6 +374,7 @@ void main() {
           ),
         );
         await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
         expect(
           find.byKey(const ValueKey<String>('test-date-label')),
@@ -382,8 +383,62 @@ void main() {
         expect(find.text('Dec 20, 2026'), findsOneWidget);
         expect(find.text('2026-12-20'), findsOneWidget);
         expect(find.text('Discover shows'), findsOneWidget);
+        final cardMaterial = tester.widget<Material>(
+          find
+              .descendant(
+                of: find.byType(Card),
+                matching: find.byType(Material),
+              )
+              .first,
+        );
+        expect(cardMaterial.color, theme.colorScheme.surface);
+        expect(
+          cardMaterial.shape,
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+        );
+        final titleText = tester.widget<Text>(
+          find.text('ArenaPass Console Very Long Title'),
+        );
+        expect(titleText.maxLines, 1);
+        expect(titleText.overflow, TextOverflow.ellipsis);
         expect(tester.takeException(), isNull);
       }
+
+      // Also verify compactSubtitle uses bodySmall vs default bodyMedium.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: const Scaffold(
+            body: Column(
+              children: <Widget>[
+                ArenaPageHeader(
+                  eyebrow: 'ArenaPass',
+                  title: 'Default',
+                  subtitle: 'Normal subtitle',
+                ),
+                ArenaPageHeader(
+                  eyebrow: 'ArenaPass',
+                  title: 'Compact',
+                  subtitle: 'Compact subtitle',
+                  compactSubtitle: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      final normalSize = tester
+          .widget<Text>(find.text('Normal subtitle'))
+          .style
+          ?.fontSize;
+      final compactSize = tester
+          .widget<Text>(find.text('Compact subtitle'))
+          .style
+          ?.fontSize;
+      expect(compactSize, lessThan(normalSize!));
     },
   );
 }
