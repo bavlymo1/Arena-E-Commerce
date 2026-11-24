@@ -56,7 +56,10 @@ Future<void> _commit(List<Map<String, Object>> writes) async {
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
   try {
     final request = await client.postUrl(
-      Uri.http('127.0.0.1:8180', '/v1/$_documents:commit'),
+      Uri.http(
+        '$kEmulatorHost:$kFirestoreEmulatorPort',
+        '/v1/$_documents:commit',
+      ),
     );
     request.headers.contentType = ContentType.json;
     request.headers.set(HttpHeaders.authorizationHeader, 'Bearer owner');
