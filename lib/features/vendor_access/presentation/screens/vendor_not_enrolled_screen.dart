@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../shared/widgets/arena_busy_button_label.dart';
+import '../../../../shared/widgets/arena_icon_label.dart';
 import '../vendor_access_strings.dart';
 import '../widgets/vendor_access_widgets.dart';
 
@@ -52,34 +53,32 @@ class VendorNotEnrolledScreen extends StatelessWidget {
         const SizedBox(height: 20),
         Semantics(
           container: true,
-          child: Container(
+          child: Card(
             key: const ValueKey<String>('vendor-access-device-id-card'),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colorScheme.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  VendorAccessStrings.deviceIdLabel,
-                  style: textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    VendorAccessStrings.deviceIdLabel,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                SelectableText(
-                  uid,
-                  key: const ValueKey<String>('vendor-access-device-id'),
-                  style: textTheme.titleMedium?.copyWith(
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    uid,
+                    key: const ValueKey<String>('vendor-access-device-id'),
+                    style: textTheme.titleMedium?.copyWith(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -87,14 +86,8 @@ class VendorNotEnrolledScreen extends StatelessWidget {
         FilledButton(
           key: const ValueKey<String>('vendor-access-copy-button'),
           onPressed: () => unawaited(_copyDeviceId(context)),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const VendorAccessButtonContent(
-            icon: Icon(Icons.copy_outlined, size: 18),
+          child: const ArenaIconLabel(
+            icon: Icons.copy_outlined,
             label: VendorAccessStrings.copyDeviceId,
           ),
         ),
@@ -102,20 +95,14 @@ class VendorNotEnrolledScreen extends StatelessWidget {
         OutlinedButton(
           key: const ValueKey<String>('vendor-access-retry-button'),
           onPressed: isChecking ? null : onRetry,
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
           child: isChecking
               ? const ArenaBusyButtonLabel(
                   label: VendorAccessStrings.retrying,
                   mainAxisAlignment: MainAxisAlignment.center,
                   textAlign: TextAlign.center,
                 )
-              : const VendorAccessButtonContent(
-                  icon: Icon(Icons.refresh, size: 18),
+              : const ArenaIconLabel(
+                  icon: Icons.refresh,
                   label: VendorAccessStrings.retry,
                 ),
         ),

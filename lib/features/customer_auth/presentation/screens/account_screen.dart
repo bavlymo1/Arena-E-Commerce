@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
 import '../../../../shared/widgets/arena_busy_button_label.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_page_header.dart';
 import '../cubit/customer_auth_cubit.dart';
 import '../cubit/customer_auth_state.dart';
 
@@ -28,19 +29,7 @@ class AccountScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: const Row(
-          children: <Widget>[
-            ArenaBrandMark(),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Account',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const ArenaBrandAppBarTitle(title: 'Account', spacing: 12),
       ),
       body: SafeArea(
         child: BlocBuilder<CustomerAuthCubit, CustomerAuthState>(
@@ -52,20 +41,7 @@ class AccountScreen extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               children: <Widget>[
-                Text(
-                  'ArenaPass',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Profile',
-                  style: textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                const ArenaPageHeader(eyebrow: 'ArenaPass', title: 'Profile'),
                 if (state.isChecking && user == null) ...<Widget>[
                   const SizedBox(height: 20),
                   const ArenaLoadingView(
@@ -95,65 +71,63 @@ class AccountScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 Semantics(
                   container: true,
-                  child: Container(
+                  child: Card(
                     key: const ValueKey<String>('account-user-card'),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: colorScheme.outlineVariant),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: <Widget>[
-                        ExcludeSemantics(
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: colorScheme.outlineVariant,
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: <Widget>[
+                          ExcludeSemantics(
+                            child: Container(
+                              width: 52,
+                              height: 52,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHighest,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: colorScheme.outlineVariant,
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              _initialForEmail(user?.email),
-                              style: textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
+                              child: Text(
+                                _initialForEmail(user?.email),
+                                style: textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                'Customer account',
-                                style: textTheme.labelMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Semantics(
-                                container: true,
-                                child: Text(
-                                  emailText,
-                                  key: const ValueKey<String>(
-                                    'account-email-text',
-                                  ),
-                                  style: textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  'Customer account',
+                                  style: textTheme.labelMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                Semantics(
+                                  container: true,
+                                  child: Text(
+                                    emailText,
+                                    key: const ValueKey<String>(
+                                      'account-email-text',
+                                    ),
+                                    style: textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -163,12 +137,6 @@ class AccountScreen extends StatelessWidget {
                   onPressed: state.busy || user == null
                       ? null
                       : () => unawaited(cubit.logout()),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                   child: state.busy
                       ? const ArenaBusyButtonLabel(label: 'Signing out…')
                       : const Text('Log out'),

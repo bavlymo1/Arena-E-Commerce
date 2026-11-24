@@ -94,38 +94,36 @@ class BookingResultScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Container(
+                  Card(
                     key: const ValueKey<String>('booking-result-details-card'),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: colorScheme.outlineVariant),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        SelectableText(
-                          'Reference: ${pending ? request!.bookingId : bookingId}',
-                          style: textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontFeatures: const <FontFeature>[
-                              FontFeature.tabularFigures(),
-                            ],
-                          ),
-                        ),
-                        if (matches || pending) ...<Widget>[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Seats: ${seats!.join(', ')}',
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          SelectableText(
+                            'Reference: ${pending ? request!.bookingId : bookingId}',
                             style: textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
                               fontFeatures: const <FontFeature>[
                                 FontFeature.tabularFigures(),
                               ],
                             ),
                           ),
+                          if (matches || pending) ...<Widget>[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Seats: ${seats!.join(', ')}',
+                              style: textTheme.bodyMedium?.copyWith(
+                                fontFeatures: const <FontFeature>[
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                   if (matches || pending) ...<Widget>[

@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
-import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
+import '../../../../shared/widgets/arena_page_header.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_show_date_row.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../../vendor_shows/domain/models/show.dart';
 import '../cubit/discovery_cubit.dart';
@@ -58,19 +60,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             ),
         ],
         titleSpacing: 16,
-        title: const Row(
-          children: <Widget>[
-            ArenaBrandMark(),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'ArenaPass',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const ArenaBrandAppBarTitle(title: 'ArenaPass'),
       ),
       body: SafeArea(
         child: BlocConsumer<DiscoveryCubit, DiscoveryState>(
@@ -92,19 +82,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               children: <Widget>[
-                Text(
-                  'ArenaPass',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Discover shows',
-                  style: textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                const ArenaPageHeader(
+                  eyebrow: 'ArenaPass',
+                  title: 'Discover shows',
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -206,6 +186,7 @@ class _DiscoverShowCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+
     final dateLabel = formatShowDateLabel(show.showDate);
 
     return Semantics(
@@ -214,13 +195,9 @@ class _DiscoverShowCard extends StatelessWidget {
       label: '${show.title}, $dateLabel',
       onTap: onTap,
       excludeSemantics: true,
-      child: Material(
+      child: Card(
         key: ValueKey<String>('discover-show-card-${show.id}'),
-        color: colorScheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: colorScheme.outlineVariant),
-        ),
+        margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -238,31 +215,7 @@ class _DiscoverShowCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: <Widget>[
-                        Text(
-                          dateLabel,
-                          style: textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontFeatures: const <FontFeature>[
-                              FontFeature.tabularFigures(),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          show.showDate,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontFeatures: const <FontFeature>[
-                              FontFeature.tabularFigures(),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                    ArenaShowDateRow(showDate: show.showDate),
                     const SizedBox(height: 8),
                     Text(
                       show.title,

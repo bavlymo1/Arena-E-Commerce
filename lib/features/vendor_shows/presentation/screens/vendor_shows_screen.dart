@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
+import '../../../../shared/widgets/arena_icon_label.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_page_header.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/show.dart';
 import '../cubit/vendor_shows_cubit.dart';
@@ -42,25 +44,10 @@ class VendorShowsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: const Row(
-          children: <Widget>[
-            ArenaBrandMark(),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'ArenaPass Console',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const ArenaBrandAppBarTitle(title: 'ArenaPass Console'),
         actions: <Widget>[
           if (onOpenUpdates != null)
             IconButton(
@@ -87,26 +74,11 @@ class VendorShowsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Text(
-                    'ArenaPass Console',
-                    style: textTheme.labelLarge?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'My shows',
-                    style: textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Live seat totals update as customers book.',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                  const ArenaPageHeader(
+                    eyebrow: 'ArenaPass Console',
+                    title: 'My shows',
+                    subtitle: 'Live seat totals update as customers book.',
+                    compactSubtitle: true,
                   ),
                   if (onAddShow != null || onOpenUpdates != null) ...<Widget>[
                     const SizedBox(height: 16),
@@ -120,7 +92,7 @@ class VendorShowsScreen extends StatelessWidget {
                               'vendor-shows-add-button',
                             ),
                             onPressed: onAddShow,
-                            child: const VendorButtonContent(
+                            child: const ArenaIconLabel(
                               icon: Icons.add,
                               label: 'Add show',
                             ),
@@ -131,7 +103,7 @@ class VendorShowsScreen extends StatelessWidget {
                               'vendor-shows-open-updates-button',
                             ),
                             onPressed: onOpenUpdates,
-                            child: VendorButtonContent(
+                            child: ArenaIconLabel(
                               icon: Icons.notifications_outlined,
                               label: unreadUpdatesCount > 0
                                   ? 'Booking updates ($unreadUpdatesCount)'

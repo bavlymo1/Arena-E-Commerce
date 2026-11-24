@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../shared/widgets/arena_brand_mark.dart';
+import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
 import '../../../../shared/widgets/arena_busy_button_label.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_page_header.dart';
 import '../cubit/customer_auth_cubit.dart';
 import '../cubit/customer_auth_state.dart';
 import '../widgets/customer_auth_widgets.dart';
@@ -62,25 +63,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: const Row(
-          children: <Widget>[
-            ArenaBrandMark(),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Sign in',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const ArenaBrandAppBarTitle(title: 'Sign in', spacing: 12),
       ),
       body: SafeArea(
         child: BlocBuilder<CustomerAuthCubit, CustomerAuthState>(
@@ -92,26 +78,10 @@ class _LoginScreenState extends State<LoginScreen> {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               children: <Widget>[
-                Text(
-                  'ArenaPass',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Customer sign in',
-                  style: textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Sign in with your customer email and password to book seats.',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                const ArenaPageHeader(
+                  eyebrow: 'ArenaPass',
+                  title: 'Customer sign in',
+                  subtitle: 'Sign in with your customer email and password to book seats.',
                 ),
                 if (state.isChecking && !state.busy) ...<Widget>[
                   const SizedBox(height: 16),
@@ -201,12 +171,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: state.busy
                               ? null
                               : () => _submit(cubit, state),
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
                           child: state.busy
                               ? const ArenaBusyButtonLabel(label: 'Signing in…')
                               : const Text('Sign in'),
@@ -222,12 +186,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   cubit.clearError();
                                   widget.onRegisterRequested();
                                 },
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
                           child: const Text('Create account'),
                         ),
                       ],

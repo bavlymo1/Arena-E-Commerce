@@ -4,6 +4,7 @@ import 'package:e_commerce_project/features/vendor_shows/domain/models/session.d
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/show.dart';
 import 'package:e_commerce_project/features/vendor_shows/presentation/widgets/vendor_show_widgets.dart';
+import 'package:e_commerce_project/shared/widgets/arena_icon_label.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -54,17 +55,14 @@ void main() {
     );
   });
 
-  testWidgets('VendorButtonContent renders icon and label without overflow', (
+  testWidgets('ArenaIconLabel renders icon and label without overflow', (
     tester,
   ) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAppTheme(),
         home: const Scaffold(
-          body: VendorButtonContent(
-            icon: Icons.add_outlined,
-            label: 'Add show',
-          ),
+          body: ArenaIconLabel(icon: Icons.add_outlined, label: 'Add show'),
         ),
       ),
     );

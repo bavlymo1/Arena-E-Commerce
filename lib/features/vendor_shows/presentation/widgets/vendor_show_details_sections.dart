@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/widgets/seat_map_view.dart';
+import '../../../../shared/widgets/arena_icon_label.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_show_date_row.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
 import 'delete_show_dialog.dart';
@@ -28,7 +30,6 @@ class VendorShowDetailsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final dateLabel = formatShowDateLabel(show.showDate);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -41,33 +42,12 @@ class VendorShowDetailsHeader extends StatelessWidget {
           fallbackLabel: 'ARENA CONSOLE',
         ),
         const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            Icon(
-              Icons.calendar_today_outlined,
-              size: 15,
-              color: colorScheme.primary,
-            ),
-            Text(
-              dateLabel,
-              key: const ValueKey<String>('vendor-show-details-date'),
-              style: textTheme.labelLarge?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-              ),
-            ),
-            Text(
-              show.showDate,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-              ),
-            ),
-            VendorShowStatusBadge(isDeleting: isDeletingBadge),
-          ],
+        ArenaShowDateRow(
+          showDate: show.showDate,
+          showIcon: true,
+          prominent: true,
+          dateLabelKey: const ValueKey<String>('vendor-show-details-date'),
+          trailing: VendorShowStatusBadge(isDeleting: isDeletingBadge),
         ),
         const SizedBox(height: 8),
         Text(
@@ -172,7 +152,7 @@ class VendorShowSummaryCard extends StatelessWidget {
           OutlinedButton(
             key: const ValueKey<String>('vendor-show-details-delete-button'),
             onPressed: isDeletingShow ? null : onDelete,
-            child: VendorButtonContent(
+            child: ArenaIconLabel(
               icon: Icons.delete_outline,
               label: isDeletingShow ? 'Deleting…' : 'Delete show',
             ),

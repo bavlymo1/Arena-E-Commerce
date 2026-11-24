@@ -3,10 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../../shared/widgets/arena_busy_button_label.dart';
+import '../../../../shared/widgets/arena_icon_label.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
 import '../cubit/show_form_state.dart';
-import 'vendor_show_widgets.dart';
 
 InputDecoration _addShowFieldDecoration({
   required String labelText,
@@ -148,119 +148,115 @@ class AddShowPosterSection extends StatelessWidget {
           style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: posterError != null
-                  ? colorScheme.error.withValues(alpha: 0.7)
-                  : colorScheme.outlineVariant,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              if (hasPoster)
-                ArenaPosterBanner(
-                  key: const ValueKey<String>('add-show-poster-preview'),
-                  posterBytes: posterBytes,
-                  title: title.trim().isEmpty ? 'Show artwork' : title.trim(),
-                  height: 160,
-                  borderRadius: BorderRadius.circular(12),
-                  fallbackLabel: 'ARENA CONSOLE',
-                )
-              else
-                Container(
-                  key: const ValueKey<String>('add-show-poster-placeholder'),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: colorScheme.outlineVariant),
+        Card(
+          margin: EdgeInsets.zero,
+          shape: posterError != null
+              ? RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: colorScheme.error.withValues(alpha: 0.7),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                        Icons.image_outlined,
-                        size: 28,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No artwork selected',
-                        textAlign: TextAlign.center,
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Choose a gallery image or take a photo (max 200 KB).',
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodySmall?.copyWith(
+                )
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (hasPoster)
+                  ArenaPosterBanner(
+                    key: const ValueKey<String>('add-show-poster-preview'),
+                    posterBytes: posterBytes,
+                    title: title.trim().isEmpty ? 'Show artwork' : title.trim(),
+                    height: 160,
+                    borderRadius: BorderRadius.circular(12),
+                    fallbackLabel: 'ARENA CONSOLE',
+                  )
+                else
+                  Container(
+                    key: const ValueKey<String>('add-show-poster-placeholder'),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colorScheme.outlineVariant),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(
+                          Icons.image_outlined,
+                          size: 28,
                           color: colorScheme.onSurfaceVariant,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        Text(
+                          'No artwork selected',
+                          textAlign: TextAlign.center,
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Choose a gallery image or take a photo (max 200 KB).',
+                          textAlign: TextAlign.center,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: <Widget>[
+                    OutlinedButton(
+                      key: const ValueKey<String>('add-show-gallery-button'),
+                      onPressed: isBusy ? null : onPickGallery,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(120, 48),
+                      ),
+                      child: ArenaIconLabel(
+                        icon: Icons.photo_library_outlined,
+                        label:
+                            isPickingPoster &&
+                                pickingPosterSource == ShowPosterSource.gallery
+                            ? 'Selecting…'
+                            : 'Gallery',
+                      ),
+                    ),
+                    OutlinedButton(
+                      key: const ValueKey<String>('add-show-camera-button'),
+                      onPressed: isBusy ? null : onPickCamera,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(120, 48),
+                      ),
+                      child: ArenaIconLabel(
+                        icon: Icons.photo_camera_outlined,
+                        label:
+                            isPickingPoster &&
+                                pickingPosterSource == ShowPosterSource.camera
+                            ? 'Selecting…'
+                            : 'Camera',
+                      ),
+                    ),
+                  ],
                 ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: <Widget>[
-                  OutlinedButton(
-                    key: const ValueKey<String>('add-show-gallery-button'),
-                    onPressed: isBusy ? null : onPickGallery,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(120, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: VendorButtonContent(
-                      icon: Icons.photo_library_outlined,
-                      label:
-                          isPickingPoster &&
-                              pickingPosterSource == ShowPosterSource.gallery
-                          ? 'Selecting…'
-                          : 'Gallery',
-                    ),
-                  ),
-                  OutlinedButton(
-                    key: const ValueKey<String>('add-show-camera-button'),
-                    onPressed: isBusy ? null : onPickCamera,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(120, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: VendorButtonContent(
-                      icon: Icons.photo_camera_outlined,
-                      label:
-                          isPickingPoster &&
-                              pickingPosterSource == ShowPosterSource.camera
-                          ? 'Selecting…'
-                          : 'Camera',
+                if (posterError != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text(
+                    posterError!,
+                    key: const ValueKey<String>('add-show-poster-error'),
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.error,
                     ),
                   ),
                 ],
-              ),
-              if (posterError != null) ...<Widget>[
-                const SizedBox(height: 12),
-                Text(
-                  posterError!,
-                  key: const ValueKey<String>('add-show-poster-error'),
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.error,
-                  ),
-                ),
               ],
-            ],
+            ),
           ),
         ),
       ],
@@ -367,16 +363,7 @@ class AddShowSessionsSection extends StatelessWidget {
         OutlinedButton(
           key: const ValueKey<String>('add-show-add-session-button'),
           onPressed: canAddSession ? onAddSession : null,
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const VendorButtonContent(
-            icon: Icons.add,
-            label: 'Add session',
-          ),
+          child: const ArenaIconLabel(icon: Icons.add, label: 'Add session'),
         ),
       ],
     );
@@ -420,12 +407,6 @@ class AddShowSubmitFooter extends StatelessWidget {
         FilledButton(
           key: const ValueKey<String>('add-show-submit-button'),
           onPressed: isBusy ? null : onSubmit,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
           child: isSubmitting
               ? const ArenaBusyButtonLabel(label: 'Saving show…')
               : const Text('Save show'),

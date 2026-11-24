@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/arena_loading_view.dart';
+import '../../widgets/arena_notice_banner.dart';
+import '../../widgets/arena_status_panel.dart';
 import '../seat_layout.dart';
 import 'seat_legend.dart';
 import 'seat_tile.dart';
@@ -204,39 +207,15 @@ class _SeatMapViewState extends State<SeatMapView> {
   Widget build(BuildContext context) {
     switch (widget.loadState) {
       case SeatMapLoadState.loading:
+        return const ArenaLoadingView(label: 'Loading seats…');
+      case SeatMapLoadState.unavailable:
         return const Center(
           child: Padding(
             padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                CircularProgressIndicator(),
-                SizedBox(height: 12),
-                Text('Loading seats…'),
-              ],
-            ),
-          ),
-        );
-      case SeatMapLoadState.unavailable:
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Icon(Icons.event_busy_outlined, size: 40),
-                const SizedBox(height: 12),
-                Text(
-                  'Show unavailable',
-                  style: Theme.of(context).textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'This show or session no longer accepts bookings.',
-                  textAlign: TextAlign.center,
-                ),
-              ],
+            child: ArenaStatusPanel(
+              icon: Icons.event_busy_outlined,
+              title: 'Show unavailable',
+              message: 'This show or session no longer accepts bookings.',
             ),
           ),
         );
@@ -244,30 +223,15 @@ class _SeatMapViewState extends State<SeatMapView> {
         return Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Icon(Icons.error_outline, size: 40),
-                const SizedBox(height: 12),
-                Text(
-                  'Unable to load seats',
-                  style: Theme.of(context).textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
+            child: ArenaStatusPanel(
+              icon: Icons.error_outline,
+              isError: true,
+              title: 'Unable to load seats',
+              message:
                   widget.errorMessage ??
-                      'Your existing choices are preserved. Please retry.',
-                  textAlign: TextAlign.center,
-                ),
-                if (widget.onRetry != null) ...<Widget>[
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: widget.onRetry,
-                    child: const Text('Try again'),
-                  ),
-                ],
-              ],
+                  'Your existing choices are preserved. Please retry.',
+              actionLabel: widget.onRetry != null ? 'Try again' : null,
+              onAction: widget.onRetry,
             ),
           ),
         );
@@ -282,16 +246,28 @@ class _SeatMapViewState extends State<SeatMapView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         if (widget.busy)
-          const _StatusBanner(
-            key: ValueKey<String>('seat-busy-banner'),
-            icon: Icons.hourglass_top_outlined,
-            message: 'Submitting booking… Please wait.',
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: ArenaNoticeBanner(
+              key: ValueKey<String>('seat-busy-banner'),
+              icon: Icons.hourglass_top_outlined,
+              message: 'Submitting booking… Please wait.',
+              emphasizeText: true,
+              iconSpacing: 10,
+            ),
           ),
         if (widget.conflictMessage != null)
-          _StatusBanner(
-            key: const ValueKey<String>('seat-conflict-banner'),
-            icon: Icons.warning_amber_rounded,
-            message: widget.conflictMessage!,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: ArenaNoticeBanner(
+              key: const ValueKey<String>('seat-conflict-banner'),
+              icon: Icons.warning_amber_rounded,
+              message: widget.conflictMessage!,
+              isError: true,
+              liveRegion: true,
+              emphasizeText: true,
+              iconSpacing: 10,
+            ),
           ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -311,10 +287,15 @@ class _SeatMapViewState extends State<SeatMapView> {
           ),
         ),
         if (_isSoldOut)
-          const _StatusBanner(
-            key: ValueKey<String>('seat-sold-out-banner'),
-            icon: Icons.info_outline,
-            message: 'Sold out. All seats booked.',
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: ArenaNoticeBanner(
+              key: ValueKey<String>('seat-sold-out-banner'),
+              icon: Icons.info_outline,
+              message: 'Sold out. All seats booked.',
+              emphasizeText: true,
+              iconSpacing: 10,
+            ),
           ),
         Card(
           margin: const EdgeInsets.symmetric(vertical: 8),
@@ -367,33 +348,6 @@ class _SeatMapViewState extends State<SeatMapView> {
             ),
         ],
       ],
-    );
-  }
-}
-
-class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({required this.icon, required this.message, super.key});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(icon, size: 18),
-          const SizedBox(width: 10),
-          Expanded(child: Text(message)),
-        ],
-      ),
     );
   }
 }

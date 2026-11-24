@@ -227,12 +227,7 @@ void main() {
 
       final themes = <String, ThemeData>{
         'light': buildAppTheme(),
-        'dark': ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xffd52f65),
-            brightness: Brightness.dark,
-          ),
-        ),
+        'dark': buildAppTheme(brightness: Brightness.dark),
       };
 
       for (final themeEntry in themes.entries) {

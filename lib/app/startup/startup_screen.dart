@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../shared/widgets/arena_brand_app_bar_title.dart';
 import 'app_variant.dart';
 import 'startup_cubit.dart';
 
@@ -15,7 +16,10 @@ class StartupScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text('ArenaPass ${variant.label}')),
+    appBar: AppBar(
+      titleSpacing: 16,
+      title: ArenaBrandAppBarTitle(title: 'ArenaPass ${variant.label}'),
+    ),
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(

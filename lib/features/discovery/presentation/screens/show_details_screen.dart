@@ -5,6 +5,7 @@ import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_show_date_row.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../../vendor_shows/domain/models/session.dart';
 import '../cubit/show_details_cubit.dart';
@@ -89,7 +90,6 @@ class ShowDetailsScreen extends StatelessWidget {
             }
 
             final show = state.show!;
-            final dateLabel = formatShowDateLabel(show.showDate);
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
@@ -101,35 +101,10 @@ class ShowDetailsScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: <Widget>[
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: 15,
-                      color: colorScheme.primary,
-                    ),
-                    Text(
-                      dateLabel,
-                      style: textTheme.labelLarge?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontFeatures: const <FontFeature>[
-                          FontFeature.tabularFigures(),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      show.showDate,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontFeatures: const <FontFeature>[
-                          FontFeature.tabularFigures(),
-                        ],
-                      ),
-                    ),
-                  ],
+                ArenaShowDateRow(
+                  showDate: show.showDate,
+                  showIcon: true,
+                  prominent: true,
                 ),
                 const SizedBox(height: 8),
                 Text(

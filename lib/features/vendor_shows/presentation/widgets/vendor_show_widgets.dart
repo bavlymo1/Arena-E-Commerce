@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
+import '../../../../shared/widgets/arena_icon_label.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../../../shared/widgets/arena_show_date_row.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
 import 'delete_show_dialog.dart';
@@ -18,30 +20,6 @@ String formatVendorSessionBookedSummary(Session session) {
 /// Returns the vendor-facing show-wide booked seat summary.
 String formatVendorShowBookedSummary(Show show) =>
     '${show.bookedCount} booked total';
-
-/// Adaptive icon-plus-label button child that wraps cleanly at high text scales.
-class VendorButtonContent extends StatelessWidget {
-  const VendorButtonContent({
-    required this.icon,
-    required this.label,
-    super.key,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Icon(icon, size: 18),
-        const SizedBox(width: 8),
-        Flexible(child: Text(label)),
-      ],
-    );
-  }
-}
 
 /// Status pill indicating whether a vendor show is active or finishing deletion.
 class VendorShowStatusBadge extends StatelessWidget {
@@ -122,31 +100,9 @@ class VendorShowCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  Text(
-                    dateLabel,
-                    style: textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontFeatures: const <FontFeature>[
-                        FontFeature.tabularFigures(),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    show.showDate,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontFeatures: const <FontFeature>[
-                        FontFeature.tabularFigures(),
-                      ],
-                    ),
-                  ),
-                  VendorShowStatusBadge(isDeleting: badgeDeleting),
-                ],
+              ArenaShowDateRow(
+                showDate: show.showDate,
+                trailing: VendorShowStatusBadge(isDeleting: badgeDeleting),
               ),
               const SizedBox(height: 8),
               Text(
@@ -195,18 +151,18 @@ class VendorShowCard extends StatelessWidget {
           )
         : summaryBody;
 
-    return Material(
+    return Card(
       key: ValueKey<String>('vendor-show-card-${show.id}'),
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: badgeDeleting
-              ? colorScheme.error.withValues(alpha: 0.45)
-              : colorScheme.outlineVariant,
-        ),
-      ),
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
+      shape: badgeDeleting
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: colorScheme.error.withValues(alpha: 0.45),
+              ),
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -259,7 +215,7 @@ class VendorShowCard extends StatelessWidget {
                 child: OutlinedButton(
                   key: ValueKey<String>('vendor-show-delete-${show.id}'),
                   onPressed: onDeleteShow,
-                  child: const VendorButtonContent(
+                  child: const ArenaIconLabel(
                     icon: Icons.delete_outline,
                     label: 'Delete',
                   ),

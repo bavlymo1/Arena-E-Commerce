@@ -1,9 +1,15 @@
 import 'dart:typed_data';
 
 import 'package:e_commerce_project/app/theme/app_theme.dart';
+import 'package:e_commerce_project/shared/widgets/arena_brand_app_bar_title.dart';
 import 'package:e_commerce_project/shared/widgets/arena_brand_mark.dart';
+import 'package:e_commerce_project/shared/widgets/arena_busy_button_label.dart';
+import 'package:e_commerce_project/shared/widgets/arena_icon_label.dart';
+import 'package:e_commerce_project/shared/widgets/arena_loading_view.dart';
 import 'package:e_commerce_project/shared/widgets/arena_notice_banner.dart';
+import 'package:e_commerce_project/shared/widgets/arena_page_header.dart';
 import 'package:e_commerce_project/shared/widgets/arena_poster_banner.dart';
+import 'package:e_commerce_project/shared/widgets/arena_show_date_row.dart';
 import 'package:e_commerce_project/shared/widgets/arena_status_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -287,6 +293,97 @@ void main() {
         expect(outline.borderRadius, BorderRadius.circular(12));
         expect(outline.borderSide.color, theme.colorScheme.outlineVariant);
       }
+      expect(theme.cardTheme.color, theme.colorScheme.surface);
+      expect(theme.cardTheme.elevation, 0);
     }
   });
+
+  testWidgets(
+    'shared Batch 4 widgets and Card theme render cleanly in light/dark at 320px and 2.0x text scale',
+    (tester) async {
+      for (final brightness in Brightness.values) {
+        final theme = buildAppTheme(brightness: brightness);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(320, 640),
+                textScaler: TextScaler.linear(2.0),
+              ),
+              child: Scaffold(
+                appBar: AppBar(
+                  title: const ArenaBrandAppBarTitle(
+                    title: 'ArenaPass Console Very Long Title',
+                  ),
+                ),
+                body: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: <Widget>[
+                    const ArenaPageHeader(
+                      eyebrow: 'ArenaPass',
+                      title: 'Discover shows',
+                      subtitle: 'Subtitle wraps cleanly on narrow screens.',
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            const ArenaShowDateRow(
+                              showDate: '2026-12-20',
+                              showIcon: true,
+                              prominent: true,
+                              dateLabelKey: ValueKey<String>('test-date-label'),
+                              trailing: Chip(label: Text('Active')),
+                            ),
+                            const SizedBox(height: 12),
+                            ArenaPosterBanner(
+                              title: 'Sample',
+                              posterBytes: _validPng,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () {},
+                      child: const ArenaIconLabel(
+                        icon: Icons.add,
+                        label: 'Add show with a longer wrapping label',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const OutlinedButton(
+                      onPressed: null,
+                      child: ArenaBusyButtonLabel(label: 'Saving…'),
+                    ),
+                    const SizedBox(height: 8),
+                    const ArenaLoadingView(
+                      label: 'Loading…',
+                      padding: EdgeInsets.all(12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.byKey(const ValueKey<String>('test-date-label')),
+          findsOneWidget,
+        );
+        expect(find.text('Dec 20, 2026'), findsOneWidget);
+        expect(find.text('2026-12-20'), findsOneWidget);
+        expect(find.text('Discover shows'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 }

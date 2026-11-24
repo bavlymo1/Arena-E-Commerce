@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../shared/widgets/arena_busy_button_label.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_page_header.dart';
 import '../cubit/customer_auth_cubit.dart';
 import '../cubit/customer_auth_state.dart';
 import '../widgets/customer_auth_widgets.dart';
@@ -75,9 +76,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return BlocBuilder<CustomerAuthCubit, CustomerAuthState>(
       builder: (context, state) {
         final cubit = context.read<CustomerAuthCubit>();
@@ -108,26 +106,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               children: <Widget>[
-                Text(
-                  'ArenaPass',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Create account',
-                  style: textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Register with your email and password to reserve arena seats.',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                const ArenaPageHeader(
+                  eyebrow: 'ArenaPass',
+                  title: 'Create account',
+                  subtitle: 'Register with your email and password to reserve arena seats.',
                 ),
                 if (state.isChecking && !state.busy) ...<Widget>[
                   const SizedBox(height: 16),
@@ -247,12 +229,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           onPressed: state.busy
                               ? null
                               : () => _submit(cubit, state),
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
                           child: state.busy
                               ? const ArenaBusyButtonLabel(
                                   label: 'Creating account…',
@@ -265,12 +241,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             'register-back-to-login-button',
                           ),
                           onPressed: handleBackToLogin,
-                          style: TextButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
                           child: const Text('Back to sign in'),
                         ),
                       ],

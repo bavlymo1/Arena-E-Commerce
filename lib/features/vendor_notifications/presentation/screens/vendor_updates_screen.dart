@@ -5,6 +5,7 @@ import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/seat_numbers.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
+import '../../../../shared/widgets/arena_page_header.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/booking_event.dart';
 import '../cubit/vendor_notifications_cubit.dart';
@@ -50,26 +51,11 @@ class VendorUpdatesScreen extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               children: <Widget>[
-                Text(
-                  'ArenaPass Console',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Booking updates',
-                  style: textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Confirmed bookings and exact booked-seat totals at commit time.',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                const ArenaPageHeader(
+                  eyebrow: 'ArenaPass Console',
+                  title: 'Booking updates',
+                  subtitle: 'Confirmed bookings and exact booked-seat totals at commit time.',
+                  compactSubtitle: true,
                 ),
                 if (state.unreadCount > 0) ...<Widget>[
                   const SizedBox(height: 12),
@@ -302,16 +288,16 @@ class _BookingEventCard extends StatelessWidget {
         '${unread ? 'Unread, ' : ''}${event.showTitle}, $slotLabel, '
         '$timestampLabel, $seatsLabel, $slotTotalLabel, $showTotalLabel';
 
-    return Material(
+    return Card(
       key: ValueKey<String>('vendor-update-card-${event.id}'),
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: unread ? colorScheme.primary : colorScheme.outlineVariant,
-        ),
-      ),
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
+      shape: unread
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: colorScheme.primary),
+            )
+          : null,
       child: onTap != null
           ? Semantics(
               container: true,
