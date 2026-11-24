@@ -1040,7 +1040,8 @@ void main() {
   test('addShow validates inputs, enforces vendor enrollment, and writes atomic 3-collection show transaction', () async {
     final store = _ShowStore(deletingShows: <String, Map<String, dynamic>>{});
     addTearDown(store.dispose);
-    final jpegBytes = File('assets/demo/skyline_jam.jpg').readAsBytesSync();
+    final jpegBytes = File('test/fixtures/posters/skyline_jam.jpg')
+        .readAsBytesSync();
     NewShow validShow({
       String vendorId = 'vendor-a',
       String? title,

@@ -1,4 +1,5 @@
-import 'package:e_commerce_project/app/customer/customer_demo_app.dart';
+import '../support/customer_demo_app.dart';
+
 import 'package:e_commerce_project/features/booking/presentation/cubit/booking_cubit.dart';
 import 'package:e_commerce_project/features/booking/presentation/cubit/seat_selection_cubit.dart';
 import 'package:e_commerce_project/features/booking/presentation/screens/seat_selection_screen.dart';

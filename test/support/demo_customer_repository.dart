@@ -1,17 +1,17 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:flutter/services.dart';
-
-import '../../features/booking/domain/models/booking.dart';
-import '../../features/booking/domain/models/booking_recovery.dart';
-import '../../features/booking/domain/models/booking_request.dart';
-import '../../features/booking/domain/models/booking_result.dart';
-import '../../features/booking/domain/repositories/booking_repository.dart';
-import '../../features/vendor_shows/domain/models/new_show.dart';
-import '../../features/vendor_shows/domain/models/session.dart';
-import '../../features/vendor_shows/domain/models/session_time.dart';
-import '../../features/vendor_shows/domain/models/show.dart';
-import '../../features/vendor_shows/domain/repositories/shows_repository.dart';
+import 'package:e_commerce_project/features/booking/domain/models/booking.dart';
+import 'package:e_commerce_project/features/booking/domain/models/booking_recovery.dart';
+import 'package:e_commerce_project/features/booking/domain/models/booking_request.dart';
+import 'package:e_commerce_project/features/booking/domain/models/booking_result.dart';
+import 'package:e_commerce_project/features/booking/domain/repositories/booking_repository.dart';
+import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
+import 'package:e_commerce_project/features/vendor_shows/domain/models/session.dart';
+import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
+import 'package:e_commerce_project/features/vendor_shows/domain/models/show.dart';
+import 'package:e_commerce_project/features/vendor_shows/domain/repositories/shows_repository.dart';
 
 /// App-composed, in-memory fixtures. No authentication, disk, or Firebase writes.
 /// These outcomes exercise presentation; they do not simulate server transactions.
@@ -244,12 +244,9 @@ final class DemoCustomerRepository
     final name = names[showId];
     if (name == null || _closed) return null;
     if (_posters[showId] case final bytes?) return bytes;
-    final data = await rootBundle.load('assets/demo/$name.jpg');
-    if (_closed) return null;
-    return _posters[showId] = data.buffer.asUint8List(
-      data.offsetInBytes,
-      data.lengthInBytes,
-    );
+    final file = File('test/fixtures/posters/$name.jpg');
+    if (!file.existsSync() || _closed) return null;
+    return _posters[showId] = file.readAsBytesSync();
   }
 
   @override

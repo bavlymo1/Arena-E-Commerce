@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:e_commerce_project/features/booking/data/repositories/firestore_booking_repository.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_request.dart';
@@ -16,70 +13,12 @@ import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/show.dart';
 import 'package:e_commerce_project/features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-const int _authPort = int.fromEnvironment(
-  'AUTH_EMULATOR_PORT',
-  defaultValue: 9099,
-);
-const int _firestorePort = int.fromEnvironment(
-  'FIRESTORE_EMULATOR_PORT',
-  defaultValue: 8180,
-);
-
-const FirebaseOptions _demoOptions = FirebaseOptions(
-  apiKey: 'ADemoProjectApiKey000000000000000000000',
-  appId: '1:1:android:1',
-  messagingSenderId: '1',
-  projectId: 'demo-arenapass',
-);
-
-Future<(FirebaseAuth, FirebaseFirestore)> _client(String name) async {
-  final app = await Firebase.initializeApp(name: name, options: _demoOptions);
-  final auth = FirebaseAuth.instanceFor(app: app);
-  await auth.useAuthEmulator(
-    '127.0.0.1',
-    _authPort,
-    automaticHostMapping: false,
-  );
-  final db = FirebaseFirestore.instanceFor(app: app);
-  db.settings = const Settings(persistenceEnabled: false);
-  db.useFirestoreEmulator(
-    '127.0.0.1',
-    _firestorePort,
-    automaticHostMapping: false,
-  );
-  return (auth, db);
-}
-
-Future<void> _enrollVendorDevice(String uid, String vendorId) async {
-  final http = HttpClient();
-  try {
-    final req = await http.patchUrl(
-      Uri.parse(
-        'http://127.0.0.1:$_firestorePort/v1/projects/demo-arenapass/databases/(default)/documents/vendorDevices/$uid',
-      ),
-    );
-    req.headers.set('Authorization', 'Bearer owner');
-    req.headers.contentType = ContentType.json;
-    req.write(
-      jsonEncode(<String, Object?>{
-        'fields': <String, Object?>{
-          'vendorId': <String, Object?>{'stringValue': vendorId},
-          'enabled': <String, Object?>{'booleanValue': true},
-        },
-      }),
-    );
-    final res = await req.close();
-    expect(res.statusCode, 200, reason: await utf8.decoder.bind(res).join());
-  } finally {
-    http.close(force: true);
-  }
-}
+import 'support/emulator_support.dart';
+import 'support/poster_fixture.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -88,11 +27,13 @@ void main() {
     'deletes >3 booking pairs in <=3 batches, transitions customer views to unavailable, resumes interrupted delete, and is idempotent',
     (tester) async {
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(options: _demoOptions);
+        await Firebase.initializeApp(options: kDemoEmulatorOptions);
       }
 
       final tag = DateTime.now().microsecondsSinceEpoch.toString();
-      final (customerAuth, customerDb) = await _client('customer-$tag');
+      final (customerAuth, customerDb) = await createNamedEmulatorClient(
+        'customer-$tag',
+      );
       final customerUid = (await customerAuth.createUserWithEmailAndPassword(
         email: 'customer-$tag@example.test',
         password: 'Local-demo-47',
@@ -104,10 +45,12 @@ void main() {
         customerShowsRepo,
       );
 
-      final (vendorAuth, vendorDb) = await _client('vendor-$tag');
+      final (vendorAuth, vendorDb) = await createNamedEmulatorClient(
+        'vendor-$tag',
+      );
       final vendorUid = (await vendorAuth.signInAnonymously()).user!.uid;
       final vendorId = 'vendor-$tag';
-      await _enrollVendorDevice(vendorUid, vendorId);
+      await enrollVendorDeviceOnEmulator(vendorUid, vendorId);
       final vendorAccess = FirebaseVendorAccessRepository(vendorAuth, vendorDb);
 
       final committedBatches = <int>[];
@@ -119,11 +62,7 @@ void main() {
         },
       );
 
-      final jpeg = await rootBundle.load('assets/demo/skyline_jam.jpg');
-      final posterBytes = jpeg.buffer.asUint8List(
-        jpeg.offsetInBytes,
-        jpeg.lengthInBytes,
-      );
+      final posterBytes = loadFixturePosterBytes();
 
       // --- 1. Create Show 1 with 7 confirmed bookings across 2 sessions ---
       final title1 = 'Batch Delete Show $tag';

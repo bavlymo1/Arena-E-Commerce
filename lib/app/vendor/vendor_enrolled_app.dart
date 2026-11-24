@@ -19,7 +19,7 @@ class VendorEnrolledApp extends StatefulWidget {
   const VendorEnrolledApp({
     required this.services,
     this.canAddShow = true,
-    this.banner = 'LOCAL EMULATORS · enrolled vendor',
+    this.banner,
     super.key,
   });
 

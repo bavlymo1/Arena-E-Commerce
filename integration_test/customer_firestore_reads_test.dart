@@ -2,16 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:e_commerce_project/app/customer/customer_app.dart';
-import 'package:e_commerce_project/app/di/customer_registration.dart';
-import 'package:e_commerce_project/features/customer_auth/data/local_auth_emulator.dart';
 import 'package:e_commerce_project/features/discovery/presentation/cubit/discovery_cubit.dart';
 import 'package:e_commerce_project/features/discovery/presentation/screens/discovery_screen.dart';
-import 'package:e_commerce_project/features/vendor_shows/data/local_shows_emulator.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+
+import '../test/support/customer_test_services.dart';
+import 'support/emulator_support.dart';
+import 'support/poster_fixture.dart';
 
 const _documents = 'projects/demo-arenapass/databases/(default)/documents';
 const _older = 'customer-reads-older';
@@ -99,12 +99,7 @@ void main() {
       const updatedTitle = 'Summit Series Revised';
       const oldDate = '2026-11-16T20:00:00Z';
       const newDate = '2026-11-17T20:00:00Z';
-      const posterAsset = 'assets/demo/skyline_jam.jpg';
-      final data = await rootBundle.load(posterAsset);
-      final bytes = data.buffer.asUint8List(
-        data.offsetInBytes,
-        data.lengthInBytes,
-      );
+      final bytes = loadFixturePosterBytes();
       await _commit([
         _show(_older, oldTitle, oldDate),
         _show(_newer, newTitle, newDate),

@@ -74,37 +74,6 @@ VendorNotificationsCubit _buildVendorNotificationsCubit(
       : null,
 );
 
-void registerVendorJourney(
-  GetIt services, {
-  required String vendorId,
-  ShowPosterPicker? posterPicker,
-  ShowPosterRecovery? recoverPoster,
-}) {
-  services.registerFactory<ShowFormCubit>(
-    () => _buildShowFormCubit(
-      services,
-      vendorId: vendorId,
-      posterPicker: posterPicker,
-      recoverPoster: recoverPoster,
-    ),
-  );
-  services.registerFactory<VendorShowsCubit>(
-    () => VendorShowsCubit(services<ShowsRepository>(), vendorId: vendorId),
-  );
-  services.registerFactoryParam<VendorShowDetailsCubit, String, Object?>(
-    (showId, _) => VendorShowDetailsCubit(
-      services<ShowsRepository>(),
-      vendorId: vendorId,
-      showId: showId,
-    ),
-  );
-  if (services.isRegistered<BookingEventsRepository>()) {
-    services.registerFactory<VendorNotificationsCubit>(
-      () => _buildVendorNotificationsCubit(services, vendorId: vendorId),
-    );
-  }
-}
-
 void registerVendorEnrolledJourney(
   GetIt services, {
   ShowPosterPicker? posterPicker,

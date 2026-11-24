@@ -24,25 +24,6 @@ GetIt createCustomerServices() {
   return services;
 }
 
-GetIt createAuthenticatedCustomerServices({
-  required CustomerAuthRepository authRepository,
-  ShowsRepository? showsRepository,
-}) {
-  final services = createCustomerServices();
-  services.registerSingleton<CustomerAuthRepository>(authRepository);
-  services.registerFactory<CustomerAuthCubit>(
-    () => CustomerAuthCubit(services<CustomerAuthRepository>()),
-  );
-  if (showsRepository != null) {
-    services.registerSingleton<ShowsRepository>(
-      showsRepository,
-      dispose: (repository) => repository.dispose(),
-    );
-    registerCustomerDiscovery(services);
-  }
-  return services;
-}
-
 /// Registers the full live Firebase Auth + Firestore Shows + Booking customer graph.
 GetIt createLiveCustomerServices({
   required FirebaseAuth auth,
@@ -56,10 +37,16 @@ GetIt createLiveCustomerServices({
       authRepository ?? FirebaseCustomerAuthRepository(auth);
   final resolvedShowsRepository =
       showsRepository ?? FirestoreShowsRepository(firestore);
-  final services = createAuthenticatedCustomerServices(
-    authRepository: resolvedAuthRepository,
-    showsRepository: resolvedShowsRepository,
+  final services = createCustomerServices();
+  services.registerSingleton<CustomerAuthRepository>(resolvedAuthRepository);
+  services.registerFactory<CustomerAuthCubit>(
+    () => CustomerAuthCubit(services<CustomerAuthRepository>()),
   );
+  services.registerSingleton<ShowsRepository>(
+    resolvedShowsRepository,
+    dispose: (repository) => repository.dispose(),
+  );
+  registerCustomerDiscovery(services);
   services.registerSingleton<BookingRepository>(
     bookingRepository ??
         FirestoreBookingRepository(firestore, auth, resolvedShowsRepository),
@@ -69,19 +56,6 @@ GetIt createLiveCustomerServices({
     customerUid: currentCustomerUid ?? () => auth.currentUser!.uid,
   );
   return services;
-}
-
-void registerCustomerJourney(
-  GetIt services, {
-  required String customerUid,
-  String Function()? newBookingId,
-}) {
-  registerCustomerDiscovery(services);
-  registerCustomerBooking(
-    services,
-    customerUid: () => customerUid,
-    newBookingId: newBookingId,
-  );
 }
 
 void registerCustomerBooking(

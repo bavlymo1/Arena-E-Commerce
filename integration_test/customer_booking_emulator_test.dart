@@ -1,72 +1,29 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:e_commerce_project/app/customer/customer_app.dart';
-import 'package:e_commerce_project/app/di/vendor_registration.dart';
-import 'package:e_commerce_project/app/vendor/vendor_demo_app.dart';
 import 'package:e_commerce_project/features/booking/data/repositories/firestore_booking_repository.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_recovery.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_request.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_result.dart';
 import 'package:e_commerce_project/features/booking/domain/repositories/booking_repository.dart';
+import 'package:e_commerce_project/features/booking/presentation/cubit/booking_cubit.dart';
+import 'package:e_commerce_project/features/booking/presentation/screens/booking_result_screen.dart';
 import 'package:e_commerce_project/features/vendor_access/data/repositories/firebase_vendor_access_repository.dart';
 import 'package:e_commerce_project/features/vendor_shows/data/repositories/firestore_shows_repository.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/repositories/shows_repository.dart';
-import 'package:e_commerce_project/main_customer_auth_emulator.dart' as preview;
 import 'package:e_commerce_project/shared/seating/seat_layout.dart';
 import 'package:e_commerce_project/shared/seating/widgets/seat_tile.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:e_commerce_project/features/booking/presentation/cubit/booking_cubit.dart';
-import 'package:e_commerce_project/features/booking/presentation/screens/booking_result_screen.dart';
 import 'package:integration_test/integration_test.dart';
 
-Future<(FirebaseAuth, FirebaseFirestore)> client(String name) async {
-  final app = await Firebase.initializeApp(
-    name: name,
-    options: Firebase.app().options,
-  );
-  final auth = FirebaseAuth.instanceFor(app: app);
-  await auth.useAuthEmulator('127.0.0.1', 9099, automaticHostMapping: false);
-  final db = FirebaseFirestore.instanceFor(app: app);
-  db.settings = const Settings(persistenceEnabled: false);
-  db.useFirestoreEmulator('127.0.0.1', 8180, automaticHostMapping: false);
-  return (auth, db);
-}
-
-// Administrative access is limited to provisioning the Vendor device fixture.
-Future<void> enroll(String uid, String vendorId) async {
-  final http = HttpClient();
-  try {
-    final req = await http.patchUrl(
-      Uri.parse(
-        'http://127.0.0.1:8180/v1/projects/demo-arenapass/databases/(default)/documents/vendorDevices/$uid',
-      ),
-    );
-    req.headers.set('Authorization', 'Bearer owner');
-    req.headers.contentType = ContentType.json;
-    req.write(
-      jsonEncode({
-        'fields': {
-          'vendorId': {'stringValue': vendorId},
-          'enabled': {'booleanValue': true},
-        },
-      }),
-    );
-    final res = await req.close();
-    expect(res.statusCode, 200, reason: await utf8.decoder.bind(res).join());
-  } finally {
-    http.close(force: true);
-  }
-}
+import '../test/support/vendor_demo_app.dart';
+import 'support/emulator_support.dart';
+import 'support/poster_fixture.dart';
 
 Future<void> waitFor(WidgetTester tester, Finder finder) async {
   for (var i = 0; i < 150 && finder.evaluate().isEmpty; i++) {
@@ -103,7 +60,7 @@ void main() {
   testWidgets(
     'local Customer booking persists, Vendor sees it, and two Customers contend atomically',
     (tester) async {
-      final graph = await preview.createLocalCustomerServices();
+      final graph = await createLocalCustomerServices();
       final a = graph<BookingRepository>();
       final tag = DateTime.now().microsecondsSinceEpoch.toString();
       final auth = FirebaseAuth.instance;
@@ -111,7 +68,7 @@ void main() {
         email: 'alice-$tag@example.test',
         password: 'Local-demo-47',
       )).user!.uid;
-      final (bobAuth, bobDb) = await client('bob-$tag');
+      final (bobAuth, bobDb) = await createNamedEmulatorClient('bob-$tag');
       final bob = (await bobAuth.createUserWithEmailAndPassword(
         email: 'bob-$tag@example.test',
         password: 'Local-demo-47',
@@ -121,16 +78,18 @@ void main() {
         bobAuth,
         FirestoreShowsRepository(bobDb),
       );
-      final (vendorAuth, vendorDb) = await client('vendor-$tag');
+      final (vendorAuth, vendorDb) = await createNamedEmulatorClient(
+        'vendor-$tag',
+      );
       final vendorUid = (await vendorAuth.signInAnonymously()).user!.uid;
       final vendorId = 'vendor-$tag';
-      await enroll(vendorUid, vendorId);
+      await enrollVendorDeviceOnEmulator(vendorUid, vendorId);
       final shows = FirestoreShowsRepository(
         vendorDb,
         vendorAccess: FirebaseVendorAccessRepository(vendorAuth, vendorDb),
       );
       final title = 'Booking arena $tag';
-      final jpeg = await rootBundle.load('assets/demo/skyline_jam.jpg');
+      final posterBytes = loadFixturePosterBytes();
       await shows.addShow(
         NewShow(
           vendorId: vendorId,
@@ -139,7 +98,7 @@ void main() {
           showDate: '2026-12-20',
           sessions: [SessionTime('19:00')],
         ),
-        jpeg.buffer.asUint8List(jpeg.offsetInBytes, jpeg.lengthInBytes),
+        posterBytes,
       );
       final show =
           (await shows

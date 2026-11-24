@@ -1,9 +1,10 @@
 import 'dart:async';
 
-import 'package:e_commerce_project/features/customer_auth/data/local_auth_emulator.dart';
 import 'package:e_commerce_project/features/customer_auth/domain/models/app_user.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+
+import 'support/emulator_support.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

@@ -1,9 +1,9 @@
+import 'package:e_commerce_project/app/customer/customer_journey_app.dart';
+import 'package:e_commerce_project/features/booking/domain/repositories/booking_repository.dart';
+import 'package:e_commerce_project/features/vendor_shows/domain/repositories/shows_repository.dart';
 import 'package:get_it/get_it.dart';
 
-import '../../features/booking/domain/repositories/booking_repository.dart';
-import '../../features/vendor_shows/domain/repositories/shows_repository.dart';
-import '../di/customer_registration.dart';
-import 'customer_journey_app.dart';
+import 'customer_test_services.dart';
 import 'demo_customer_repository.dart';
 
 const String _defaultDemoBanner =

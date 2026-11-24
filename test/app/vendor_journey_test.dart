@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:e_commerce_project/app/customer/demo_customer_repository.dart';
 import 'package:e_commerce_project/app/di/vendor_registration.dart';
-import 'package:e_commerce_project/app/vendor/vendor_demo_app.dart';
+
+import '../support/demo_customer_repository.dart';
+import '../support/vendor_demo_app.dart';
+
 import 'package:e_commerce_project/app/vendor/vendor_enrolled_app.dart';
 import 'package:e_commerce_project/features/booking/domain/models/booking_request.dart';
 import 'package:e_commerce_project/features/vendor_access/domain/models/vendor_access.dart';

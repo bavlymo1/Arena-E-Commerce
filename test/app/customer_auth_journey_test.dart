@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:e_commerce_project/app/customer/customer_app.dart';
-import 'package:e_commerce_project/app/di/customer_registration.dart';
 import 'package:e_commerce_project/features/customer_auth/domain/models/app_user.dart';
+
+import '../support/customer_test_services.dart';
+
 import 'package:e_commerce_project/features/customer_auth/domain/repositories/customer_auth_repository.dart';
 import 'package:e_commerce_project/features/customer_auth/presentation/cubit/customer_auth_cubit.dart';
 import 'package:e_commerce_project/features/customer_auth/presentation/screens/login_screen.dart';

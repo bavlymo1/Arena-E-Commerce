@@ -8,10 +8,7 @@ import '../di/customer_registration.dart';
 import '../startup/arena_pass_app.dart';
 import 'customer_journey_app.dart';
 
-Widget createCustomerApp({
-  GetIt? services,
-  String? banner = 'LOCAL EMULATORS',
-}) {
+Widget createCustomerApp({GetIt? services, String? banner}) {
   final graph = services ?? createCustomerServices();
   if (!graph.isRegistered<CustomerAuthRepository>()) {
     return ArenaPassApp(services: graph);

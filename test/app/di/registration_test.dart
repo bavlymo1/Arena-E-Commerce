@@ -3,14 +3,11 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:e_commerce_project/app/customer/customer_app.dart';
-import 'package:e_commerce_project/app/customer/customer_demo_app.dart';
 import 'package:e_commerce_project/app/di/customer_registration.dart';
 import 'package:e_commerce_project/app/di/vendor_registration.dart';
 import 'package:e_commerce_project/app/startup/app_variant.dart';
 import 'package:e_commerce_project/app/startup/arena_pass_app.dart';
 import 'package:e_commerce_project/app/startup/startup_cubit.dart';
-import 'package:e_commerce_project/app/vendor/vendor_app.dart';
-import 'package:e_commerce_project/app/vendor/vendor_demo_app.dart';
 import 'package:e_commerce_project/app/vendor/vendor_enrolled_app.dart';
 import 'package:e_commerce_project/features/booking/domain/repositories/booking_repository.dart';
 import 'package:e_commerce_project/features/booking/presentation/cubit/booking_cubit.dart';
@@ -46,8 +43,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 
+import '../../support/customer_demo_app.dart';
 import '../../support/fake_booking_repository.dart';
 import '../../support/fake_shows_repository.dart';
+import '../../support/vendor_demo_app.dart';
 
 // ignore_for_file: subtype_of_sealed_class
 
@@ -255,9 +254,9 @@ void main() {
   });
 
   testWidgets(
-    'live Customer and Vendor apps omit emulator banners while emulator defaults keep them',
+    'Customer and Vendor apps omit emulator banners by default and show explicit banners',
     (tester) async {
-      // 1. Live Customer app (banner: null) omits LOCAL EMULATORS banner.
+      // 1. Default live Customer app omits emulator banner.
       final liveCustomerServices = createLiveCustomerServices(
         auth: _FakeFirebaseAuth(),
         firestore: _FakeFirebaseFirestore(),
@@ -269,7 +268,7 @@ void main() {
         currentCustomerUid: () => 'cust-1',
       );
       await tester.pumpWidget(
-        createCustomerApp(services: liveCustomerServices, banner: null),
+        createCustomerApp(services: liveCustomerServices),
       );
       await tester.pumpAndSettle();
       expect(find.byType(DiscoveryScreen), findsOneWidget);
@@ -277,7 +276,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
 
-      // 2. Default Customer emulator app preserves LOCAL EMULATORS banner.
+      // 2. Explicit banner renders when requested.
       final emuCustomerServices = createLiveCustomerServices(
         auth: _FakeFirebaseAuth(),
         firestore: _FakeFirebaseFirestore(),
@@ -288,14 +287,19 @@ void main() {
         bookingRepository: FakeBookingRepository(),
         currentCustomerUid: () => 'cust-1',
       );
-      await tester.pumpWidget(createCustomerApp(services: emuCustomerServices));
+      await tester.pumpWidget(
+        createCustomerApp(
+          services: emuCustomerServices,
+          banner: 'LOCAL EMULATORS',
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.byType(DiscoveryScreen), findsOneWidget);
       expect(find.text('LOCAL EMULATORS'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
 
-      // 3. Live Vendor app via createEnrolledVendorApp(banner: null) omits banner.
+      // 3. Default live Vendor app omits emulator banner.
       final liveVendorServices = createLiveVendorServices(
         auth: _FakeFirebaseAuth(),
         firestore: _FakeFirebaseFirestore(),
@@ -311,16 +315,14 @@ void main() {
       liveVendorServices.registerSingleton<BookingEventsRepository>(
         _StubBookingEventsRepository(),
       );
-      await tester.pumpWidget(
-        createEnrolledVendorApp(services: liveVendorServices, banner: null),
-      );
+      await tester.pumpWidget(VendorEnrolledApp(services: liveVendorServices));
       await tester.pumpAndSettle();
       expect(find.byType(VendorShowsScreen), findsOneWidget);
       expect(find.textContaining('LOCAL EMULATORS'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
 
-      // 4. Default VendorEnrolledApp preserves LOCAL EMULATORS banner.
+      // 4. Explicit Vendor banner renders when supplied.
       final emuVendorServices = createLiveVendorServices(
         auth: _FakeFirebaseAuth(),
         firestore: _FakeFirebaseFirestore(),
@@ -336,7 +338,12 @@ void main() {
       emuVendorServices.registerSingleton<BookingEventsRepository>(
         _StubBookingEventsRepository(),
       );
-      await tester.pumpWidget(VendorEnrolledApp(services: emuVendorServices));
+      await tester.pumpWidget(
+        VendorEnrolledApp(
+          services: emuVendorServices,
+          banner: 'LOCAL EMULATORS · enrolled vendor',
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.byType(VendorShowsScreen), findsOneWidget);
       expect(find.text('LOCAL EMULATORS · enrolled vendor'), findsOneWidget);
@@ -484,41 +491,45 @@ void main() {
     expect(vendorServices.isRegistered<ShowsRepository>(), isFalse);
   });
 
-  test('only explicit demo files import demo composition or fixtures', () {
-    const allowedDemoFiles = <String>{
-      'lib/main_customer_demo.dart',
-      'lib/main_vendor_demo.dart',
-      'lib/app/customer/customer_demo_app.dart',
-      'lib/app/vendor/vendor_demo_app.dart',
-      'lib/app/customer/demo_customer_repository.dart',
-    };
-    final nonDemoDartFiles =
-        Directory('lib')
-            .listSync(recursive: true)
-            .whereType<File>()
-            .map((file) => file.path.replaceAll('\\', '/'))
-            .where((path) => path.endsWith('.dart'))
-            .where((path) => !allowedDemoFiles.contains(path))
-            .toList()
-          ..sort();
-    expect(nonDemoDartFiles, isNotEmpty);
-    for (final relativePath in nonDemoDartFiles) {
-      final contents = File(relativePath).readAsStringSync();
-      expect(
-        contents,
-        isNot(contains('customer_demo_app.dart')),
-        reason: relativePath,
-      );
-      expect(
-        contents,
-        isNot(contains('vendor_demo_app.dart')),
-        reason: relativePath,
-      );
-      expect(
-        contents,
-        isNot(contains('demo_customer_repository.dart')),
-        reason: relativePath,
-      );
-    }
-  });
+  test(
+    'production lib/ files have no demo, fixture, or emulator dependencies',
+    () {
+      const forbiddenTokens = <String>[
+        'customer_demo_app.dart',
+        'vendor_demo_app.dart',
+        'demo_customer_repository.dart',
+        'main_customer_demo.dart',
+        'main_vendor_demo.dart',
+        'main_vendor_emulator.dart',
+        'main_customer_auth_emulator.dart',
+        'local_auth_emulator.dart',
+        'local_shows_emulator.dart',
+        'createAuthenticatedCustomerServices',
+        'registerCustomerJourney',
+        'registerVendorJourney',
+        'assets/demo',
+        'useAuthEmulator',
+        'useFirestoreEmulator',
+      ];
+      final prodDartFiles =
+          Directory('lib')
+              .listSync(recursive: true)
+              .whereType<File>()
+              .map((file) => file.path.replaceAll('\\', '/'))
+              .where((path) => path.endsWith('.dart'))
+              .toList()
+            ..sort();
+      expect(prodDartFiles, isNotEmpty);
+      for (final relativePath in prodDartFiles) {
+        final contents = File(relativePath).readAsStringSync();
+        for (final token in forbiddenTokens) {
+          expect(
+            contents,
+            isNot(contains(token)),
+            reason: '$relativePath must not reference $token',
+          );
+        }
+      }
+    },
+  );
 }

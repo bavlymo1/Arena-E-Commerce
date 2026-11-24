@@ -178,7 +178,7 @@ export function toFirestoreFields(record) {
   );
 }
 
-export async function loadPosterAssets(assetsDir = path.join(APP_ROOT, 'assets', 'demo')) {
+export async function loadPosterAssets(assetsDir = path.join(APP_ROOT, 'test', 'fixtures', 'posters')) {
   const loaded = new Map();
   for (const show of SEED_SHOWS) {
     const filePath = path.join(assetsDir, show.assetFile);
