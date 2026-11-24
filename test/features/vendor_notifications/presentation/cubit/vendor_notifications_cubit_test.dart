@@ -1330,4 +1330,38 @@ void main() {
     expect(presenter.groupedCounts, isEmpty);
     expect(store.saved, hasLength(2));
   });
+
+  test('transitions to error if watchEvents closes before initial snapshot, but keeps ready on post-snapshot close', () async {
+    final repo = _StreamingBookingEventsRepository();
+    addTearDown(repo.dispose);
+    final cubit = VendorNotificationsCubit(repo, vendorId: 'vendor-a');
+    addTearDown(cubit.close);
+
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorNotificationsStatus.loading);
+
+    await repo.controller.close();
+    await pumpEventQueue();
+
+    expect(cubit.state.status, VendorNotificationsStatus.error);
+    expect(cubit.state.hasError, isTrue);
+    expect(
+      cubit.state.errorMessage,
+      'Unable to load booking updates. Try again.',
+    );
+
+    // Retry receives a snapshot then closes cleanly -> stays ready.
+    repo.controller = StreamController<List<BookingEvent>>();
+    await cubit.retry();
+    expect(cubit.state.status, VendorNotificationsStatus.loading);
+
+    repo.controller.add(const <BookingEvent>[]);
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorNotificationsStatus.ready);
+
+    await repo.controller.close();
+    await pumpEventQueue();
+    expect(cubit.state.status, VendorNotificationsStatus.ready);
+    expect(cubit.state.hasError, isFalse);
+  });
 }

@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/models/alert_permission.dart';
 import '../../domain/models/booking_alert.dart';
 import '../../domain/models/booking_event.dart';
+import '../../domain/models/booking_event_reconciliation.dart';
 import '../../domain/models/notification_watermark.dart';
 import '../../domain/repositories/booking_events_repository.dart';
 import '../../domain/repositories/local_alert_presenter.dart';
@@ -180,8 +181,12 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
             onError: (Object _) => _onStreamError(generation),
             onDone: () {
               if (generation == _listenGeneration) {
+                final closedWithoutSnapshot = _awaitingInitialEvent;
                 _eventsSubscription = null;
                 _awaitingInitialEvent = false;
+                if (closedWithoutSnapshot) {
+                  _onStreamError(generation);
+                }
               }
             },
           );
@@ -199,83 +204,33 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
     if (isClosed || generation != _listenGeneration) return;
     _awaitingInitialEvent = false;
 
-    final sortedNewestFirst =
-        rawEvents
-            .where((event) => event.vendorId == state.vendorId)
-            .toList(growable: false)
-          ..sort(BookingEvent.compareNewestFirst);
-    final seenIds = <String>{};
-    final ownedEvents = <BookingEvent>[
-      for (final event in sortedNewestFirst)
-        if (seenIds.add(event.bookingId)) event,
-    ];
-    final ownedIds = ownedEvents.map((event) => event.id).toSet();
-
     final isInitial = !_initialSnapshotProcessed;
     _initialSnapshotProcessed = true;
 
-    late final Set<String> nextUnread;
-    late final List<BookingEvent> alertsToFire;
-    late final bool isCatchUp;
-    NotificationWatermark? watermarkToPersist;
-
-    if (isInitial && _watermark.isEmpty) {
-      // First-time launch with no watermark: seed cursor without alerts.
-      nextUnread = const <String>{};
-      alertsToFire = const <BookingEvent>[];
-      isCatchUp = false;
-      var cursor = ownedEvents.isEmpty
-          ? NotificationWatermark(lastSeenEventAtMs: 0)
-          : _watermark;
-      for (final event in ownedEvents.reversed) {
-        cursor = cursor.advance(
-          createdAtMs: event.createdAt.millisecondsSinceEpoch,
-          eventId: event.id,
-        );
-      }
-      _watermark = cursor;
-      watermarkToPersist = cursor;
-    } else {
-      nextUnread = state.unreadEventIds.where(ownedIds.contains).toSet();
-      final oldestFirst = ownedEvents.toList(growable: false)
-        ..sort(BookingEvent.compareOldestFirst);
-      final unseen = <BookingEvent>[];
-      var nextWatermark = _watermark;
-
-      for (final event in oldestFirst) {
-        final ms = event.createdAt.millisecondsSinceEpoch;
-        if (nextWatermark.isUnseen(ms, event.id)) {
-          unseen.add(event);
-          nextUnread.add(event.id);
-          nextWatermark = nextWatermark.advance(
-            createdAtMs: ms,
-            eventId: event.id,
-          );
-        }
-      }
-
-      _watermark = nextWatermark;
-      alertsToFire = unseen;
-      isCatchUp = isInitial;
-      if (unseen.isNotEmpty) {
-        watermarkToPersist = nextWatermark;
-      }
-    }
+    final reconciliation = reconcileBookingEventsSnapshot(
+      rawEvents: rawEvents,
+      vendorId: state.vendorId,
+      watermark: _watermark,
+      isInitialSnapshot: isInitial,
+      previousUnreadIds: state.unreadEventIds,
+    );
+    _watermark = reconciliation.nextWatermark;
 
     emit(
       state.copyWith(
         status: VendorNotificationsStatus.ready,
-        events: ownedEvents,
-        unreadEventIds: nextUnread,
+        events: reconciliation.events,
+        unreadEventIds: reconciliation.unreadEventIds,
         clearErrorMessage: true,
       ),
     );
 
-    if (watermarkToPersist != null || alertsToFire.isNotEmpty) {
+    if (reconciliation.watermarkToPersist != null ||
+        reconciliation.alertsToFire.isNotEmpty) {
       _enqueueAlertAndPersist(
-        events: alertsToFire,
-        isCatchUp: isCatchUp,
-        watermarkToPersist: watermarkToPersist ?? _watermark,
+        events: reconciliation.alertsToFire,
+        isCatchUp: reconciliation.isCatchUp,
+        watermarkToPersist: reconciliation.watermarkToPersist ?? _watermark,
       );
     }
   }
