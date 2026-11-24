@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// Real 960x536 JPEG poster (skyline_jam.jpg, 68494 bytes) for device
-/// integration tests after removing ssets/demo/ from production APK assets.
+/// Real 960x536 JPEG poster (`skyline_jam.jpg`, 68494 bytes) for device
+/// integration tests after removing `assets/demo/` from production APK assets.
 Uint8List loadFixturePosterBytes() {
   final hostFile = File('test/fixtures/posters/skyline_jam.jpg');
   if (hostFile.existsSync()) {
