@@ -229,7 +229,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
         reconciliation.alertsToFire.isNotEmpty) {
       _enqueueAlertAndPersist(
         events: reconciliation.alertsToFire,
-        isCatchUp: reconciliation.isCatchUp,
+        shouldGroupAlerts: reconciliation.shouldGroupAlerts,
         watermarkToPersist: reconciliation.watermarkToPersist ?? _watermark,
       );
     }
@@ -237,7 +237,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
 
   void _enqueueAlertAndPersist({
     required List<BookingEvent> events,
-    required bool isCatchUp,
+    required bool shouldGroupAlerts,
     required NotificationWatermark watermarkToPersist,
   }) {
     _alertPipeline = _alertPipeline.then((_) async {
@@ -252,7 +252,7 @@ final class VendorNotificationsCubit extends Cubit<VendorNotificationsState> {
       if (presenter != null &&
           events.isNotEmpty &&
           state.alertPermission == AlertPermission.granted) {
-        if (isCatchUp && events.length > 1) {
+        if (shouldGroupAlerts) {
           try {
             await presenter.showGroupedAlert(events.length);
           } catch (_) {
