@@ -18,20 +18,18 @@ final class VendorAccessCubit extends Cubit<VendorAccessState> {
 
   final VendorAccessRepository _repository;
   bool _inFlight = false;
-  int _generation = 0;
 
   /// Checks whether this device is enrolled for vendor management.
   Future<void> check() async {
     if (_inFlight || isClosed) return;
     _inFlight = true;
-    final generation = ++_generation;
     if (state is! AccessChecking) {
       emit(const AccessChecking());
     }
 
     try {
       final access = await _repository.check();
-      if (isClosed || generation != _generation) return;
+      if (isClosed) return;
       switch (access) {
         case VendorAllowed(:final vendorId):
           emit(AccessAllowed(vendorId));
@@ -39,12 +37,10 @@ final class VendorAccessCubit extends Cubit<VendorAccessState> {
           emit(AccessNotEnrolled(uid));
       }
     } catch (_) {
-      if (isClosed || generation != _generation) return;
+      if (isClosed) return;
       emit(const AccessError(VendorAccessStrings.checkErrorMessage));
     } finally {
-      if (generation == _generation) {
-        _inFlight = false;
-      }
+      _inFlight = false;
     }
   }
 
@@ -53,7 +49,6 @@ final class VendorAccessCubit extends Cubit<VendorAccessState> {
 
   @override
   Future<void> close() {
-    _generation++;
     _inFlight = false;
     return super.close();
   }

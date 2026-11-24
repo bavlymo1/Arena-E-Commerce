@@ -33,7 +33,6 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
   Future<void> _cancellation = Future<void>.value();
   Future<void>? _activeStartFuture;
   int _listenGeneration = 0;
-  int _authEventSequence = 0;
   bool _awaitingInitialEvent = false;
   bool _openingSubscription = false;
   Object? _activeOperation;
@@ -143,27 +142,17 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
   }) async {
     final operation = Object();
     _activeOperation = operation;
-    final startListenGeneration = _listenGeneration;
-    final startAuthEventSequence = _authEventSequence;
     emit(state.copyWith(busy: true, clearErrorMessage: true));
 
     try {
       await action();
-      if (!_isCurrentOperation(
-        operation,
-        startListenGeneration,
-        startAuthEventSequence,
-      )) {
+      if (!_isCurrentOperation(operation)) {
         return;
       }
       _activeOperation = null;
       emit(state.copyWith(busy: false));
     } catch (_) {
-      if (!_isCurrentOperation(
-        operation,
-        startListenGeneration,
-        startAuthEventSequence,
-      )) {
+      if (!_isCurrentOperation(operation)) {
         return;
       }
       _activeOperation = null;
@@ -182,20 +171,11 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
     }
   }
 
-  bool _isCurrentOperation(
-    Object operation,
-    int startListenGeneration,
-    int startAuthEventSequence,
-  ) {
-    return !isClosed &&
-        identical(_activeOperation, operation) &&
-        startListenGeneration == _listenGeneration &&
-        startAuthEventSequence == _authEventSequence;
-  }
+  bool _isCurrentOperation(Object operation) =>
+      !isClosed && identical(_activeOperation, operation);
 
   Future<void> _startListening() {
     final generation = ++_listenGeneration;
-    _authEventSequence++;
     _activeOperation = null;
     _awaitingInitialEvent = true;
     _openingSubscription = true;
@@ -237,7 +217,6 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
   void _onAuthChanged(int generation, AppUser? user) {
     if (isClosed || generation != _listenGeneration) return;
     _awaitingInitialEvent = false;
-    _authEventSequence++;
     _activeOperation = null;
 
     if (user != null) {
@@ -250,7 +229,6 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
   void _onStreamError(int generation) {
     if (isClosed || generation != _listenGeneration) return;
     _awaitingInitialEvent = false;
-    _authEventSequence++;
     _activeOperation = null;
 
     emit(
@@ -275,7 +253,6 @@ final class CustomerAuthCubit extends Cubit<CustomerAuthState> {
   @override
   Future<void> close() async {
     _listenGeneration++;
-    _authEventSequence++;
     _activeOperation = null;
     _awaitingInitialEvent = false;
     await Future.wait<void>(<Future<void>>[

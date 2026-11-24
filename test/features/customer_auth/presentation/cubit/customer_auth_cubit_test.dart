@@ -572,4 +572,76 @@ void main() {
     await cubit.close();
     expect(() => cubit.clearError(), returnsNormally);
   });
+
+  test('ignores late prior operation and stale stream events when a new login/logout or retry overlaps', () async {
+    final firstLogoutGate = Completer<void>();
+    final secondLogoutGate = Completer<void>();
+    var logoutAttempts = 0;
+    final repo = _ScriptedCustomerAuthRepository()
+      ..logoutHandler = () {
+        logoutAttempts++;
+        return logoutAttempts == 1
+            ? firstLogoutGate.future
+            : secondLogoutGate.future;
+      };
+    addTearDown(repo.dispose);
+
+    final cubit = CustomerAuthCubit(repo);
+    addTearDown(cubit.close);
+    await pumpEventQueue();
+
+    final alice = AppUser(uid: 'alice', email: 'alice@example.test');
+    final bob = AppUser(uid: 'bob', email: 'bob@example.test');
+    repo.controller.add(alice);
+    await pumpEventQueue();
+
+    // Start logout for alice; before it finishes, stream switches to bob.
+    final firstLogout = cubit.logout();
+    expect(cubit.state.busy, isTrue);
+
+    repo.controller.add(bob);
+    await pumpEventQueue();
+    expect(cubit.state.status, CustomerAuthStatus.signedIn);
+    expect(cubit.state.user, bob);
+    expect(cubit.state.busy, isFalse);
+
+    // Start a second logout while firstLogout is still pending; firstLogout
+    // completing late must not clear the second operation's busy flag.
+    final secondLogout = cubit.logout();
+    expect(cubit.state.busy, isTrue);
+
+    firstLogoutGate.complete();
+    await firstLogout;
+    expect(cubit.state.busy, isTrue);
+    expect(cubit.state.user, bob);
+    expect(cubit.state.errorMessage, isNull);
+
+    secondLogoutGate.complete();
+    await secondLogout;
+    expect(cubit.state.busy, isFalse);
+
+    // Overlapping login + retry() ignores both stale login failure and stale stream events.
+    final staleLoginGate = Completer<void>();
+    repo.loginHandler = (_, _) => staleLoginGate.future;
+    repo.controller.add(null);
+    await pumpEventQueue();
+    final staleLogin = cubit.login('bob@example.test', 'password');
+    expect(cubit.state.busy, isTrue);
+
+    final staleController = repo.controller;
+    repo.controller = StreamController<AppUser?>();
+    await cubit.retry();
+    expect(cubit.state.status, CustomerAuthStatus.checking);
+    expect(cubit.state.busy, isFalse);
+
+    staleController.add(alice);
+    staleLoginGate.completeError(StateError('stale login failure'));
+    await staleLogin;
+    await staleController.close();
+    await pumpEventQueue();
+
+    expect(cubit.state.status, CustomerAuthStatus.checking);
+    expect(cubit.state.user, isNull);
+    expect(cubit.state.errorMessage, isNull);
+  });
 }

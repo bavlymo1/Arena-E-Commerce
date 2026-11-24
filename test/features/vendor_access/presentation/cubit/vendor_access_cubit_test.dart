@@ -221,4 +221,37 @@ void main() {
     expect(const AccessError('e1'), equals(const AccessError('e1')));
     expect(const AccessError('e1'), isNot(equals(const AccessError('e2'))));
   });
+
+  test('close() during pending check() blocks immediate and late emissions on success or error', () async {
+    final successGate = Completer<VendorAccess>();
+    final repoSuccess = _FakeVendorAccessRepository()
+      ..onCheck = () => successGate.future;
+    final cubit1 = VendorAccessCubit(repoSuccess);
+    final emitted1 = <VendorAccessState>[];
+    final sub1 = cubit1.stream.listen(emitted1.add);
+    addTearDown(sub1.cancel);
+
+    // Unawaited close() synchronously marks cubit closed before check resolves.
+    final closing1 = cubit1.close();
+    expect(cubit1.isClosed, isTrue);
+    successGate.complete(VendorAllowed(uid: 'uid-mid', vendorId: 'arena'));
+    await closing1;
+    await pumpEventQueue();
+    expect(emitted1, isEmpty);
+
+    final errorGate = Completer<VendorAccess>();
+    final repoError = _FakeVendorAccessRepository()
+      ..onCheck = () => errorGate.future;
+    final cubit2 = VendorAccessCubit(repoError);
+    final emitted2 = <VendorAccessState>[];
+    final sub2 = cubit2.stream.listen(emitted2.add);
+    addTearDown(sub2.cancel);
+
+    final closing2 = cubit2.close();
+    expect(cubit2.isClosed, isTrue);
+    errorGate.completeError(StateError('mid-flight error'));
+    await closing2;
+    await pumpEventQueue();
+    expect(emitted2, isEmpty);
+  });
 }
