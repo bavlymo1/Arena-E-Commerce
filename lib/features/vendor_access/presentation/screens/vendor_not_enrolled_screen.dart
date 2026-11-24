@@ -51,34 +51,31 @@ class VendorNotEnrolledScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        Semantics(
-          container: true,
-          child: Card(
-            key: const ValueKey<String>('vendor-access-device-id-card'),
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    VendorAccessStrings.deviceIdLabel,
-                    style: textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
+        Card(
+          key: const ValueKey<String>('vendor-access-device-id-card'),
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  VendorAccessStrings.deviceIdLabel,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    uid,
-                    key: const ValueKey<String>('vendor-access-device-id'),
-                    style: textTheme.titleMedium?.copyWith(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.w600,
-                    ),
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  uid,
+                  key: const ValueKey<String>('vendor-access-device-id'),
+                  style: textTheme.titleMedium?.copyWith(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

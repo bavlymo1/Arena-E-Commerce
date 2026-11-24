@@ -307,7 +307,7 @@ class _BookingEventCard extends StatelessWidget {
               excludeSemantics: true,
               child: InkWell(onTap: onTap, child: body),
             )
-          : Semantics(container: true, child: body),
+          : body,
     );
   }
 }

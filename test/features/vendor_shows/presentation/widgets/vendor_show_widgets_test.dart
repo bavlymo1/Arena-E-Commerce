@@ -4,7 +4,6 @@ import 'package:e_commerce_project/features/vendor_shows/domain/models/session.d
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/show.dart';
 import 'package:e_commerce_project/features/vendor_shows/presentation/widgets/vendor_show_widgets.dart';
-import 'package:e_commerce_project/shared/widgets/arena_icon_label.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -53,21 +52,6 @@ void main() {
         lastBookingId: '',
       ).posterRevision,
     );
-  });
-
-  testWidgets('ArenaIconLabel renders icon and label without overflow', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: buildAppTheme(),
-        home: const Scaffold(
-          body: ArenaIconLabel(icon: Icons.add_outlined, label: 'Add show'),
-        ),
-      ),
-    );
-    expect(find.byIcon(Icons.add_outlined), findsOneWidget);
-    expect(find.text('Add show'), findsOneWidget);
   });
 
   testWidgets(

@@ -162,39 +162,45 @@ void main() {
   testWidgets(
     'ArenaNoticeBanner supports TextButton/OutlinedButton, liveRegion, and 300px 2.0x scale',
     (tester) async {
+      tester.view.physicalSize = const Size(300, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
       var textActionCalls = 0;
       var outlinedActionCalls = 0;
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(brightness: Brightness.light),
-          home: MediaQuery(
-            data: const MediaQueryData(
-              size: Size(300, 640),
-              textScaler: TextScaler.linear(2.0),
-            ),
-            child: Scaffold(
-              body: ListView(
-                children: <Widget>[
-                  ArenaNoticeBanner(
-                    icon: Icons.error_outline,
-                    message: 'Auth failed',
-                    isError: true,
-                    liveRegion: true,
-                    useTextAction: true,
-                    emphasizeText: true,
-                    actionLabel: 'Retry auth',
-                    actionKey: const ValueKey<String>('notice-text-action'),
-                    onAction: () => textActionCalls++,
-                  ),
-                  ArenaNoticeBanner(
-                    icon: Icons.info_outline,
-                    message: 'Sync notice',
-                    actionLabel: 'Retry sync',
-                    actionKey: const ValueKey<String>('notice-outlined-action'),
-                    onAction: () => outlinedActionCalls++,
-                  ),
-                ],
-              ),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2.0)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: ListView(
+              children: <Widget>[
+                ArenaNoticeBanner(
+                  icon: Icons.error_outline,
+                  message: 'Auth failed',
+                  isError: true,
+                  liveRegion: true,
+                  useTextAction: true,
+                  emphasizeText: true,
+                  actionLabel: 'Retry auth',
+                  actionKey: const ValueKey<String>('notice-text-action'),
+                  onAction: () => textActionCalls++,
+                ),
+                ArenaNoticeBanner(
+                  icon: Icons.info_outline,
+                  message: 'Sync notice',
+                  actionLabel: 'Retry sync',
+                  actionKey: const ValueKey<String>('notice-outlined-action'),
+                  onAction: () => outlinedActionCalls++,
+                ),
+              ],
             ),
           ),
         ),
@@ -278,12 +284,22 @@ void main() {
     },
   );
 
-  test('buildAppTheme configures shared prototype inputDecorationTheme in light and dark modes', () {
+  test('buildAppTheme configures shared prototype card, input, and button themes in light and dark modes', () {
+    final expectedButtonShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(13),
+    );
     for (final brightness in Brightness.values) {
+      final isDark = brightness == Brightness.dark;
+      final expectedSurface = isDark
+          ? const Color(0xFF1B1A1E)
+          : const Color(0xFFFFFFFF);
+      final expectedLine = isDark
+          ? const Color(0xFF3A353F)
+          : const Color(0xFFC7BAC5);
       final theme = buildAppTheme(brightness: brightness);
       final decoration = theme.inputDecorationTheme;
       expect(decoration.filled, isTrue);
-      expect(decoration.fillColor, theme.colorScheme.surfaceContainerLow);
+      expect(decoration.fillColor, expectedSurface);
       for (final border in <InputBorder?>[
         decoration.border,
         decoration.enabledBorder,
@@ -291,34 +307,87 @@ void main() {
         expect(border, isA<OutlineInputBorder>());
         final outline = border! as OutlineInputBorder;
         expect(outline.borderRadius, BorderRadius.circular(12));
-        expect(outline.borderSide.color, theme.colorScheme.outlineVariant);
+        expect(outline.borderSide.color, expectedLine);
       }
-      expect(theme.cardTheme.color, theme.colorScheme.surface);
+      expect(theme.cardTheme.color, expectedSurface);
       expect(theme.cardTheme.elevation, 0);
+      expect(theme.cardTheme.surfaceTintColor, Colors.transparent);
+      expect(
+        theme.cardTheme.shape,
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: expectedLine),
+        ),
+      );
+
+      expect(
+        theme.filledButtonTheme.style?.minimumSize?.resolve(<WidgetState>{}),
+        const Size(0, 48),
+      );
+      expect(
+        theme.filledButtonTheme.style?.shape?.resolve(<WidgetState>{}),
+        expectedButtonShape,
+      );
+      expect(
+        theme.outlinedButtonTheme.style?.minimumSize?.resolve(<WidgetState>{}),
+        const Size(0, 48),
+      );
+      expect(
+        theme.outlinedButtonTheme.style?.side?.resolve(<WidgetState>{}),
+        BorderSide(color: expectedLine),
+      );
+      expect(
+        theme.outlinedButtonTheme.style?.shape?.resolve(<WidgetState>{}),
+        expectedButtonShape,
+      );
+      expect(
+        theme.textButtonTheme.style?.minimumSize?.resolve(<WidgetState>{}),
+        const Size(0, 44),
+      );
+      expect(
+        theme.textButtonTheme.style?.shape?.resolve(<WidgetState>{}),
+        expectedButtonShape,
+      );
     }
   });
 
   testWidgets(
     'shared Batch 4 widgets and Card theme render cleanly in light/dark at 320px and 2.0x text scale',
     (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
       for (final brightness in Brightness.values) {
+        final isDark = brightness == Brightness.dark;
+        final expectedSurface = isDark
+            ? const Color(0xFF1B1A1E)
+            : const Color(0xFFFFFFFF);
+        final expectedLine = isDark
+            ? const Color(0xFF3A353F)
+            : const Color(0xFFC7BAC5);
         final theme = buildAppTheme(brightness: brightness);
         await tester.pumpWidget(
           MaterialApp(
             theme: theme,
-            home: MediaQuery(
-              data: const MediaQueryData(
-                size: Size(320, 640),
-                textScaler: TextScaler.linear(2.0),
-              ),
-              child: Scaffold(
-                appBar: AppBar(
-                  title: const ArenaBrandAppBarTitle(
-                    title: 'ArenaPass Console Very Long Title',
-                  ),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: const TextScaler.linear(2.0)),
+              child: child!,
+            ),
+            home: Scaffold(
+              appBar: AppBar(
+                title: const ArenaBrandAppBarTitle(
+                  title: 'ArenaPass Console Very Long Title',
                 ),
-                body: ListView(
-                  padding: const EdgeInsets.all(16),
+              ),
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     const ArenaPageHeader(
                       eyebrow: 'ArenaPass',
@@ -358,9 +427,12 @@ void main() {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const OutlinedButton(
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(120, 48),
+                      ),
                       onPressed: null,
-                      child: ArenaBusyButtonLabel(label: 'Saving…'),
+                      child: const ArenaBusyButtonLabel(label: 'Saving…'),
                     ),
                     const SizedBox(height: 8),
                     const ArenaLoadingView(
@@ -391,12 +463,28 @@ void main() {
               )
               .first,
         );
-        expect(cardMaterial.color, theme.colorScheme.surface);
+        expect(cardMaterial.color, expectedSurface);
+        expect(cardMaterial.surfaceTintColor, Colors.transparent);
         expect(
           cardMaterial.shape,
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: theme.colorScheme.outlineVariant),
+            side: BorderSide(color: expectedLine),
+          ),
+        );
+        final outlinedMaterial = tester.widget<Material>(
+          find
+              .descendant(
+                of: find.byType(OutlinedButton),
+                matching: find.byType(Material),
+              )
+              .first,
+        );
+        expect(
+          outlinedMaterial.shape,
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(13),
+            side: BorderSide(color: expectedLine),
           ),
         );
         final titleText = tester.widget<Text>(

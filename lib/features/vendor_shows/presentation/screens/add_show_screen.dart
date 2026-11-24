@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/formatting/date_time_formatting.dart';
+import '../../../../shared/widgets/arena_page_header.dart';
 import '../cubit/show_form_cubit.dart';
 import '../cubit/show_form_state.dart';
 import '../widgets/add_show_form_sections.dart';
@@ -133,8 +134,6 @@ class _AddShowScreenState extends State<AddShowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final canGoBack = widget.onBackToShows != null || Navigator.canPop(context);
     void handleBack() => widget.onBackToShows != null
         ? widget.onBackToShows!()
@@ -179,26 +178,10 @@ class _AddShowScreenState extends State<AddShowScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Text(
-                    'ArenaPass Console',
-                    style: textTheme.labelLarge?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Add show',
-                    style: textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Set show details, poster artwork, and 1–5 daily sessions.',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                  const ArenaPageHeader(
+                    eyebrow: 'ArenaPass Console',
+                    title: 'Add show',
+                    subtitle: 'Set show details, poster artwork, and 1–5 daily sessions.',
                   ),
                   const SizedBox(height: 20),
                   AddShowDetailsFields(

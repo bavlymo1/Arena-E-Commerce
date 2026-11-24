@@ -69,65 +69,62 @@ class AccountScreen extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 20),
-                Semantics(
-                  container: true,
-                  child: Card(
-                    key: const ValueKey<String>('account-user-card'),
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: <Widget>[
-                          ExcludeSemantics(
-                            child: Container(
-                              width: 52,
-                              height: 52,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant,
-                                ),
+                Card(
+                  key: const ValueKey<String>('account-user-card'),
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        ExcludeSemantics(
+                          child: Container(
+                            width: 52,
+                            height: 52,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: colorScheme.outlineVariant,
                               ),
-                              child: Text(
-                                _initialForEmail(user?.email),
-                                style: textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            ),
+                            child: Text(
+                              _initialForEmail(user?.email),
+                              style: textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  'Customer account',
-                                  style: textTheme.labelMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Customer account',
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Semantics(
+                                container: true,
+                                child: Text(
+                                  emailText,
+                                  key: const ValueKey<String>(
+                                    'account-email-text',
+                                  ),
+                                  style: textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Semantics(
-                                  container: true,
-                                  child: Text(
-                                    emailText,
-                                    key: const ValueKey<String>(
-                                      'account-email-text',
-                                    ),
-                                    style: textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
