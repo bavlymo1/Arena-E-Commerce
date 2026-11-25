@@ -145,7 +145,7 @@ Run from repository root (except Rules tests inside `firebase/rules_test`):
 
 ```powershell
 # Formatting & static analysis
-dart format --output=none --set-exit-if-changed .
+dart format --output=none --set-exit-if-changed lib test integration_test
 flutter analyze --no-pub
 
 # Full Flutter unit & widget test suite (333 tests)
