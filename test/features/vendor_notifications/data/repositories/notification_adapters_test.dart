@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:e_commerce_project/features/vendor_notifications/data/repositories/flutter_local_alert_presenter.dart';
 import 'package:e_commerce_project/features/vendor_notifications/data/repositories/shared_preferences_watermark_store.dart';
@@ -112,5 +113,22 @@ void main() {
     );
     expect(jsonDecode(shown.last['payload'] as String)['count'], 2);
     await expectLater(presenter.showGroupedAlert(0), throwsArgumentError);
+  });
+
+  test('FlutterLocalAlertPresenter keeps vendor notification small icon in release builds', () {
+    final presenter = FlutterLocalAlertPresenter(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+    final iconFile = File(
+      'android/app/src/vendor/res/drawable/${presenter.androidSmallIcon}.xml',
+    );
+    final keepFile = File('android/app/src/vendor/res/raw/keep.xml');
+
+    expect(iconFile.existsSync(), isTrue);
+    expect(keepFile.existsSync(), isTrue);
+    expect(
+      keepFile.readAsStringSync(),
+      contains('@drawable/${presenter.androidSmallIcon}'),
+    );
   });
 }
