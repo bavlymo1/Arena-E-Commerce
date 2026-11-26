@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "167616601158",
+    "project_id": "arenapass-demo",
+    "storage_bucket": "arenapass-demo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:167616601158:android:60ae2780e0c553eb24be47",
+        "android_client_info": {
+          "package_name": "com.arenapass.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC7rR3JBKIq0fAMcpvRotcRIVyspfG011w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

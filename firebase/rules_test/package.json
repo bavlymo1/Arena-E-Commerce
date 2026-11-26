@@ -1,0 +1,14 @@
+{
+  "name": "arenapass-rules-test",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22 <23" },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 baseline.test.mjs",
+    "test:emulator": "firebase --config ../../firebase.json --project demo-arenapass emulators:exec --only firestore \"npm test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.19.0"
+  }
+}

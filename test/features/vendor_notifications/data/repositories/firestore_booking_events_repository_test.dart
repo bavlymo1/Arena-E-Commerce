@@ -1,0 +1,628 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:e_commerce_project/features/vendor_access/domain/models/vendor_access.dart';
+import 'package:e_commerce_project/features/vendor_access/domain/repositories/vendor_access_repository.dart';
+import 'package:e_commerce_project/features/vendor_notifications/data/repositories/firestore_booking_events_repository.dart';
+import 'package:e_commerce_project/features/vendor_notifications/domain/models/booking_event.dart';
+import 'package:e_commerce_project/features/vendor_shows/domain/models/session_time.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+// ignore_for_file: subtype_of_sealed_class
+
+final class _FakeVendorAccessRepository implements VendorAccessRepository {
+  _FakeVendorAccessRepository(this.handler);
+
+  final Future<VendorAccess> Function() handler;
+  int checkCalls = 0;
+
+  @override
+  Future<VendorAccess> check() {
+    checkCalls++;
+    return handler();
+  }
+}
+
+final class _QueryRecorder {
+  _QueryRecorder({
+    StreamController<QuerySnapshot<Map<String, dynamic>>>? controller,
+  }) : controller =
+           controller ??
+           StreamController<QuerySnapshot<Map<String, dynamic>>>.broadcast();
+
+  final StreamController<QuerySnapshot<Map<String, dynamic>>> controller;
+  final requestedCollections = <String>[];
+  final whereCalls = <(Object, Object?)>[];
+  final orderByCalls = <(Object, bool)>[];
+  final limitCalls = <int>[];
+  final includeMetadataCalls = <bool>[];
+  bool subscribed = false;
+
+  Future<void> dispose() => controller.close();
+}
+
+final class _FakeFirestore extends Fake implements FirebaseFirestore {
+  _FakeFirestore(this.recorder);
+
+  final _QueryRecorder recorder;
+
+  @override
+  CollectionReference<Map<String, dynamic>> collection(String collectionPath) {
+    recorder.requestedCollections.add(collectionPath);
+    return _FakeCollectionReference(recorder);
+  }
+}
+
+final class _FakeCollectionReference extends Fake
+    implements CollectionReference<Map<String, dynamic>> {
+  _FakeCollectionReference(this.recorder);
+
+  final _QueryRecorder recorder;
+
+  @override
+  Query<Map<String, dynamic>> where(
+    Object field, {
+    Object? isEqualTo,
+    Object? isNotEqualTo,
+    Object? isLessThan,
+    Object? isLessThanOrEqualTo,
+    Object? isGreaterThan,
+    Object? isGreaterThanOrEqualTo,
+    Object? arrayContains,
+    Iterable<Object?>? arrayContainsAny,
+    Iterable<Object?>? whereIn,
+    Iterable<Object?>? whereNotIn,
+    bool? isNull,
+  }) => _FakeQuery(recorder).where(
+    field,
+    isEqualTo: isEqualTo,
+    isNotEqualTo: isNotEqualTo,
+    isLessThan: isLessThan,
+    isLessThanOrEqualTo: isLessThanOrEqualTo,
+    isGreaterThan: isGreaterThan,
+    isGreaterThanOrEqualTo: isGreaterThanOrEqualTo,
+    arrayContains: arrayContains,
+    arrayContainsAny: arrayContainsAny,
+    whereIn: whereIn,
+    whereNotIn: whereNotIn,
+    isNull: isNull,
+  );
+}
+
+final class _FakeQuery extends Fake implements Query<Map<String, dynamic>> {
+  _FakeQuery(this.recorder);
+
+  final _QueryRecorder recorder;
+
+  @override
+  Query<Map<String, dynamic>> where(
+    Object field, {
+    Object? isEqualTo,
+    Object? isNotEqualTo,
+    Object? isLessThan,
+    Object? isLessThanOrEqualTo,
+    Object? isGreaterThan,
+    Object? isGreaterThanOrEqualTo,
+    Object? arrayContains,
+    Iterable<Object?>? arrayContainsAny,
+    Iterable<Object?>? whereIn,
+    Iterable<Object?>? whereNotIn,
+    bool? isNull,
+  }) {
+    recorder.whereCalls.add((field, isEqualTo));
+    return this;
+  }
+
+  @override
+  Query<Map<String, dynamic>> orderBy(Object field, {bool descending = false}) {
+    recorder.orderByCalls.add((field, descending));
+    return this;
+  }
+
+  @override
+  Query<Map<String, dynamic>> limit(int limit) {
+    recorder.limitCalls.add(limit);
+    return this;
+  }
+
+  @override
+  Stream<QuerySnapshot<Map<String, dynamic>>> snapshots({
+    bool includeMetadataChanges = false,
+    ListenSource source = ListenSource.defaultSource,
+  }) {
+    recorder.subscribed = true;
+    recorder.includeMetadataCalls.add(includeMetadataChanges);
+    return recorder.controller.stream;
+  }
+}
+
+final class _FakeSnapshotMetadata extends Fake implements SnapshotMetadata {
+  _FakeSnapshotMetadata({
+    this.hasPendingWrites = false,
+    this.isFromCache = false,
+  });
+
+  @override
+  final bool hasPendingWrites;
+
+  @override
+  final bool isFromCache;
+}
+
+final class _FakeQuerySnapshot extends Fake
+    implements QuerySnapshot<Map<String, dynamic>> {
+  _FakeQuerySnapshot(
+    this.docs, {
+    bool hasPendingWrites = false,
+    bool isFromCache = false,
+  }) : metadata = _FakeSnapshotMetadata(
+         hasPendingWrites: hasPendingWrites,
+         isFromCache: isFromCache,
+       );
+
+  @override
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs;
+
+  @override
+  final SnapshotMetadata metadata;
+}
+
+final class _FakeQueryDocumentSnapshot extends Fake
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {
+  _FakeQueryDocumentSnapshot(this.id, this._data);
+
+  @override
+  final String id;
+
+  final Map<String, dynamic> _data;
+
+  @override
+  Map<String, dynamic> data() => _data;
+}
+
+Map<String, dynamic> _validEventData({
+  String bookingId = 'booking-1',
+  String vendorId = 'vendor-a',
+  String showId = 'show-1',
+  String sessionId = '1900',
+  List<Object?> seats = const <int>[4, 1],
+  String showTitle = 'Apex Finals',
+  String slotTime = '19:00',
+  Object? slotTotal = 2,
+  Object? showTotal = 5,
+  Object? kind = 'booked',
+  Object? createdAt,
+}) {
+  return <String, dynamic>{
+    'bookingId': bookingId,
+    'vendorId': vendorId,
+    'showId': showId,
+    'sessionId': sessionId,
+    'seats': seats,
+    'showTitle': showTitle,
+    'slotTime': slotTime,
+    'slotTotal': slotTotal,
+    'showTotal': showTotal,
+    'kind': kind,
+    'createdAt':
+        createdAt ?? Timestamp.fromDate(DateTime.utc(2026, 11, 20, 12, 0)),
+  };
+}
+
+void main() {
+  test('validates constructor limit and empty vendorId synchronously', () {
+    final recorder = _QueryRecorder();
+    addTearDown(recorder.dispose);
+    final firestore = _FakeFirestore(recorder);
+    final access = _FakeVendorAccessRepository(
+      () async => VendorAllowed(uid: 'u1', vendorId: 'vendor-a'),
+    );
+
+    expect(
+      () => FirestoreBookingEventsRepository(firestore, access, limit: 0),
+      throwsArgumentError,
+    );
+
+    final repository = FirestoreBookingEventsRepository(firestore, access);
+    expect(() => repository.watchEvents('  '), throwsArgumentError);
+  });
+
+  test(
+    'rejects unenrolled and mismatched-vendor access before subscribing',
+    () async {
+      final recorder1 = _QueryRecorder();
+      addTearDown(recorder1.dispose);
+      final notEnrolledRepo = FirestoreBookingEventsRepository(
+        _FakeFirestore(recorder1),
+        _FakeVendorAccessRepository(
+          () async => VendorNotEnrolled(uid: 'anon-1'),
+        ),
+      );
+
+      await expectLater(
+        notEnrolledRepo.watchEvents('vendor-a').first,
+        throwsStateError,
+      );
+      expect(recorder1.subscribed, isFalse);
+
+      final recorder2 = _QueryRecorder();
+      addTearDown(recorder2.dispose);
+      final wrongVendorRepo = FirestoreBookingEventsRepository(
+        _FakeFirestore(recorder2),
+        _FakeVendorAccessRepository(
+          () async => VendorAllowed(uid: 'anon-2', vendorId: 'vendor-b'),
+        ),
+      );
+
+      await expectLater(
+        wrongVendorRepo.watchEvents('vendor-a').first,
+        throwsStateError,
+      );
+      expect(recorder2.subscribed, isFalse);
+    },
+  );
+
+  test('queries bookingEvents unbounded by default, skips pending/cached snapshots, and decodes descending with tie-break', () async {
+    final recorder = _QueryRecorder();
+    addTearDown(recorder.dispose);
+    final repository = FirestoreBookingEventsRepository(
+      _FakeFirestore(recorder),
+      _FakeVendorAccessRepository(
+        () async => VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+      ),
+    );
+
+    final emitted = <List<BookingEvent>>[];
+    final sub = repository.watchEvents('vendor-a').listen(emitted.add);
+    addTearDown(sub.cancel);
+    await pumpEventQueue();
+
+    expect(recorder.requestedCollections, <String>['bookingEvents']);
+    expect(recorder.whereCalls, <(Object, Object?)>[('vendorId', 'vendor-a')]);
+    expect(recorder.orderByCalls, <(Object, bool)>[('createdAt', true)]);
+    expect(recorder.limitCalls, isEmpty);
+    expect(recorder.includeMetadataCalls, <bool>[true]);
+
+    // Ignored: empty cache snapshot before server confirmation.
+    recorder.controller.add(_FakeQuerySnapshot(const [], isFromCache: true));
+    await pumpEventQueue();
+    expect(emitted, isEmpty);
+
+    // Ignored: non-empty cached snapshot before server confirmation.
+    recorder.controller.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot(
+          'b-cached',
+          _validEventData(bookingId: 'b-cached'),
+        ),
+      ], isFromCache: true),
+    );
+    await pumpEventQueue();
+    expect(emitted, isEmpty);
+
+    // Ignored: pending local writes.
+    recorder.controller.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot(
+          'b-pending',
+          _validEventData(bookingId: 'b-pending'),
+        ),
+      ], hasPendingWrites: true),
+    );
+    await pumpEventQueue();
+    expect(emitted, isEmpty);
+
+    // Accepted: confirmed empty server snapshot.
+    recorder.controller.add(_FakeQuerySnapshot(const [], isFromCache: false));
+    await pumpEventQueue();
+    expect(emitted, hasLength(1));
+    expect(emitted.single, isEmpty);
+
+    final tiedStamp = Timestamp.fromDate(DateTime.utc(2026, 11, 20, 12, 0));
+    final newerStamp = Timestamp.fromDate(DateTime.utc(2026, 11, 20, 12, 5));
+
+    recorder.controller.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot(
+          'b-tie-z',
+          _validEventData(bookingId: 'b-tie-z', createdAt: tiedStamp),
+        ),
+        _FakeQueryDocumentSnapshot(
+          'b-newer',
+          _validEventData(
+            bookingId: 'b-newer',
+            seats: const <int>[10, 2],
+            slotTotal: 4,
+            showTotal: 19,
+            createdAt: newerStamp,
+          ),
+        ),
+        _FakeQueryDocumentSnapshot(
+          'b-tie-a',
+          _validEventData(bookingId: 'b-tie-a', createdAt: tiedStamp),
+        ),
+      ]),
+    );
+    await pumpEventQueue();
+
+    expect(emitted, hasLength(2));
+    expect(emitted.last.map((e) => e.bookingId).toList(), <String>[
+      'b-newer',
+      'b-tie-a',
+      'b-tie-z',
+    ]);
+    final first = emitted.last.first;
+    expect(first.bookingId, 'b-newer');
+    expect(first.seats, <int>{2, 10});
+    expect(first.slotTime, SessionTime('19:00'));
+    expect(first.slotTotal, 4);
+    expect(first.showTotal, 19);
+
+    // Emits >100 bookings without truncation when limit is omitted.
+    final baseTime = DateTime.utc(2026, 11, 20, 13, 0);
+    final docs105 = List<_FakeQueryDocumentSnapshot>.generate(
+      105,
+      (index) => _FakeQueryDocumentSnapshot(
+        'b-${index.toString().padLeft(3, '0')}',
+        _validEventData(
+          bookingId: 'b-${index.toString().padLeft(3, '0')}',
+          createdAt: Timestamp.fromDate(baseTime.add(Duration(seconds: index))),
+        ),
+      ),
+    );
+    recorder.controller.add(_FakeQuerySnapshot(docs105));
+    await pumpEventQueue();
+    expect(emitted, hasLength(3));
+    expect(emitted.last, hasLength(105));
+    expect(emitted.last.first.bookingId, 'b-104');
+    expect(emitted.last.last.bookingId, 'b-000');
+  });
+
+  test('rejects malformed event documents cleanly', () async {
+    Future<void> expectRejectedDoc(
+      String id,
+      Map<String, dynamic> payload,
+      Matcher matcher,
+    ) async {
+      final recorder = _QueryRecorder();
+      addTearDown(recorder.dispose);
+      final repository = FirestoreBookingEventsRepository(
+        _FakeFirestore(recorder),
+        _FakeVendorAccessRepository(
+          () async => VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+        ),
+      );
+      final future = repository.watchEvents('vendor-a').first;
+      await pumpEventQueue();
+      recorder.controller.add(
+        _FakeQuerySnapshot([_FakeQueryDocumentSnapshot(id, payload)]),
+      );
+      await expectLater(future, throwsA(matcher));
+    }
+
+    await expectRejectedDoc(
+      'b1',
+      _validEventData(bookingId: 'b1', kind: 'cancelled'),
+      isA<FormatException>(),
+    );
+    await expectRejectedDoc(
+      'b1',
+      _validEventData(bookingId: 'other-id'),
+      isA<FormatException>(),
+    );
+    await expectRejectedDoc(
+      'b1',
+      _validEventData(bookingId: 'b1', vendorId: 'vendor-other'),
+      isA<FormatException>(),
+    );
+    await expectRejectedDoc(
+      'b1',
+      _validEventData(bookingId: 'b1', seats: const <Object?>['1']),
+      isA<FormatException>(),
+    );
+    await expectRejectedDoc(
+      'b1',
+      _validEventData(bookingId: 'b1', createdAt: 'not-a-timestamp'),
+      isA<FormatException>(),
+    );
+    await expectRejectedDoc(
+      'b1',
+      _validEventData(bookingId: 'b1', slotTotal: '2'),
+      isA<FormatException>(),
+    );
+  });
+
+  test('watchEvents cancels cleanly while vendor check is pending without Zone errors or Firestore listener leakage', () async {
+    final uncaught = <Object>[];
+    final errors1 = <Object>[];
+    Object? cancel1Error;
+    final recorder1 = _QueryRecorder();
+    addTearDown(recorder1.dispose);
+
+    final errors2 = <Object>[];
+    final recorder2 = _QueryRecorder();
+    addTearDown(recorder2.dispose);
+
+    final emitted3 = <List<BookingEvent>>[];
+    Object? cancel3Error;
+    final recorder3 = _QueryRecorder();
+    addTearDown(recorder3.dispose);
+
+    final done = Completer<void>();
+    runZonedGuarded(() async {
+      try {
+        // 1. Cancelled before VendorNotEnrolled resolves (would throw StateError).
+        final gate1 = Completer<VendorAccess>();
+        final repo1 = FirestoreBookingEventsRepository(
+          _FakeFirestore(recorder1),
+          _FakeVendorAccessRepository(() => gate1.future),
+        );
+        final sub1 = repo1
+            .watchEvents('vendor-a')
+            .listen((_) {}, onError: errors1.add);
+        await pumpEventQueue();
+        final cancel1 = sub1.cancel();
+        gate1.complete(VendorNotEnrolled(uid: 'anon-1'));
+        try {
+          await cancel1;
+        } catch (error) {
+          cancel1Error = error;
+        }
+        await pumpEventQueue();
+
+        // 2. Unawaited cancel before VendorAccess check fails with error.
+        final gate2 = Completer<VendorAccess>();
+        final repo2 = FirestoreBookingEventsRepository(
+          _FakeFirestore(recorder2),
+          _FakeVendorAccessRepository(() => gate2.future),
+        );
+        final sub2 = repo2
+            .watchEvents('vendor-a')
+            .listen((_) {}, onError: errors2.add);
+        await pumpEventQueue();
+        unawaited(sub2.cancel());
+        gate2.completeError(StateError('auth check failed'));
+        await pumpEventQueue();
+
+        // 3. Cancelled before VendorAllowed resolves -> must not subscribe to Firestore.
+        final gate3 = Completer<VendorAccess>();
+        final repo3 = FirestoreBookingEventsRepository(
+          _FakeFirestore(recorder3),
+          _FakeVendorAccessRepository(() => gate3.future),
+        );
+        final sub3 = repo3.watchEvents('vendor-a').listen(emitted3.add);
+        await pumpEventQueue();
+        final cancel3 = sub3.cancel();
+        gate3.complete(VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'));
+        try {
+          await cancel3;
+        } catch (error) {
+          cancel3Error = error;
+        }
+        await pumpEventQueue();
+      } finally {
+        if (!done.isCompleted) done.complete();
+      }
+    }, (error, _) => uncaught.add(error));
+    await done.future;
+
+    expect(uncaught, isEmpty);
+    expect(cancel1Error, isNull);
+    expect(errors1, isEmpty);
+    expect(recorder1.subscribed, isFalse);
+    expect(recorder1.requestedCollections, isEmpty);
+
+    expect(errors2, isEmpty);
+    expect(recorder2.subscribed, isFalse);
+    expect(recorder2.requestedCollections, isEmpty);
+
+    expect(cancel3Error, isNull);
+    expect(emitted3, isEmpty);
+    expect(recorder3.subscribed, isFalse);
+    expect(recorder3.requestedCollections, isEmpty);
+    expect(recorder3.controller.hasListener, isFalse);
+
+    // 4. Active subscription tears down cleanly and ignores subsequent snapshots.
+    final recorder4 = _QueryRecorder();
+    addTearDown(recorder4.dispose);
+    final repo4 = FirestoreBookingEventsRepository(
+      _FakeFirestore(recorder4),
+      _FakeVendorAccessRepository(
+        () async => VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'),
+      ),
+    );
+    final emitted4 = <List<BookingEvent>>[];
+    final sub4 = repo4.watchEvents('vendor-a').listen(emitted4.add);
+    await pumpEventQueue();
+    expect(recorder4.controller.hasListener, isTrue);
+
+    await sub4.cancel();
+    expect(recorder4.controller.hasListener, isFalse);
+
+    recorder4.controller.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot(
+          'b-late',
+          _validEventData(bookingId: 'b-late'),
+        ),
+      ]),
+    );
+    await pumpEventQueue();
+    expect(emitted4, isEmpty);
+  });
+
+  test('watchEvents forwards pending and active pause/resume and closes cleanly on upstream onDone', () async {
+    var pauseCount = 0;
+    var resumeCount = 0;
+    final upstream = StreamController<QuerySnapshot<Map<String, dynamic>>>(
+      onPause: () => pauseCount++,
+      onResume: () => resumeCount++,
+    );
+    final recorder = _QueryRecorder(controller: upstream);
+    addTearDown(recorder.dispose);
+
+    final accessGate = Completer<VendorAccess>();
+    final repo = FirestoreBookingEventsRepository(
+      _FakeFirestore(recorder),
+      _FakeVendorAccessRepository(() => accessGate.future),
+    );
+
+    final emitted = <List<BookingEvent>>[];
+    var done = false;
+    final sub = repo
+        .watchEvents('vendor-a')
+        .listen(emitted.add, onDone: () => done = true);
+    addTearDown(sub.cancel);
+    await pumpEventQueue();
+
+    // Pause while _requireVendor is still pending -> pauses immediately upon attach.
+    sub.pause();
+    expect(pauseCount, 0);
+
+    accessGate.complete(VendorAllowed(uid: 'anon-1', vendorId: 'vendor-a'));
+    await pumpEventQueue();
+    expect(pauseCount, 1);
+    expect(upstream.isPaused, isTrue);
+
+    upstream.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot('b1', _validEventData(bookingId: 'b1')),
+      ]),
+    );
+    await pumpEventQueue();
+    expect(emitted, isEmpty);
+
+    sub.resume();
+    await pumpEventQueue();
+    expect(resumeCount, 1);
+    expect(upstream.isPaused, isFalse);
+    expect(emitted, hasLength(1));
+    expect(emitted.single.single.bookingId, 'b1');
+
+    // Post-attach pause and resume forward cleanly.
+    sub.pause();
+    await pumpEventQueue();
+    expect(pauseCount, 2);
+    expect(upstream.isPaused, isTrue);
+
+    upstream.add(
+      _FakeQuerySnapshot([
+        _FakeQueryDocumentSnapshot('b2', _validEventData(bookingId: 'b2')),
+      ]),
+    );
+    await pumpEventQueue();
+    expect(emitted, hasLength(1));
+
+    sub.resume();
+    await pumpEventQueue();
+    expect(resumeCount, 2);
+    expect(upstream.isPaused, isFalse);
+    expect(emitted, hasLength(2));
+    expect(emitted.last.single.bookingId, 'b2');
+
+    // Closing upstream closes returned stream cleanly.
+    await upstream.close();
+    await pumpEventQueue();
+    expect(done, isTrue);
+  });
+}
