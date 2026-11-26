@@ -11,7 +11,7 @@ import '../../features/vendor_shows/presentation/cubit/show_form_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_show_details_cubit.dart';
 import '../../features/vendor_shows/presentation/cubit/vendor_shows_cubit.dart';
 import '../theme/app_theme.dart';
-import 'vendor_journey_router.dart';
+import 'vendor_journey_app.dart';
 
 /// Root owner for enrolled Vendor access gating, notifications, and routing.
 class VendorEnrolledApp extends StatefulWidget {
@@ -48,7 +48,7 @@ class _VendorEnrolledAppState extends State<VendorEnrolledApp> {
           create: (_) => widget.services<VendorNotificationsCubit>(
             param1: accessState.vendorId,
           ),
-          child: VendorJourneyRouter(
+          child: VendorJourneyApp(
             key: ValueKey<String>('vendor-journey-${accessState.vendorId}'),
             title: 'ArenaPass Vendor',
             banner: widget.banner,

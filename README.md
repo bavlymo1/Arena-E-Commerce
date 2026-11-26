@@ -47,8 +47,8 @@ ArenaPass is a Tier 1 Android event-seat-booking Flutter workspace built with Fi
   - `lib/shared/seating/` — shared 47-seat geometry helpers (`seat_layout.dart`, `seat_numbers.dart`) and `SeatMapView` used by both apps
   - `lib/shared/widgets/` — reusable UI building blocks (`ArenaPosterBanner`, `ArenaStatusPanel`, `ArenaNoticeBanner`, etc.)
   - `lib/core/formatting/` — shared date/session time formatters
-  - `lib/app/di/` (`shared_registration.dart`, `customer_registration.dart`, `vendor_registration.dart`) — manual `GetIt` composition (`GetIt` lookups remain confined to app DI/router setup; Cubits and repositories use constructor injection)
-  - `lib/app/customer/`, `lib/app/vendor/`, `lib/app/startup/`, `lib/app/theme/` — flavor shells, routers, retryable startup error wrapper, and Light/Dark Material themes
+  - `lib/app/di/` (`shared_registration.dart`, `customer_registration.dart`, `vendor_registration.dart`) — manual `GetIt` composition (`GetIt` lookups remain confined to app DI/shell setup; Cubits and repositories use constructor injection)
+  - `lib/app/customer/`, `lib/app/vendor/`, `lib/app/router/`, `lib/app/startup/`, `lib/app/theme/` — flavor shells, dedicated `GoRouter` definitions and route paths, retryable startup error wrapper, and Light/Dark Material themes
 - **Firebase Configuration & Harnesses**:
   - `firebase/firestore.rules` & `firebase/firestore.indexes.json`
   - `firebase/rules_test/` — 105-test Security Rules & concurrency specification against local Firestore Emulator
@@ -148,7 +148,7 @@ Run from repository root (except Rules tests inside `firebase/rules_test`):
 dart format --output=none --set-exit-if-changed lib test integration_test
 flutter analyze --no-pub
 
-# Full Flutter unit & widget test suite (333 tests)
+# Full Flutter unit & widget test suite (336 tests)
 flutter test --no-pub
 
 # Firebase seed contract tests (7 tests)

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:e_commerce_project/app/vendor/vendor_journey_router.dart';
+import 'package:e_commerce_project/app/vendor/vendor_journey_app.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/repositories/booking_events_repository.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/repositories/local_alert_presenter.dart';
 import 'package:e_commerce_project/features/vendor_notifications/domain/repositories/watermark_store.dart';
@@ -98,7 +98,7 @@ class _VendorDemoAppState extends State<VendorDemoApp> {
   }
 
   @override
-  Widget build(BuildContext context) => VendorJourneyRouter(
+  Widget build(BuildContext context) => VendorJourneyApp(
     title: 'ArenaPass Vendor · Demo',
     banner: widget.banner,
     createShowsCubit: () => widget.services<VendorShowsCubit>(),
