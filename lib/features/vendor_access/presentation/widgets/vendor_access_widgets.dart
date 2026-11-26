@@ -11,14 +11,11 @@ class VendorAccessScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
         title: const ArenaBrandAppBarTitle(
-          title: VendorAccessStrings.consoleTitle,
+          title: VendorAccessStrings.screenTitle,
         ),
       ),
       body: SafeArea(
@@ -30,17 +27,7 @@ class VendorAccessScaffold extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: 480),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Text(
-                      VendorAccessStrings.screenTitle,
-                      style: textTheme.labelLarge?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ...children,
-                  ],
+                  children: children,
                 ),
               ),
             ),

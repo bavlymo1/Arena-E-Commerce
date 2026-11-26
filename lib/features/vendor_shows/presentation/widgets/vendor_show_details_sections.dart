@@ -180,55 +180,36 @@ class VendorShowSessionsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Container(
+    return Column(
       key: const ValueKey<String>('vendor-show-details-sessions-section'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              Text(
-                'Daily sessions',
-                style: textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'Daily sessions',
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
+        if (sessions.isEmpty)
+          const ArenaNoticeBanner(
+            key: ValueKey<String>('vendor-show-details-empty-sessions'),
+            icon: Icons.schedule_outlined,
+            message: 'No sessions are available for this show right now.',
+          )
+        else
+          for (final session in sessions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _VendorSessionOptionTile(
+                session: session,
+                selected: selectedSessionId == session.id,
+                onTap: isDeletingShow
+                    ? null
+                    : () => onSelectSession(session.id),
               ),
-              Text(
-                'Select a session to inspect seats',
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (sessions.isEmpty)
-            const ArenaNoticeBanner(
-              key: ValueKey<String>('vendor-show-details-empty-sessions'),
-              icon: Icons.schedule_outlined,
-              message: 'No sessions are available for this show right now.',
-            )
-          else
-            for (final session in sessions)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _VendorSessionOptionTile(
-                  session: session,
-                  selected: selectedSessionId == session.id,
-                  onTap: isDeletingShow
-                      ? null
-                      : () => onSelectSession(session.id),
-                ),
-              ),
-        ],
-      ),
+            ),
+      ],
     );
   }
 }
@@ -257,63 +238,58 @@ class VendorSessionSeatMapSection extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Container(
+    return Column(
       key: const ValueKey<String>('vendor-show-details-seat-map-section'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              Text(
-                'Session seat map',
-                style: textTheme.titleMedium?.copyWith(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            Text(
+              'Session seat map',
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'Read-only live view',
+                style: textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  'Read-only live view',
-                  style: textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _selectedSessionSubtitle(selectedSession),
-            key: const ValueKey<String>(
-              'vendor-show-details-selected-session-subtitle',
             ),
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _selectedSessionSubtitle(selectedSession),
+          key: const ValueKey<String>(
+            'vendor-show-details-selected-session-subtitle',
           ),
-          const SizedBox(height: 10),
-          SeatMapView(
-            key: const ValueKey<String>('vendor-session-seat-map'),
-            bookedSeats: selectedSession.bookedSeats,
-            vendorMode: true,
-            loadState: SeatMapLoadState.ready,
-            onRetry: onRetry,
+          style: textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        SeatMapView(
+          key: const ValueKey<String>('vendor-session-seat-map'),
+          bookedSeats: selectedSession.bookedSeats,
+          vendorMode: true,
+          loadState: SeatMapLoadState.ready,
+          onRetry: onRetry,
+        ),
+      ],
     );
   }
 }

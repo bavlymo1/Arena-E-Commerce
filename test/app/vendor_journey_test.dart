@@ -269,7 +269,7 @@ void main() {
       eventsRepo.controller.add(const <BookingEvent>[]);
       await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
       await tester.pumpAndSettle();
-      expect(find.text('Booking updates'), findsOneWidget);
+      expect(find.byTooltip('Booking updates'), findsOneWidget);
 
       eventsRepo.controller.add(<BookingEvent>[
         BookingEvent(
@@ -291,12 +291,23 @@ void main() {
       expect(alertPresenter.shownAlerts.map((a) => a.bookingId), <String>[
         'b1',
       ]);
-      expect(find.text('Booking updates (1)'), findsOneWidget);
+      expect(find.byTooltip('Booking updates (1 unread)'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('vendor-shows-appbar-updates-button'),
+          ),
+          matching: find.text('1'),
+        ),
+        findsOneWidget,
+      );
       expect(services.isRegistered<ShowsRepository>(), isTrue);
 
       // Visiting /updates reuses the same ancestor VendorNotificationsCubit.
       await tester.tap(
-        find.byKey(const ValueKey<String>('vendor-shows-open-updates-button')),
+        find.byKey(
+          const ValueKey<String>('vendor-shows-appbar-updates-button'),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -323,7 +334,7 @@ void main() {
       await tester.tap(find.byTooltip('Back to My shows'));
       await tester.pumpAndSettle();
       expect(find.byType(VendorShowsScreen), findsOneWidget);
-      expect(find.text('Booking updates'), findsOneWidget);
+      expect(find.byTooltip('Booking updates'), findsOneWidget);
 
       // Disposing root VendorEnrolledApp closes Cubits and resets GetIt once.
       await tester.pumpWidget(const SizedBox.shrink());

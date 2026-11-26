@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../shared/widgets/arena_icon_label.dart';
+import '../../../../shared/widgets/arena_loading_view.dart';
+import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../cubit/vendor_access_cubit.dart';
 import '../cubit/vendor_access_state.dart';
 import '../vendor_access_strings.dart';
@@ -61,42 +63,16 @@ class _VendorAccessCheckingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return VendorAccessScaffold(
       children: <Widget>[
-        Text(
-          VendorAccessStrings.checkingTitle,
-          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 24),
         Semantics(
           key: const ValueKey<String>('vendor-access-checking-panel'),
           liveRegion: true,
           container: true,
-          child: Card(
-            semanticContainer: false,
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const CircularProgressIndicator(
-                    key: ValueKey<String>('vendor-access-checking-indicator'),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    VendorAccessStrings.checkingMessage,
-                    textAlign: TextAlign.center,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          child: const ArenaLoadingView(
+            label: VendorAccessStrings.checkingMessage,
+            indicatorKey: ValueKey<String>('vendor-access-checking-indicator'),
+            padding: EdgeInsets.symmetric(vertical: 48),
           ),
         ),
       ],
@@ -112,7 +88,6 @@ class _VendorAccessErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return VendorAccessScaffold(
@@ -122,36 +97,14 @@ class _VendorAccessErrorView extends StatelessWidget {
           style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
-        Semantics(
+        ArenaNoticeBanner(
           key: const ValueKey<String>('vendor-access-error-panel'),
+          icon: Icons.error_outline,
+          message: message,
+          isError: true,
           liveRegion: true,
-          container: true,
-          child: Card(
-            semanticContainer: false,
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Icon(Icons.error_outline, color: colorScheme.error),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          emphasizeText: true,
+          padding: const EdgeInsets.all(16),
         ),
         const SizedBox(height: 20),
         FilledButton(

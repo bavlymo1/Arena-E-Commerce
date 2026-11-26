@@ -7,7 +7,6 @@ import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
 import '../../../../shared/widgets/arena_icon_label.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
-import '../../../../shared/widgets/arena_page_header.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/show.dart';
 import '../cubit/vendor_shows_cubit.dart';
@@ -47,7 +46,7 @@ class VendorShowsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: const ArenaBrandAppBarTitle(title: 'ArenaPass Console'),
+        title: const ArenaBrandAppBarTitle(title: 'My shows'),
         actions: <Widget>[
           if (onOpenUpdates != null)
             IconButton(
@@ -70,50 +69,24 @@ class VendorShowsScreen extends StatelessWidget {
             final cubit = context.read<VendorShowsCubit>();
 
             return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  const ArenaPageHeader(
-                    eyebrow: 'ArenaPass Console',
-                    title: 'My shows',
-                    subtitle: 'Live seat totals update as customers book.',
-                    compactSubtitle: true,
-                  ),
-                  if (onAddShow != null || onOpenUpdates != null) ...<Widget>[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: <Widget>[
-                        if (onAddShow != null)
-                          FilledButton(
-                            key: const ValueKey<String>(
-                              'vendor-shows-add-button',
-                            ),
-                            onPressed: onAddShow,
-                            child: const ArenaIconLabel(
-                              icon: Icons.add,
-                              label: 'Add show',
-                            ),
-                          ),
-                        if (onOpenUpdates != null)
-                          OutlinedButton(
-                            key: const ValueKey<String>(
-                              'vendor-shows-open-updates-button',
-                            ),
-                            onPressed: onOpenUpdates,
-                            child: ArenaIconLabel(
-                              icon: Icons.notifications_outlined,
-                              label: unreadUpdatesCount > 0
-                                  ? 'Booking updates ($unreadUpdatesCount)'
-                                  : 'Booking updates',
-                            ),
-                          ),
-                      ],
+                  if (onAddShow != null && state.shows.isNotEmpty) ...<Widget>[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton(
+                        key: const ValueKey<String>('vendor-shows-add-button'),
+                        onPressed: onAddShow,
+                        child: const ArenaIconLabel(
+                          icon: Icons.add,
+                          label: 'Add show',
+                        ),
+                      ),
                     ),
+                    const SizedBox(height: 16),
                   ],
-                  const SizedBox(height: 20),
                   if (state.isLoading && state.shows.isEmpty)
                     const ArenaLoadingView(
                       key: ValueKey<String>('vendor-shows-loading'),

@@ -305,7 +305,7 @@ void main() {
         );
         await tester.tap(
           find.byKey(
-            const ValueKey<String>('vendor-shows-open-updates-button'),
+            const ValueKey<String>('vendor-shows-appbar-updates-button'),
           ),
         );
         await tester.tap(

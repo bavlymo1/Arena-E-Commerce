@@ -5,7 +5,6 @@ import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/seat_numbers.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
-import '../../../../shared/widgets/arena_page_header.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
 import '../../domain/models/booking_event.dart';
 import '../cubit/vendor_notifications_cubit.dart';
@@ -49,16 +48,9 @@ class VendorUpdatesScreen extends StatelessWidget {
             final cubit = context.read<VendorNotificationsCubit>();
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               children: <Widget>[
-                const ArenaPageHeader(
-                  eyebrow: 'ArenaPass Console',
-                  title: 'Booking updates',
-                  subtitle: 'Confirmed bookings and exact booked-seat totals at commit time.',
-                  compactSubtitle: true,
-                ),
                 if (state.unreadCount > 0) ...<Widget>[
-                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -84,17 +76,17 @@ class VendorUpdatesScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
                 ],
                 if (state.isAlertPermissionDenied) ...<Widget>[
-                  const SizedBox(height: 12),
                   AlertPermissionBanner(
                     key: const ValueKey<String>(
                       'vendor-updates-permission-denied-banner',
                     ),
                     onRetryPermission: cubit.requestAlertPermission,
                   ),
+                  const SizedBox(height: 16),
                 ],
-                const SizedBox(height: 20),
                 if (state.isLoading && state.events.isEmpty)
                   const ArenaLoadingView(
                     key: ValueKey<String>('vendor-updates-loading'),

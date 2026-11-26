@@ -1,8 +1,6 @@
 /// User-facing copy for vendor access checking, enrollment, and error states.
 abstract final class VendorAccessStrings {
-  static const String consoleTitle = 'ArenaPass Console';
   static const String screenTitle = 'Vendor access';
-  static const String checkingTitle = 'Checking device access';
   static const String checkingMessage = 'Checking this device…';
   static const String notEnrolledTitle = 'Device not enrolled';
   static const String notEnrolledExplanation =
