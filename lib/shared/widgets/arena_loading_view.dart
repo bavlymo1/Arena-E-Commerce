@@ -5,11 +5,13 @@ class ArenaLoadingView extends StatelessWidget {
   const ArenaLoadingView({
     required this.label,
     this.padding = const EdgeInsets.all(24),
+    this.indicatorKey,
     super.key,
   });
 
   final String label;
   final EdgeInsetsGeometry padding;
+  final Key? indicatorKey;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +21,7 @@ class ArenaLoadingView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const CircularProgressIndicator(),
+            CircularProgressIndicator(key: indicatorKey),
             const SizedBox(height: 16),
             Text(label),
           ],

@@ -13,6 +13,7 @@ void main() {
           home: const Scaffold(
             body: ArenaLoadingView(
               key: ValueKey<String>('sample-loading'),
+              indicatorKey: ValueKey<String>('sample-indicator'),
               label: 'Loading shows…',
               padding: EdgeInsets.symmetric(vertical: 48),
             ),
@@ -22,6 +23,10 @@ void main() {
 
       expect(
         find.byKey(const ValueKey<String>('sample-loading')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('sample-indicator')),
         findsOneWidget,
       );
       expect(find.byType(CircularProgressIndicator), findsOneWidget);

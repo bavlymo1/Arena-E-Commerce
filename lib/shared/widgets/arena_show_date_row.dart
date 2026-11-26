@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/formatting/date_time_formatting.dart';
 
-/// Wrapping show-date display combining human-readable date, ISO date, and optional trailing badge.
+/// Wrapping show-date display combining formatted calendar date and optional trailing badge.
 class ArenaShowDateRow extends StatelessWidget {
   const ArenaShowDateRow({
     required this.showDate,
@@ -44,13 +44,6 @@ class ArenaShowDateRow extends StatelessWidget {
                 color: colorScheme.onSurfaceVariant,
                 fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
               ),
-        ),
-        Text(
-          showDate,
-          style: textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-          ),
         ),
         ?trailing,
       ],

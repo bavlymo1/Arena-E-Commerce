@@ -453,7 +453,6 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Dec 20, 2026'), findsOneWidget);
-        expect(find.text('2026-12-20'), findsOneWidget);
         expect(find.text('Discover shows'), findsOneWidget);
         final cardMaterial = tester.widget<Material>(
           find

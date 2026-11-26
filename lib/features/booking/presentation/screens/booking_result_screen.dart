@@ -44,16 +44,8 @@ class BookingResultScreen extends StatelessWidget {
             ),
             body: SafeArea(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
                 children: <Widget>[
-                  Text(
-                    'ArenaPass',
-                    style: textTheme.labelLarge?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   Center(
                     child: Container(
                       key: const ValueKey<String>('booking-result-badge'),

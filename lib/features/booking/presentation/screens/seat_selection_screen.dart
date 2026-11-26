@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/seat_layout.dart';
 import '../../../../shared/seating/widgets/seat_map_view.dart';
 import '../../../vendor_shows/domain/models/session.dart';
@@ -20,12 +21,8 @@ class SeatSelectionScreen extends StatelessWidget {
   final ValueChanged<String> onResult;
   final VoidCallback onDetails;
 
-  String _formatSessionBanner(BuildContext context, Session session) {
-    final parts = session.time.value.split(':');
-    final hour = int.parse(parts[0]);
-    final minute = int.parse(parts[1]);
-    final localTime = MaterialLocalizations.of(context)
-        .formatTimeOfDay(TimeOfDay(hour: hour, minute: minute));
+  String _formatSessionBanner(Session session) {
+    final localTime = formatTime12Hour(session.time.value);
     final label = session.label?.trim();
     final timePart = localTime == session.time.value
         ? session.time.value
@@ -107,7 +104,7 @@ class SeatSelectionScreen extends StatelessWidget {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    _formatSessionBanner(context, session),
+                                    _formatSessionBanner(session),
                                     style: textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.w600,
                                       fontFeatures: const <FontFeature>[
@@ -119,8 +116,8 @@ class SeatSelectionScreen extends StatelessWidget {
                               ],
                             ),
                           ),
+                          const SizedBox(height: 8),
                         ],
-                        const SizedBox(height: 8),
                         SeatMapView(
                           bookedSeats: selection.bookedSeats,
                           myConfirmedSeats: selection.myConfirmedSeats,
