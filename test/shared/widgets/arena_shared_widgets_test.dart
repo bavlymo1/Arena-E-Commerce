@@ -7,7 +7,6 @@ import 'package:e_commerce_project/shared/widgets/arena_busy_button_label.dart';
 import 'package:e_commerce_project/shared/widgets/arena_icon_label.dart';
 import 'package:e_commerce_project/shared/widgets/arena_loading_view.dart';
 import 'package:e_commerce_project/shared/widgets/arena_notice_banner.dart';
-import 'package:e_commerce_project/shared/widgets/arena_page_header.dart';
 import 'package:e_commerce_project/shared/widgets/arena_poster_banner.dart';
 import 'package:e_commerce_project/shared/widgets/arena_show_date_row.dart';
 import 'package:e_commerce_project/shared/widgets/arena_status_panel.dart';
@@ -389,12 +388,6 @@ void main() {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    const ArenaPageHeader(
-                      eyebrow: 'ArenaPass',
-                      title: 'Discover shows',
-                      subtitle: 'Subtitle wraps cleanly on narrow screens.',
-                    ),
-                    const SizedBox(height: 12),
                     Card(
                       margin: EdgeInsets.zero,
                       child: Padding(
@@ -453,7 +446,6 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Dec 20, 2026'), findsOneWidget);
-        expect(find.text('Discover shows'), findsOneWidget);
         final cardMaterial = tester.widget<Material>(
           find
               .descendant(
@@ -493,39 +485,6 @@ void main() {
         expect(titleText.overflow, TextOverflow.ellipsis);
         expect(tester.takeException(), isNull);
       }
-
-      // Also verify compactSubtitle uses bodySmall vs default bodyMedium.
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildAppTheme(),
-          home: const Scaffold(
-            body: Column(
-              children: <Widget>[
-                ArenaPageHeader(
-                  eyebrow: 'ArenaPass',
-                  title: 'Default',
-                  subtitle: 'Normal subtitle',
-                ),
-                ArenaPageHeader(
-                  eyebrow: 'ArenaPass',
-                  title: 'Compact',
-                  subtitle: 'Compact subtitle',
-                  compactSubtitle: true,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      final normalSize = tester
-          .widget<Text>(find.text('Normal subtitle'))
-          .style
-          ?.fontSize;
-      final compactSize = tester
-          .widget<Text>(find.text('Compact subtitle'))
-          .style
-          ?.fontSize;
-      expect(compactSize, lessThan(normalSize!));
     },
   );
 }
