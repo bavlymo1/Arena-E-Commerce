@@ -6,7 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
-import '../../../../shared/widgets/arena_page_header.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
 import '../../../../shared/widgets/arena_show_date_row.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
@@ -46,9 +45,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -60,7 +56,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             ),
         ],
         titleSpacing: 16,
-        title: const ArenaBrandAppBarTitle(title: 'ArenaPass'),
+        title: const ArenaBrandAppBarTitle(title: 'Discover shows'),
       ),
       body: SafeArea(
         child: BlocConsumer<DiscoveryCubit, DiscoveryState>(
@@ -82,11 +78,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               children: <Widget>[
-                const ArenaPageHeader(
-                  eyebrow: 'ArenaPass',
-                  title: 'Discover shows',
-                ),
-                const SizedBox(height: 16),
                 TextField(
                   key: const ValueKey<String>('discovery-search-field'),
                   controller: _searchController,
@@ -107,14 +98,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                           ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Showing newest active shows · search filters loaded shows',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 if (state.isLoading)
                   const ArenaLoadingView(
                     label: 'Loading…',
@@ -145,13 +129,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     useOutlinedAction: true,
                   )
                 else ...<Widget>[
-                  Text(
-                    'Recently added',
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                   for (final show in state.filteredShows)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),

@@ -7,7 +7,6 @@ import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
 import '../../../../shared/widgets/arena_busy_button_label.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
-import '../../../../shared/widgets/arena_page_header.dart';
 import '../cubit/customer_auth_cubit.dart';
 import '../cubit/customer_auth_state.dart';
 
@@ -41,16 +40,14 @@ class AccountScreen extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               children: <Widget>[
-                const ArenaPageHeader(eyebrow: 'ArenaPass', title: 'Profile'),
                 if (state.isChecking && user == null) ...<Widget>[
-                  const SizedBox(height: 20),
                   const ArenaLoadingView(
                     label: 'Checking session…',
                     padding: EdgeInsets.symmetric(vertical: 24),
                   ),
+                  const SizedBox(height: 16),
                 ],
                 if (state.errorMessage != null) ...<Widget>[
-                  const SizedBox(height: 16),
                   ArenaNoticeBanner(
                     key: const ValueKey<String>('account-error-banner'),
                     icon: Icons.error_outline,
@@ -67,8 +64,8 @@ class AccountScreen extends StatelessWidget {
                         ? () => unawaited(cubit.retry())
                         : null,
                   ),
+                  const SizedBox(height: 16),
                 ],
-                const SizedBox(height: 20),
                 Card(
                   key: const ValueKey<String>('account-user-card'),
                   margin: EdgeInsets.zero,

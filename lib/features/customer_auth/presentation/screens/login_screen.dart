@@ -6,7 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
 import '../../../../shared/widgets/arena_busy_button_label.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
-import '../../../../shared/widgets/arena_page_header.dart';
 import '../cubit/customer_auth_cubit.dart';
 import '../cubit/customer_auth_state.dart';
 import '../widgets/customer_auth_widgets.dart';
@@ -78,22 +77,16 @@ class _LoginScreenState extends State<LoginScreen> {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               children: <Widget>[
-                const ArenaPageHeader(
-                  eyebrow: 'ArenaPass',
-                  title: 'Customer sign in',
-                  subtitle: 'Sign in with your customer email and password to book seats.',
-                ),
                 if (state.isChecking && !state.busy) ...<Widget>[
-                  const SizedBox(height: 16),
                   const ArenaNoticeBanner(
                     icon: Icons.info_outline,
                     message: 'Checking session…',
                     liveRegion: true,
                     emphasizeText: true,
                   ),
+                  const SizedBox(height: 16),
                 ],
                 if (state.errorMessage != null) ...<Widget>[
-                  const SizedBox(height: 16),
                   ArenaNoticeBanner(
                     key: const ValueKey<String>('login-error-banner'),
                     icon: Icons.error_outline,
@@ -110,8 +103,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? () => unawaited(cubit.retry())
                         : null,
                   ),
+                  const SizedBox(height: 16),
                 ],
-                const SizedBox(height: 20),
                 AutofillGroup(
                   key: const ValueKey<String>('login-autofill-group'),
                   child: Form(
