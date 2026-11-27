@@ -105,7 +105,9 @@ void main() {
     await tester.pumpAndSettle();
     final shows = find.byType(VendorShowsScreen);
     final list = tester.element(shows).read<VendorShowsCubit>();
-    await tester.tap(find.text('Add show').first);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.text('Add show'), findsNothing);
+    await tester.tap(find.byTooltip('Add show'));
     await tester.pumpAndSettle();
     final form = tester
         .element(find.byType(AddShowScreen))
@@ -139,6 +141,7 @@ void main() {
     final list = tester
         .element(find.byType(VendorShowsScreen))
         .read<VendorShowsCubit>();
+    expect(find.text('3 / 94'), findsOneWidget);
     await tester.tap(find.text('Skyline Jam'));
     await tester.pumpAndSettle();
     final details = tester
@@ -183,6 +186,7 @@ void main() {
     expect(details.isClosed, isTrue);
     expect(list.isClosed, isFalse);
     expect(find.byType(VendorShowsScreen), findsOneWidget);
+    expect(find.text('5 / 94'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
     expect(list.isClosed, isTrue);

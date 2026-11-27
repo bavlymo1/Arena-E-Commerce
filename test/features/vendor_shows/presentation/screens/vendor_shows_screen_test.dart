@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:e_commerce_project/app/theme/app_theme.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/new_show.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/session.dart';
 import 'package:e_commerce_project/features/vendor_shows/domain/models/show.dart';
@@ -17,6 +18,7 @@ Show _show({
   required String title,
   ShowStatus status = ShowStatus.active,
   int bookedCount = 0,
+  int? sessionCount = 3,
   DateTime? createdAt,
 }) {
   return Show(
@@ -28,6 +30,7 @@ Show _show({
     imageId: id,
     status: status,
     bookedCount: bookedCount,
+    sessionCount: sessionCount,
     lastBookingId: '',
     createdAt: createdAt,
   );
@@ -107,12 +110,7 @@ Widget _buildApp(
   int unreadUpdatesCount = 0,
 }) {
   return MaterialApp(
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xffd52f65),
-        brightness: brightness,
-      ),
-    ),
+    theme: buildAppTheme(brightness: brightness),
     home: BlocProvider<VendorShowsCubit>.value(
       value: cubit,
       child: VendorShowsScreen(
@@ -128,22 +126,29 @@ Widget _buildApp(
 
 void main() {
   testWidgets(
-    'shows loading, empty, error+retry, and ready newest-first states',
+    'shows loading, empty with FAB only, error+retry, and newest-first occupancy updates',
     (tester) async {
       final repo = _ControllableVendorShowsRepository();
       addTearDown(repo.dispose);
       final cubit = VendorShowsCubit(repo, vendorId: 'vendor-1');
       final selected = <String>[];
+      var addTapped = 0;
 
       try {
-        await tester.pumpWidget(_buildApp(cubit, onShowSelected: selected.add));
+        await tester.pumpWidget(
+          _buildApp(
+            cubit,
+            onShowSelected: selected.add,
+            onAddShow: () => addTapped++,
+          ),
+        );
         await tester.pump();
         expect(
           find.byKey(const ValueKey<String>('vendor-shows-loading')),
           findsOneWidget,
         );
 
-        // Stream error -> Retry -> Empty -> Populated.
+        // Stream error -> Retry -> Empty with single FAB (no duplicate Add show button).
         repo.failWithError = true;
         repo.emitCurrent();
         await tester.pump();
@@ -164,32 +169,62 @@ void main() {
           find.byKey(const ValueKey<String>('vendor-shows-empty-state')),
           findsOneWidget,
         );
+        expect(find.byType(FloatingActionButton), findsOneWidget);
+        expect(find.text('Add show'), findsNothing);
+        await tester.tap(find.byTooltip('Add show'));
+        await tester.pump();
+        expect(addTapped, 1);
 
+        // Populated list: empty, partial, full, and interrupted deleting show.
         repo.controller.add(<Show>[
           _show(
             id: 'older',
-            title: 'Older Show',
-            bookedCount: 12,
+            title: 'Older Full Show',
+            bookedCount: 47,
+            sessionCount: 1,
             createdAt: DateTime.utc(2026, 11, 10),
           ),
           _show(
             id: 'newest',
             title: 'Newest Show',
-            bookedCount: 33,
+            bookedCount: 24,
+            sessionCount: 3,
             createdAt: DateTime.utc(2026, 11, 20),
+          ),
+          _show(
+            id: 'empty-bookings',
+            title: 'Zero Booked Show',
+            bookedCount: 0,
+            sessionCount: 2,
+            createdAt: DateTime.utc(2026, 11, 18),
           ),
           _show(
             id: 'deleting',
             title: 'Interrupted Show',
             status: ShowStatus.deleting,
             bookedCount: 7,
+            sessionCount: 1,
             createdAt: DateTime.utc(2026, 11, 15),
           ),
         ]);
         await tester.pump();
 
+        expect(find.byType(FloatingActionButton), findsOneWidget);
+        expect(find.text('Add show'), findsNothing);
         expect(find.text('Newest Show'), findsOneWidget);
-        expect(find.text('33 booked total'), findsOneWidget);
+        expect(find.text('24 / 141'), findsOneWidget);
+        expect(find.text('0 / 94'), findsOneWidget);
+        expect(find.text('47 / 47'), findsOneWidget);
+        expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                find.byKey(
+                  const ValueKey<String>('vendor-show-occupancy-bar-newest'),
+                ),
+              )
+              .value,
+          closeTo(24 / 141, 1e-6),
+        );
         expect(
           find.text('Deletion interrupted. Bookings closed.'),
           findsOneWidget,
@@ -218,9 +253,25 @@ void main() {
         await tester.pump();
         expect(selected, isEmpty);
 
+        // Final card scrolls completely above the FAB and remains visible/interactive.
+        final finalCardFinder = find.byKey(
+          const ValueKey<String>('vendor-show-card-older'),
+        );
+        await tester.scrollUntilVisible(
+          finalCardFinder,
+          120,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        final finalCardRect = tester.getRect(finalCardFinder);
+        final fabRect = tester.getRect(find.byType(FloatingActionButton));
+        expect(finalCardRect.bottom, lessThanOrEqualTo(fabRect.top));
+
         // Tapping active card invokes onShowSelected.
-        await tester.ensureVisible(
-          find.byKey(const ValueKey<String>('vendor-show-card-newest')),
+        await tester.scrollUntilVisible(
+          find.text('Newest Show'),
+          -120,
+          scrollable: find.byType(Scrollable).first,
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('Newest Show'));
@@ -252,11 +303,22 @@ void main() {
             id: 'newest',
             title: 'Newest Show',
             bookedCount: 34,
+            sessionCount: 3,
             createdAt: DateTime.utc(2026, 11, 20),
           ),
         ]);
         await tester.pump();
-        expect(find.text('34 booked total'), findsOneWidget);
+        expect(find.text('34 / 141'), findsOneWidget);
+        expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                find.byKey(
+                  const ValueKey<String>('vendor-show-occupancy-bar-newest'),
+                ),
+              )
+              .value,
+          closeTo(34 / 141, 1e-6),
+        );
         expect(
           find.byKey(const ValueKey<String>('vendor-shows-inline-error')),
           findsNothing,
@@ -269,11 +331,12 @@ void main() {
   );
 
   testWidgets(
-    'invokes optional add, delete, and updates callbacks without faking mutations',
+    'invokes optional FAB, isolated delete icon, and updates callbacks without faking mutations',
     (tester) async {
       final repo = _ControllableVendorShowsRepository();
       addTearDown(repo.dispose);
       final cubit = VendorShowsCubit(repo, vendorId: 'vendor-1');
+      final selected = <String>[];
       var addTapped = 0;
       var updatesTapped = 0;
       final deleteTapped = <String>[];
@@ -284,6 +347,7 @@ void main() {
             id: 'show-1',
             title: 'Arena Finals',
             bookedCount: 19,
+            sessionCount: 2,
             createdAt: DateTime.utc(2026, 11, 18),
           ),
         ]);
@@ -291,7 +355,7 @@ void main() {
         await tester.pumpWidget(
           _buildApp(
             cubit,
-            onShowSelected: (_) {},
+            onShowSelected: selected.add,
             onAddShow: () => addTapped++,
             onDeleteShow: deleteTapped.add,
             onOpenUpdates: () => updatesTapped++,
@@ -301,7 +365,7 @@ void main() {
         await tester.pump();
 
         await tester.tap(
-          find.byKey(const ValueKey<String>('vendor-shows-add-button')),
+          find.byKey(const ValueKey<String>('vendor-shows-add-fab')),
         );
         await tester.tap(
           find.byKey(
@@ -316,6 +380,7 @@ void main() {
         expect(addTapped, 1);
         expect(updatesTapped, 1);
         expect(deleteTapped, <String>['show-1']);
+        expect(selected, isEmpty);
         expect(find.text('Arena Finals'), findsOneWidget);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
@@ -323,6 +388,26 @@ void main() {
       }
     },
   );
+
+  testWidgets('omits FAB when onAddShow is null and hides duplicate actions', (
+    tester,
+  ) async {
+    final repo = _ControllableVendorShowsRepository();
+    addTearDown(repo.dispose);
+    final cubit = VendorShowsCubit(repo, vendorId: 'vendor-1');
+
+    try {
+      repo.controller.add(const <Show>[]);
+      await tester.pumpWidget(_buildApp(cubit, onShowSelected: (_) {}));
+      await tester.pump();
+
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.text('Add show'), findsNothing);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(cubit.close);
+    }
+  });
 
   testWidgets(
     'renders without overflow on dark narrow 300x640 viewport at 2.0x text scale',
@@ -344,8 +429,9 @@ void main() {
         repo.controller.add(<Show>[
           _show(
             id: 'show-1',
-            title: 'World Arena Finals Championship',
+            title: 'World Arena Finals Championship Exhibition',
             bookedCount: 41,
+            sessionCount: 3,
             createdAt: DateTime.utc(2026, 11, 18),
           ),
         ]);
@@ -364,11 +450,11 @@ void main() {
         await tester.pump();
 
         await tester.scrollUntilVisible(
-          find.text('41 booked total'),
+          find.text('41 / 141'),
           150,
           scrollable: find.byType(Scrollable).first,
         );
-        expect(find.text('41 booked total'), findsOneWidget);
+        expect(find.text('41 / 141'), findsOneWidget);
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
@@ -390,6 +476,7 @@ void main() {
         };
       addTearDown(repo.dispose);
       final cubit = VendorShowsCubit(repo, vendorId: 'vendor-1');
+      final selected = <String>[];
 
       try {
         repo.controller.add(<Show>[
@@ -397,14 +484,15 @@ void main() {
             id: 'show-1',
             title: 'Arena Finals',
             bookedCount: 19,
+            sessionCount: 2,
             createdAt: DateTime.utc(2026, 11, 18),
           ),
         ]);
 
-        await tester.pumpWidget(_buildApp(cubit, onShowSelected: (_) {}));
+        await tester.pumpWidget(_buildApp(cubit, onShowSelected: selected.add));
         await tester.pump();
 
-        // Tap Delete -> opens confirm dialog naming the show and warning bookings/seats will be removed.
+        // Tap Delete -> opens confirm dialog without navigating to details.
         await tester.ensureVisible(
           find.byKey(const ValueKey<String>('vendor-show-delete-show-1')),
         );
@@ -414,6 +502,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        expect(selected, isEmpty);
         expect(
           find.byKey(const ValueKey<String>('delete-show-confirm-dialog')),
           findsOneWidget,
@@ -442,6 +531,7 @@ void main() {
         await tester.pump();
 
         expect(repo.deletedShowIds, <String>['show-1']);
+        expect(selected, isEmpty);
         expect(
           find.byKey(
             const ValueKey<String>('vendor-show-deleting-progress-show-1'),
@@ -449,6 +539,14 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Finishing delete'), findsOneWidget);
+
+        // Repeat tap on top-right Delete while in progress does not enqueue another delete.
+        await tester.tap(
+          find.byKey(const ValueKey<String>('vendor-show-delete-show-1')),
+        );
+        await tester.pump();
+        expect(repo.deletedShowIds, <String>['show-1']);
+        expect(selected, isEmpty);
 
         // Fail first attempt -> shows retryable error banner while preserving card.
         firstAttempt.completeError(StateError('cleanup interrupted'));

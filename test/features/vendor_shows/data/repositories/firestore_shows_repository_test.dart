@@ -524,6 +524,7 @@ void main() {
           'status': 'active',
           'bookedCount': 4,
           'lastBookingId': 'b-4',
+          'sessionIds': const <String>['1400', '1900', '2130'],
           'createdAt': Timestamp.fromDate(createdAt),
           'updatedAt': Timestamp.fromDate(updatedAt),
         }),
@@ -542,6 +543,7 @@ void main() {
     expect(show.status, ShowStatus.active);
     expect(show.bookedCount, 4);
     expect(show.lastBookingId, 'b-4');
+    expect(show.sessionCount, 3);
     expect(show.createdAt?.toUtc(), createdAt);
     expect(show.updatedAt?.toUtc(), updatedAt);
   });
@@ -612,6 +614,7 @@ void main() {
 
     expect(emitted.single.single.id, 'show-v1');
     expect(emitted.single.single.vendorId, 'vendor-a');
+    expect(emitted.single.single.sessionCount, isNull);
   });
 
   test('watchShow suppresses cache-only missing snapshot and decodes server-confirmed docs', () async {

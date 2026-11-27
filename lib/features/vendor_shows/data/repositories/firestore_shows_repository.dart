@@ -100,6 +100,8 @@ final class FirestoreShowsRepository implements ShowsRepository {
 
   static Show _decodeShow(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;
+    final rawSessionIds = data['sessionIds'];
+    final sessionCount = rawSessionIds is List ? rawSessionIds.length : null;
     return Show(
       id: doc.id,
       vendorId: data['vendorId'] as String,
@@ -110,6 +112,7 @@ final class FirestoreShowsRepository implements ShowsRepository {
       status: ShowStatus.values.byName(data['status'] as String),
       bookedCount: data['bookedCount'] as int,
       lastBookingId: data['lastBookingId'] as String,
+      sessionCount: sessionCount,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );

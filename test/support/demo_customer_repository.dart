@@ -41,6 +41,7 @@ final class DemoCustomerRepository
         status: ShowStatus.active,
         bookedCount: seats.length + (entry.key == 'demo-success' ? 1 : 0),
         lastBookingId: '',
+        sessionCount: entry.key == 'demo-success' ? 2 : 1,
         createdAt: DateTime.utc(
           2026,
           11,
@@ -194,6 +195,7 @@ final class DemoCustomerRepository
       status: show.status,
       bookedCount: show.bookedCount + request.seats.length,
       lastBookingId: request.bookingId,
+      sessionCount: show.sessionCount,
       createdAt: show.createdAt,
     );
     _changes.add(null);
