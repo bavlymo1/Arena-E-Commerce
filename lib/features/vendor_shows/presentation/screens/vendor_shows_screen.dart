@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../shared/widgets/arena_brand_app_bar_title.dart';
-import '../../../../shared/widgets/arena_icon_label.dart';
 import '../../../../shared/widgets/arena_loading_view.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../../../../shared/widgets/arena_status_panel.dart';
@@ -43,6 +42,8 @@ class VendorShowsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
@@ -63,30 +64,31 @@ class VendorShowsScreen extends StatelessWidget {
             ),
         ],
       ),
+      floatingActionButton: onAddShow != null
+          ? FloatingActionButton(
+              key: const ValueKey<String>('vendor-shows-add-fab'),
+              tooltip: 'Add show',
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+              onPressed: onAddShow,
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: SafeArea(
         child: BlocBuilder<VendorShowsCubit, VendorShowsState>(
           builder: (context, state) {
             final cubit = context.read<VendorShowsCubit>();
 
             return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                onAddShow != null ? 96 : 28,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  if (onAddShow != null && state.shows.isNotEmpty) ...<Widget>[
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: FilledButton(
-                        key: const ValueKey<String>('vendor-shows-add-button'),
-                        onPressed: onAddShow,
-                        child: const ArenaIconLabel(
-                          icon: Icons.add,
-                          label: 'Add show',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
                   if (state.isLoading && state.shows.isEmpty)
                     const ArenaLoadingView(
                       key: ValueKey<String>('vendor-shows-loading'),
@@ -111,14 +113,9 @@ class VendorShowsScreen extends StatelessWidget {
                       key: const ValueKey<String>('vendor-shows-empty-state'),
                       icon: Icons.event_note_outlined,
                       title: 'No shows here yet',
-                      message: 'Add a show with its date, artwork, and up to five daily sessions.',
-                      actionLabel: onAddShow != null ? 'Add show' : null,
-                      actionKey: onAddShow != null
-                          ? const ValueKey<String>(
-                              'vendor-shows-empty-add-button',
-                            )
-                          : null,
-                      onAction: onAddShow,
+                      message: onAddShow != null
+                          ? 'Use the + button to add a show with its date, artwork, and up to five daily sessions.'
+                          : 'Shows added for this vendor will appear here.',
                     )
                   else ...<Widget>[
                     if (state.hasError)

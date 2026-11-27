@@ -16,6 +16,7 @@ final class Show extends Equatable {
     required this.status,
     required this.bookedCount,
     required this.lastBookingId,
+    this.sessionCount,
     this.createdAt,
     this.updatedAt,
   }) {
@@ -37,6 +38,7 @@ final class Show extends Equatable {
   final ShowStatus status;
   final int bookedCount;
   final String lastBookingId;
+  final int? sessionCount;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   String get titleSearch => title.toLowerCase();
@@ -66,6 +68,7 @@ final class Show extends Equatable {
     status,
     bookedCount,
     lastBookingId,
+    sessionCount,
     createdAt,
     updatedAt,
   ];

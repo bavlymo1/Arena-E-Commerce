@@ -524,6 +524,7 @@ void main() {
           'status': 'active',
           'bookedCount': 4,
           'lastBookingId': 'b-4',
+          'sessionIds': const <String>['1400', '1900', '2130'],
           'createdAt': Timestamp.fromDate(createdAt),
           'updatedAt': Timestamp.fromDate(updatedAt),
         }),
@@ -542,6 +543,7 @@ void main() {
     expect(show.status, ShowStatus.active);
     expect(show.bookedCount, 4);
     expect(show.lastBookingId, 'b-4');
+    expect(show.sessionCount, 3);
     expect(show.createdAt?.toUtc(), createdAt);
     expect(show.updatedAt?.toUtc(), updatedAt);
   });
@@ -606,12 +608,88 @@ void main() {
           'createdAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
           'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
         }),
+        _FakeQueryDocumentSnapshot('show-empty-slots', <String, dynamic>{
+          'vendorId': 'vendor-a',
+          'title': 'Empty Slots',
+          'description': 'Desc',
+          'showDate': '2026-12-22',
+          'imageId': 'show-empty-slots',
+          'status': 'active',
+          'bookedCount': 0,
+          'lastBookingId': '',
+          'sessionIds': const <String>[],
+          'createdAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+          'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+        }),
+        _FakeQueryDocumentSnapshot('show-six-slots', <String, dynamic>{
+          'vendorId': 'vendor-a',
+          'title': 'Too Many Slots',
+          'description': 'Desc',
+          'showDate': '2026-12-22',
+          'imageId': 'show-six-slots',
+          'status': 'active',
+          'bookedCount': 0,
+          'lastBookingId': '',
+          'sessionIds': const <String>[
+            '0900',
+            '1100',
+            '1400',
+            '1700',
+            '1900',
+            '2100',
+          ],
+          'createdAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+          'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+        }),
+        _FakeQueryDocumentSnapshot('show-bad-type', <String, dynamic>{
+          'vendorId': 'vendor-a',
+          'title': 'Bad Type',
+          'description': 'Desc',
+          'showDate': '2026-12-22',
+          'imageId': 'show-bad-type',
+          'status': 'active',
+          'bookedCount': 0,
+          'lastBookingId': '',
+          'sessionIds': '1900',
+          'createdAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+          'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+        }),
+        _FakeQueryDocumentSnapshot('show-bad-id', <String, dynamic>{
+          'vendorId': 'vendor-a',
+          'title': 'Bad Slot ID',
+          'description': 'Desc',
+          'showDate': '2026-12-22',
+          'imageId': 'show-bad-id',
+          'status': 'active',
+          'bookedCount': 0,
+          'lastBookingId': '',
+          'sessionIds': const <Object>['1900', '2599'],
+          'createdAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+          'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+        }),
+        _FakeQueryDocumentSnapshot('show-dup-id', <String, dynamic>{
+          'vendorId': 'vendor-a',
+          'title': 'Duplicate Slot ID',
+          'description': 'Desc',
+          'showDate': '2026-12-22',
+          'imageId': 'show-dup-id',
+          'status': 'active',
+          'bookedCount': 0,
+          'lastBookingId': '',
+          'sessionIds': const <String>['1900', '1900'],
+          'createdAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+          'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 11, 21)),
+        }),
       ]),
     );
     await pumpEventQueue();
 
-    expect(emitted.single.single.id, 'show-v1');
-    expect(emitted.single.single.vendorId, 'vendor-a');
+    expect(emitted.single, hasLength(6));
+    expect(emitted.single[0].id, 'show-v1');
+    expect(emitted.single[0].vendorId, 'vendor-a');
+    for (final show in emitted.single) {
+      expect(show.sessionCount, isNull, reason: show.id);
+    }
   });
 
   test('watchShow suppresses cache-only missing snapshot and decodes server-confirmed docs', () async {
