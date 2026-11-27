@@ -6,6 +6,7 @@ import '../../../../core/formatting/date_time_formatting.dart';
 import '../../../../shared/seating/seat_numbers.dart';
 import '../../../../shared/widgets/arena_notice_banner.dart';
 import '../../../../shared/widgets/arena_poster_banner.dart';
+import '../../domain/models/new_show.dart';
 import '../../domain/models/session.dart';
 import '../../domain/models/show.dart';
 import 'delete_show_dialog.dart';
@@ -20,35 +21,44 @@ String formatVendorSessionBookedSummary(Session session) {
 String formatVendorShowBookedSummary(Show show) =>
     '${show.bookedCount} booked total';
 
-/// Returns total capacity across daily sessions (`sessionCount * seatCapacity`),
-/// or `null` when session count is missing or non-positive.
-int? computeVendorShowCapacity(Show show) {
+bool _hasValidSessionCount(Show show) {
   final count = show.sessionCount;
-  if (count == null || count <= 0) return null;
-  return count * seatCapacity;
+  return count != null && count >= 1 && count <= maxShowSessions;
+}
+
+/// Returns total capacity across daily sessions (`sessionCount * seatCapacity`),
+/// or `null` when session count is missing or outside `1..maxShowSessions`.
+int? computeVendorShowCapacity(Show show) {
+  if (!_hasValidSessionCount(show)) return null;
+  return show.sessionCount! * seatCapacity;
 }
 
 /// Formats the daily session count line for a vendor show card.
 String formatVendorShowSessionCount(Show show) {
-  final count = show.sessionCount;
-  if (count == null || count <= 0) return 'Sessions unavailable';
+  if (!_hasValidSessionCount(show)) return 'Sessions unavailable';
+  final count = show.sessionCount!;
   return count == 1 ? '1 daily session' : '$count daily sessions';
 }
 
-/// Formats `booked / capacity` when total capacity is known, or a safe count
-/// without misrepresenting availability when capacity is unavailable.
+/// Formats `booked / capacity` when capacity is valid and consistent with
+/// `bookedCount`, or falls back to the authoritative `'bookedCount booked'`
+/// without fabricating or modifying seat totals.
 String formatVendorShowOccupancyCount(Show show) {
   final capacity = computeVendorShowCapacity(show);
-  final booked = show.bookedCount < 0 ? 0 : show.bookedCount;
-  return capacity != null ? '$booked / $capacity' : '$booked booked';
+  if (capacity == null || show.bookedCount < 0 || show.bookedCount > capacity) {
+    return '${show.bookedCount} booked';
+  }
+  return '${show.bookedCount} / $capacity';
 }
 
-/// Computes bounded `[0.0, 1.0]` occupancy progress for `LinearProgressIndicator`.
-double computeVendorShowOccupancyProgress(Show show) {
+/// Computes `[0.0, 1.0]` occupancy progress for `LinearProgressIndicator`, or
+/// returns `null` when capacity is unavailable or `bookedCount` is inconsistent.
+double? computeVendorShowOccupancyProgress(Show show) {
   final capacity = computeVendorShowCapacity(show);
-  if (capacity == null || capacity <= 0) return 0.0;
-  final booked = show.bookedCount < 0 ? 0 : show.bookedCount;
-  return (booked / capacity).clamp(0.0, 1.0);
+  if (capacity == null || show.bookedCount < 0 || show.bookedCount > capacity) {
+    return null;
+  }
+  return show.bookedCount / capacity;
 }
 
 /// Status pill indicating whether a vendor show is active or finishing deletion.
@@ -206,15 +216,17 @@ class VendorShowCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          LinearProgressIndicator(
-            key: ValueKey<String>('vendor-show-occupancy-bar-${show.id}'),
-            value: occupancyProgress,
-            minHeight: 5,
-            borderRadius: BorderRadius.circular(999),
-            backgroundColor: colorScheme.surfaceContainerHighest,
-            color: colorScheme.primary.withValues(alpha: 0.8),
-          ),
+          if (occupancyProgress != null) ...<Widget>[
+            const SizedBox(height: 6),
+            LinearProgressIndicator(
+              key: ValueKey<String>('vendor-show-occupancy-bar-${show.id}'),
+              value: occupancyProgress,
+              minHeight: 5,
+              borderRadius: BorderRadius.circular(999),
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              color: colorScheme.primary.withValues(alpha: 0.8),
+            ),
+          ],
         ],
       ),
     );

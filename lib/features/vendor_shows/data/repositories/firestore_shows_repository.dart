@@ -98,10 +98,29 @@ final class FirestoreShowsRepository implements ShowsRepository {
             .toList(growable: false),
       );
 
+  static final RegExp _sessionIdPattern = RegExp(
+    r'^([01][0-9]|2[0-3])[0-5][0-9]$',
+  );
+
+  static int? _decodeSessionCount(Object? rawSessionIds) {
+    if (rawSessionIds is! List ||
+        rawSessionIds.isEmpty ||
+        rawSessionIds.length > maxShowSessions) {
+      return null;
+    }
+    final unique = <String>{};
+    for (final item in rawSessionIds) {
+      if (item is! String ||
+          !_sessionIdPattern.hasMatch(item) ||
+          !unique.add(item)) {
+        return null;
+      }
+    }
+    return rawSessionIds.length;
+  }
+
   static Show _decodeShow(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;
-    final rawSessionIds = data['sessionIds'];
-    final sessionCount = rawSessionIds is List ? rawSessionIds.length : null;
     return Show(
       id: doc.id,
       vendorId: data['vendorId'] as String,
@@ -112,7 +131,7 @@ final class FirestoreShowsRepository implements ShowsRepository {
       status: ShowStatus.values.byName(data['status'] as String),
       bookedCount: data['bookedCount'] as int,
       lastBookingId: data['lastBookingId'] as String,
-      sessionCount: sessionCount,
+      sessionCount: _decodeSessionCount(data['sessionIds']),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );

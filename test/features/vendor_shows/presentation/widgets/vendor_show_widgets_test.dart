@@ -75,7 +75,7 @@ void main() {
       expect(computeVendorShowCapacity(unavailable), isNull);
       expect(formatVendorShowSessionCount(unavailable), 'Sessions unavailable');
       expect(formatVendorShowOccupancyCount(unavailable), '12 booked');
-      expect(computeVendorShowOccupancyProgress(unavailable), 0.0);
+      expect(computeVendorShowOccupancyProgress(unavailable), isNull);
 
       final zeroSessions = _show(bookedCount: 5, sessionCount: 0);
       expect(computeVendorShowCapacity(zeroSessions), isNull);
@@ -84,12 +84,21 @@ void main() {
         'Sessions unavailable',
       );
       expect(formatVendorShowOccupancyCount(zeroSessions), '5 booked');
-      expect(computeVendorShowOccupancyProgress(zeroSessions), 0.0);
+      expect(computeVendorShowOccupancyProgress(zeroSessions), isNull);
+
+      final overMaxSessions = _show(bookedCount: 18, sessionCount: 6);
+      expect(computeVendorShowCapacity(overMaxSessions), isNull);
+      expect(
+        formatVendorShowSessionCount(overMaxSessions),
+        'Sessions unavailable',
+      );
+      expect(formatVendorShowOccupancyCount(overMaxSessions), '18 booked');
+      expect(computeVendorShowOccupancyProgress(overMaxSessions), isNull);
 
       final overbooked = _show(bookedCount: 60, sessionCount: 1);
       expect(computeVendorShowCapacity(overbooked), 47);
-      expect(formatVendorShowOccupancyCount(overbooked), '60 / 47');
-      expect(computeVendorShowOccupancyProgress(overbooked), 1.0);
+      expect(formatVendorShowOccupancyCount(overbooked), '60 booked');
+      expect(computeVendorShowOccupancyProgress(overbooked), isNull);
 
       expect(
         partial.posterRevision,
@@ -242,7 +251,7 @@ void main() {
   );
 
   testWidgets(
-    'VendorShowCard disables repeat delete taps while isDeleting is true and renders safe unavailable fallback',
+    'VendorShowCard hides progress indicator when capacity is unavailable or bookedCount exceeds capacity and disables delete while isDeleting',
     (tester) async {
       final semantics = tester.ensureSemantics();
       try {
@@ -253,32 +262,76 @@ void main() {
           MaterialApp(
             theme: buildAppTheme(brightness: Brightness.light),
             home: Scaffold(
-              body: VendorShowCard(
-                show: _show(
-                  id: 'show-busy',
-                  bookedCount: 12,
-                  sessionCount: null,
+              body: SingleChildScrollView(
+                child: Column(
+                  children: <Widget>[
+                    VendorShowCard(
+                      show: _show(
+                        id: 'show-busy',
+                        bookedCount: 12,
+                        sessionCount: null,
+                      ),
+                      posterBytes: null,
+                      isDeleting: true,
+                      deleteErrorMessage: null,
+                      onOpenDetails: () => detailsTapped++,
+                      onDeleteShow: () => deleteTapped++,
+                      onRetryDelete: () {},
+                    ),
+                    VendorShowCard(
+                      show: _show(
+                        id: 'show-zero',
+                        bookedCount: 5,
+                        sessionCount: 0,
+                      ),
+                      posterBytes: null,
+                      isDeleting: false,
+                      deleteErrorMessage: null,
+                      onOpenDetails: () => detailsTapped++,
+                      onDeleteShow: () => deleteTapped++,
+                      onRetryDelete: () {},
+                    ),
+                    VendorShowCard(
+                      show: _show(
+                        id: 'show-over-max',
+                        bookedCount: 18,
+                        sessionCount: 6,
+                      ),
+                      posterBytes: null,
+                      isDeleting: false,
+                      deleteErrorMessage: null,
+                      onOpenDetails: () => detailsTapped++,
+                      onDeleteShow: () => deleteTapped++,
+                      onRetryDelete: () {},
+                    ),
+                    VendorShowCard(
+                      show: _show(
+                        id: 'show-overbooked',
+                        bookedCount: 60,
+                        sessionCount: 1,
+                      ),
+                      posterBytes: null,
+                      isDeleting: false,
+                      deleteErrorMessage: null,
+                      onOpenDetails: () => detailsTapped++,
+                      onDeleteShow: () => deleteTapped++,
+                      onRetryDelete: () {},
+                    ),
+                  ],
                 ),
-                posterBytes: null,
-                isDeleting: true,
-                deleteErrorMessage: null,
-                onOpenDetails: () => detailsTapped++,
-                onDeleteShow: () => deleteTapped++,
-                onRetryDelete: () {},
               ),
             ),
           ),
         );
         await tester.pump();
 
-        expect(find.text('Sessions unavailable'), findsOneWidget);
+        expect(find.text('Sessions unavailable'), findsNWidgets(3));
+        expect(find.text('1 daily session'), findsOneWidget);
         expect(find.text('12 booked'), findsOneWidget);
-        final bar = tester.widget<LinearProgressIndicator>(
-          find.byKey(
-            const ValueKey<String>('vendor-show-occupancy-bar-show-busy'),
-          ),
-        );
-        expect(bar.value, 0.0);
+        expect(find.text('5 booked'), findsOneWidget);
+        expect(find.text('18 booked'), findsOneWidget);
+        expect(find.text('60 booked'), findsOneWidget);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
 
         final deleteFinder = find.byKey(
           const ValueKey<String>('vendor-show-delete-show-busy'),
@@ -291,7 +344,7 @@ void main() {
               .hasAction(SemanticsAction.tap),
           isFalse,
         );
-        await tester.tap(deleteFinder);
+        await tester.tap(deleteFinder, warnIfMissed: false);
         await tester.pump();
         expect(deleteTapped, 0);
         expect(detailsTapped, 0);
